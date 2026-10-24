@@ -53,8 +53,8 @@ class CustodyWithdrawalAddressValidationTest {
                 new ChainAddressRuntime(metadata.chainAddressRepository, metadata.chainProfileRepository, null), bitcoin);
         var assets = mock(ChainAssetRepository.class);
         var profiles = mock(ChainProfileRepository.class);
-        when(assets.findActive(chain, chain)).thenReturn(Optional.of(Map.of("native_asset", true, "decimals", 18)));
-        when(profiles.listEnabledForWithdrawal(chain)).thenReturn(List.of(Map.of("native_symbol", chain)));
+        when(assets.findActive(chain, chain)).thenReturn(Optional.of(com.surprising.wallet.chain.model.ChainAsset.builder().nativeAsset(true).decimals(18).build()));
+        when(profiles.listEnabledForWithdrawal(chain)).thenReturn(List.of(AccountChainProfile.builder().nativeSymbol(chain).build()));
         var chains = ChainRepositoryFixture.mocked();
         var custodyAddresses = mock(CustodyAddressRepository.class);
         var chainAddresses = mock(ChainAddressRepository.class);

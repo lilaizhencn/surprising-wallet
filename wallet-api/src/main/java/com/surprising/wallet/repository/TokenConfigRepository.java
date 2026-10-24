@@ -29,6 +29,14 @@ public class TokenConfigRepository {
         return query("order by chain, network, symbol");
     }
 
+    public List<TokenConfiguration> listByChain(String chain) {
+        return query("where upper(chain)=upper(?) order by network, symbol", chain);
+    }
+
+    public boolean existsByChainAndNetwork(String chain, String network) {
+        return !jdbc.queryForList("select 1 from token_config where " + NETWORK + " limit 1", chain, network).isEmpty();
+    }
+
     public List<TokenConfiguration> listByChainAndNetwork(String chain, String network) {
         return query("where " + NETWORK + " order by symbol", chain, network);
     }

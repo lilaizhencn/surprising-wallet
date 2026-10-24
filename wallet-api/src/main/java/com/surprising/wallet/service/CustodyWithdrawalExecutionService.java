@@ -11,6 +11,8 @@ import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import java.math.BigDecimal;
+import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import java.security.SecureRandom;
 import java.util.Locale;
 import java.util.Map;
@@ -127,25 +129,25 @@ public class CustodyWithdrawalExecutionService {
      * 校验 {@code requireAsset} 对应的前置条件，不满足时抛出明确异常。
      */
     private AssetMeta requireAsset(String chain, String symbol) {
-        Map<String, Object> asset = chainAssetRepository.findActive(chain, symbol)
+        ChainAsset asset = chainAssetRepository.findActive(chain, symbol)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "asset withdrawal is not enabled: " + chain + "/" + symbol));
-        boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
-        Map<String, Object> profile = chainProfileRepository.listEnabledForWithdrawal(chain).stream()
+        boolean nativeAsset = Boolean.TRUE.equals(asset.getNativeAsset());
+        AccountChainProfile profile = chainProfileRepository.listEnabledForWithdrawal(chain).stream()
                 .filter(candidate -> nativeAsset
                         || tokenConfigRepository.findEnabled(chain,
-                                String.valueOf(candidate.get("network")), symbol).isPresent())
+                                String.valueOf(candidate.getNetwork()), symbol).isPresent())
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "asset withdrawal is not enabled: " + chain + "/" + symbol));
-        int decimals = asset.get("decimals") instanceof Number number ? number.intValue() : 18;
+        int decimals = asset.getDecimals() == null ? 18 : asset.getDecimals();
         BigDecimal networkFee = "XMR".equals(chain)
-                ? atomicToDecimal(profile.get("default_fee_rate"), decimals)
-                    .max(atomicToDecimal(profile.get("dust_threshold"), decimals))
+                ? atomicToDecimal(profile.getDefaultFee(), decimals)
+                    .max(atomicToDecimal(profile.getDustThreshold(), decimals))
                     .max(new BigDecimal("0.0001")).stripTrailingZeros()
                 : BigDecimal.ZERO;
         return new AssetMeta(
-                chain, symbol, nativeAsset, String.valueOf(profile.get("native_symbol")), networkFee);
+                chain, symbol, nativeAsset, String.valueOf(profile.getNativeSymbol()), networkFee);
     }
 
     /**

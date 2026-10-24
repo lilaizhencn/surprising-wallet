@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.web3j.crypto.Hash;
 import org.web3j.utils.Numeric;
 import java.math.BigDecimal;
+import com.surprising.wallet.chain.model.ChainAsset;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -329,7 +330,7 @@ public class Evm7702WithdrawalCoordinator {
         if (!config.batchWithdrawalEnabled()) {
             return Optional.empty();
         }
-        List<Map<String, Object>> assets = chainAssetRepository.listActiveByChain(chain);
+        List<ChainAsset> assets = chainAssetRepository.listActiveByChain(chain);
         List<TokenConfiguration> tokens = tokenConfigRepository.listEnabled(chain, network);
         List<Map<String, Object>> candidates = withdrawalOrderRepository.listClaimable(chain, 500);
         CandidateGroup group = null;
@@ -547,15 +548,15 @@ public class Evm7702WithdrawalCoordinator {
     private CandidateGroup mapCandidate(
             Map<String, Object> order,
             String chain,
-            List<Map<String, Object>> assets,
+            List<ChainAsset> assets,
             List<TokenConfiguration> tokens) {
         UUID tenantId = (UUID) order.get("tenant_id");
         String assetSymbol = String.valueOf(order.get("asset_symbol"));
-        Map<String, Object> asset = assets.stream().filter(row -> assetSymbol.equalsIgnoreCase(String.valueOf(row.get("symbol")))).findFirst().orElse(null);
+        ChainAsset asset = assets.stream().filter(row -> assetSymbol.equalsIgnoreCase(row.getSymbol())).findFirst().orElse(null);
         if (asset == null) {
             return null;
         }
-        boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
+        boolean nativeAsset = Boolean.TRUE.equals(asset.getNativeAsset());
         TokenConfiguration token = tokens.stream().filter(row -> assetSymbol.equalsIgnoreCase(row.symbol())).findFirst().orElse(null);
         if (!nativeAsset && token == null) {
             return null;
@@ -572,7 +573,7 @@ public class Evm7702WithdrawalCoordinator {
                 assetSymbol,
                 String.valueOf(order.get("from_address")),
                 nativeAsset ? "0x0000000000000000000000000000000000000000" : token.contractAddress(),
-                ((Number) asset.get("decimals")).intValue(),
+                asset.getDecimals(),
                 hot);
     }
 

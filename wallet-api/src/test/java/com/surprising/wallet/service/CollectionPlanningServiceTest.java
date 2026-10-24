@@ -21,8 +21,12 @@ class CollectionPlanningServiceTest {
     @Test
     void collectionCandidatesUseGroupedRowsAndPreserveEligibilityAmountAndOrdering() {
         var jdbc = new CollectionJdbcTemplate();
+        var assets = org.mockito.Mockito.mock(ChainAssetRepository.class);
+        org.mockito.Mockito.when(assets.listActiveByChain("ETH")).thenReturn(List.of(
+                com.surprising.wallet.chain.model.ChainAsset.builder().symbol("ETH").nativeAsset(true).minTransfer(BigDecimal.ONE).build(),
+                com.surprising.wallet.chain.model.ChainAsset.builder().symbol("USDT").nativeAsset(false).minTransfer(new BigDecimal("5")).build()));
         var planning = new CollectionPlanningService(new DepositRecordRepository(jdbc),
-                new CollectionRecordRepository(jdbc), new ChainAssetRepository(jdbc),
+                new CollectionRecordRepository(jdbc), assets,
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new CustodyGasAccountRepository(jdbc));
 
@@ -79,11 +83,6 @@ class CollectionPlanningServiceTest {
                                 "amount", new BigDecimal("3"), "pending", false),
                         row("tenant_id", TENANT_A, "asset_symbol", "USDT", "from_address", "0xabc",
                                 "amount", new BigDecimal("5"), "pending", true));
-            }
-            if (query.contains(" from chain_asset ")) {
-                return List.of(
-                        row("symbol", "ETH", "native_asset", true, "min_transfer", BigDecimal.ONE),
-                        row("symbol", "USDT", "native_asset", false, "min_transfer", new BigDecimal("5")));
             }
             if (query.contains(" from custody_address ")) {
                 return List.of(

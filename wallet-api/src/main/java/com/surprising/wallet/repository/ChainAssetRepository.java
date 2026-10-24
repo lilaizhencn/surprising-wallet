@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -15,69 +14,40 @@ import java.util.Optional;
  */
 @Repository
 public class ChainAssetRepository {
-    public List<ChainAsset> listActiveDefinitions() {
-        return jdbc.query("""
-                select id, chain, symbol, asset_kind, contract_address, decimals,
-                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
-                  from chain_asset where active=true order by chain, symbol
-                """, (rs, rowNum) -> mapDefinition(rs));
-    }
-
-    /** JDBC 模板。 */
+    private static final String COLUMNS = """
+            id, chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
+            min_transfer, min_withdraw, created_at, updated_at
+            """;
     private final JdbcTemplate jdbc;
 
-    /** 构造链资产仓储。 */
-    public ChainAssetRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    public ChainAssetRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+
+    public List<ChainAsset> listDefinitions() {
+        return query("order by chain, symbol");
     }
 
-    /** 查询非原生资产概览。 */
-    public List<Map<String, Object>> listNonNativeOverview() {
-        return jdbc.queryForList("""
-                select chain, symbol, contract_address, active
-                  from chain_asset
-                 where native_asset = false
-                 order by chain, symbol
-                """);
+    public List<ChainAsset> listDefinitionsByChain(String chain) {
+        return query("where upper(chain)=upper(?) order by symbol", chain);
     }
 
-    /** 查询全部处于启用状态的链资产。 */
-    public List<Map<String, Object>> listActive() {
-        return jdbc.queryForList("""
-                select id, chain, symbol, asset_kind, contract_address, decimals,
-                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
-                  from chain_asset
-                 where active = true
-                 order by chain, symbol
-                """);
+    public List<ChainAsset> listActiveDefinitions() {
+        return query("where active=true order by chain, symbol");
     }
 
-    /** 查询指定链的启用资产字段。 */
-    public List<Map<String, Object>> listActiveByChain(String chain) {
-        return jdbc.queryForList("""
-                select chain, symbol, asset_kind, contract_address, decimals, native_asset,
-                       active, min_transfer, min_withdraw
-                  from chain_asset where chain = ? and active = true
-                """, chain);
+    public List<ChainAsset> listNonNativeOverview() {
+        return query("where native_asset=false order by chain, symbol");
     }
 
-    /** 查询链资产。 */
-    public Optional<Map<String, Object>> find(String chain, String symbol) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                select chain, symbol, contract_address, decimals, active, native_asset
-                  from chain_asset where chain = ? and symbol = ?
-                """, chain, symbol);
-        return rows.stream().findFirst();
+    public List<ChainAsset> listActiveByChain(String chain) {
+        return query("where chain=? and active=true", chain);
     }
 
-    /** 查询指定链上处于启用状态的资产。 */
-    public Optional<Map<String, Object>> findActive(String chain, String symbol) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                select chain, symbol, decimals, active, native_asset, contract_address
-                  from chain_asset
-                 where chain = ? and symbol = ? and active = true
-                """, chain, symbol);
-        return rows.stream().findFirst();
+    public Optional<ChainAsset> find(String chain, String symbol) {
+        return query("where chain=? and symbol=?", chain, symbol).stream().findFirst();
+    }
+
+    public Optional<ChainAsset> findActive(String chain, String symbol) {
+        return query("where chain=? and symbol=? and active=true", chain, symbol).stream().findFirst();
     }
 
     /** 判断链资产是否存在。 */
@@ -146,21 +116,18 @@ public class ChainAssetRepository {
     }
 
     public Optional<ChainAsset> findActiveDefinition(String chain, String symbol) {
-        return jdbc.query("""
-                select id, chain, symbol, asset_kind, contract_address, decimals,
-                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
-                  from chain_asset
-                 where upper(chain) = upper(?) and upper(symbol) = upper(?) and active = true
-                """, (rs, rowNum) -> mapDefinition(rs), chain, symbol).stream().findFirst();
+        return query("where upper(chain)=upper(?) and upper(symbol)=upper(?) and active=true", chain, symbol)
+                .stream().findFirst();
     }
 
-    /** Observed fees retain their stored precision even when new asset work is disabled. */
+    /** 已观察费用仍按原生资产保存的精度结算，不受新业务开关影响。 */
     public Optional<ChainAsset> findDefinition(String chain, String symbol) {
-        return jdbc.query("""
-                select id, chain, symbol, asset_kind, contract_address, decimals,
-                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
-                  from chain_asset where upper(chain)=upper(?) and upper(symbol)=upper(?)
-                """, (rs, rowNum) -> mapDefinition(rs), chain, symbol).stream().findFirst();
+        return query("where upper(chain)=upper(?) and upper(symbol)=upper(?)", chain, symbol).stream().findFirst();
+    }
+
+    private List<ChainAsset> query(String predicate, Object... args) {
+        return jdbc.query("select " + COLUMNS + " from chain_asset " + predicate,
+                (rs, rowNum) -> mapDefinition(rs), args);
     }
 
     public int countActiveNativeAssets(String chain) {

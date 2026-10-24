@@ -4,6 +4,7 @@ import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.repository.*;
 import java.math.BigDecimal;
+import com.surprising.wallet.chain.model.ChainAsset;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,9 +46,9 @@ public class CollectionPlanningService {
                 pending.add(key);
             }
         }
-        Map<String, Map<String, Object>> activeAssets = new HashMap<>();
-        for (Map<String, Object> row : assets.listActiveByChain(chain)) {
-            activeAssets.put(String.valueOf(row.get("symbol")).toLowerCase(Locale.ROOT), row);
+        Map<String, ChainAsset> activeAssets = new HashMap<>();
+        for (ChainAsset row : assets.listActiveByChain(chain)) {
+            activeAssets.put(row.getSymbol().toLowerCase(Locale.ROOT), row);
         }
         Map<Long, UUID> custodyByChainAddress = new HashMap<>();
         for (Map<String, Object> row : custodyAddresses.listActiveByChain(chain)) {
@@ -63,9 +64,9 @@ public class CollectionPlanningService {
                     || userId == HotWalletRules.DEFAULT_HOT_USER_ID) {
                 continue;
             }
-            Map<String, Object> nativeAsset = activeAssets.get(
+            ChainAsset nativeAsset = activeAssets.get(
                     String.valueOf(address.get("asset_symbol")).toLowerCase(Locale.ROOT));
-            if (nativeAsset == null || !Boolean.TRUE.equals(nativeAsset.get("native_asset"))) {
+            if (nativeAsset == null || !Boolean.TRUE.equals(nativeAsset.getNativeAsset())) {
                 continue;
             }
             long chainAddressId = ((Number) address.get("id")).longValue();
@@ -81,13 +82,13 @@ public class CollectionPlanningService {
                 if (pending.contains(key)) {
                     continue;
                 }
-                Map<String, Object> asset = activeAssets.get(key.assetSymbol().toLowerCase(Locale.ROOT));
+                ChainAsset asset = activeAssets.get(key.assetSymbol().toLowerCase(Locale.ROOT));
                 if (asset == null) {
                     continue;
                 }
                 BigDecimal amount = entry.getValue().subtract(collected.getOrDefault(key, BigDecimal.ZERO))
                         .max(BigDecimal.ZERO);
-                BigDecimal minTransfer = (BigDecimal) asset.get("min_transfer");
+                BigDecimal minTransfer = asset.getMinTransfer();
                 BigDecimal required = (minTransfer == null ? BigDecimal.ZERO : minTransfer)
                         .max(minimumAmount == null ? BigDecimal.ZERO : minimumAmount);
                 if (amount.signum() <= 0 || amount.compareTo(required) < 0) {

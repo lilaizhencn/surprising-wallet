@@ -1,6 +1,10 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.chain.model.TokenConfiguration;
+import com.surprising.wallet.repository.ChainRpcNodeRepository.Overview;
 import com.surprising.wallet.service.WalletRuntimeConfigService.GlobalSwitches;
 import static com.surprising.wallet.service.WalletRuntimeConfigService.*;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
@@ -46,23 +50,14 @@ public class WalletConfigOverviewService {
     private final ChainAssetRepository chainAssetRepository;
     /** RPC 节点仓储。 */
     private final ChainRpcNodeRepository rpcNodeRepository;
-    /**
-     * 保存 {@code audits}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyAuditRepository audits;
     /**
      * 提供密钥配置状态，概览接口不读取或返回私钥材料。
      */
     private final WalletKeyMaterialProvider keyMaterial;
-    /**
-     * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
-     */
     private final String environment;
     private final WalletRuntimeConfigService runtimeConfig;
 
-    /**
-     * 构造 {@code WalletConfigOverviewService}，初始化该组件运行所需的状态和依赖。
-     */
     public WalletConfigOverviewService(WalletSystemConfigRepository systemConfigRepository,
                                        ChainProfileRepository chainProfileRepository,
                                        TokenConfigRepository tokenConfigRepository,
@@ -83,27 +78,24 @@ public class WalletConfigOverviewService {
         this.runtimeConfig = runtimeConfig;
     }
 
-    /**
-     * 执行 {@code summary} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         GlobalSwitches switches = runtimeConfig.globalSwitches();
         boolean keysetConfigured = this.keyMaterial.isConfigured();
-        List<ProfileRow> profiles = loadProfiles();
-        List<TokenRow> tokens = loadTokens();
-        List<AssetRow> assets = loadAssets();
-        List<RpcRow> rpcNodes = loadRpcNodes();
+        List<AccountChainProfile> profiles = chainProfileRepository.listAll();
+        List<TokenConfiguration> tokens = tokenConfigRepository.listAll();
+        List<ChainAsset> assets = chainAssetRepository.listNonNativeOverview();
+        List<Overview> rpcNodes = rpcNodeRepository.listOverview();
         boolean production = WalletEnvironmentPolicy.isProduction(environment);
 
         List<AnomalyView> anomalies = findAnomalies(
                 keysetConfigured, production, profiles, tokens, assets, rpcNodes);
-        Map<String, Integer> tokenCounts = enabledTokenCounts(tokens);
-        Map<String, Integer> rpcCounts = enabledRpcCounts(rpcNodes);
+        Map<NetworkKey, Integer> tokenCounts = enabledTokenCounts(tokens);
+        Map<NetworkKey, Integer> rpcCounts = enabledRpcCounts(rpcNodes);
         Map<String, Long> enabledNetworksByChain = profiles.stream()
-                .filter(ProfileRow::enabled)
+                .filter(AccountChainProfile::getEnabled)
                 .collect(Collectors.groupingBy(
-                        profile -> normalize(profile.chain()),
+                        profile -> normalize(profile.getChain()),
                         Collectors.counting()));
 
         List<ChainStatusView> chains = profiles.stream()
@@ -112,20 +104,20 @@ public class WalletConfigOverviewService {
                         switches,
                         keysetConfigured,
                         production,
-                        enabledNetworksByChain.getOrDefault(normalize(profile.chain()), 0L),
-                        tokenCounts.getOrDefault(profileKey(profile.chain(), profile.network()), 0),
-                        rpcCounts.getOrDefault(profileKey(profile.chain(), profile.network()), 0)))
+                        enabledNetworksByChain.getOrDefault(normalize(profile.getChain()), 0L),
+                        tokenCounts.getOrDefault(profileKey(profile.getChain(), profile.getNetwork()), 0),
+                        rpcCounts.getOrDefault(profileKey(profile.getChain(), profile.getNetwork()), 0)))
                 .toList();
 
         int enabledChainCount = (int) profiles.stream()
-                .filter(ProfileRow::enabled)
-                .map(profile -> normalize(profile.chain()))
+                .filter(AccountChainProfile::getEnabled)
+                .map(profile -> normalize(profile.getChain()))
                 .distinct()
                 .count();
-        int enabledNetworkCount = (int) profiles.stream().filter(ProfileRow::enabled).count();
-        int enabledTokenCount = (int) tokens.stream().filter(TokenRow::enabled).count();
+        int enabledNetworkCount = (int) profiles.stream().filter(AccountChainProfile::getEnabled).count();
+        int enabledTokenCount = (int) tokens.stream().filter(TokenConfiguration::enabled).count();
         int enabledRpcNodeCount = (int) rpcNodes.stream()
-                .filter(RpcRow::enabled)
+                .filter(Overview::enabled)
                 .filter(this::currentEnvironment)
                 .count();
 
@@ -142,9 +134,6 @@ public class WalletConfigOverviewService {
                 Instant.now());
     }
 
-    /**
-     * 设置或更新 {@code updateGlobalSwitches} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional
     public SummaryView updateGlobalSwitches(CustodyPrincipal actor,
                                             UpdateGlobalSwitchesCommand command,
@@ -175,59 +164,13 @@ public class WalletConfigOverviewService {
                 sourceIp, details);
         return summary(actor);
     }
-    /**
-     * 获取或查询 {@code loadProfiles} 对应的数据，供调用方读取当前状态。
-     */
-    private List<ProfileRow> loadProfiles() {
-        return chainProfileRepository.listAll().stream().map(row -> new ProfileRow(
-                longValue(row.get("id")),
-                stringValue(row.get("chain")),
-                stringValue(row.get("network")),
-                stringValue(row.get("family")),
-                booleanValue(row.get("enabled"), false),
-                booleanValue(row.get("scan_enabled"), false),
-                booleanValue(row.get("withdraw_enabled"), false),
-                booleanValue(row.get("collection_enabled"), false),
-                booleanValue(row.get("transfer_enabled"), false))).toList();
-    }
-    /**
-     * 获取或查询 {@code loadTokens} 对应的数据，供调用方读取当前状态。
-     */
-    private List<TokenRow> loadTokens() {
-        return tokenConfigRepository.listAll().stream().map(row -> new TokenRow(
-                row.chain(), row.network(), row.symbol(), row.contractAddress(), row.enabled())).toList();
-    }
 
-    /**
-     * 获取或查询 {@code loadAssets} 对应的数据，供调用方读取当前状态。
-     */
-    private List<AssetRow> loadAssets() {
-        return chainAssetRepository.listNonNativeOverview().stream().map(row -> new AssetRow(
-                stringValue(row.get("chain")),
-                stringValue(row.get("symbol")),
-                stringValue(row.get("contract_address")),
-                booleanValue(row.get("active"), false))).toList();
-    }
-    /**
-     * 获取或查询 {@code loadRpcNodes} 对应的数据，供调用方读取当前状态。
-     */
-    private List<RpcRow> loadRpcNodes() {
-        return rpcNodeRepository.listOverview().stream().map(row -> new RpcRow(
-                stringValue(row.get("chain")),
-                stringValue(row.get("network")),
-                stringValue(row.get("environment")),
-                booleanValue(row.get("enabled"), false))).toList();
-    }
-
-    /**
-     * 获取或查询 {@code findAnomalies} 对应的数据，供调用方读取当前状态。
-     */
     private List<AnomalyView> findAnomalies(boolean keysetConfigured,
                                             boolean production,
-                                            List<ProfileRow> profiles,
-                                            List<TokenRow> tokens,
-                                            List<AssetRow> assets,
-                                            List<RpcRow> rpcNodes) {
+                                            List<AccountChainProfile> profiles,
+                                            List<TokenConfiguration> tokens,
+                                            List<ChainAsset> assets,
+                                            List<Overview> rpcNodes) {
         List<AnomalyView> anomalies = new ArrayList<>();
         if (!keysetConfigured) {
             anomalies.add(new AnomalyView(
@@ -235,55 +178,55 @@ public class WalletConfigOverviewService {
                     "Wallet keyset is not configured."));
         }
 
-        Map<String, List<ProfileRow>> enabledProfiles = profiles.stream()
-                .filter(ProfileRow::enabled)
-                .collect(Collectors.groupingBy(profile -> normalize(profile.chain())));
+        Map<String, List<AccountChainProfile>> enabledProfiles = profiles.stream()
+                .filter(AccountChainProfile::getEnabled)
+                .collect(Collectors.groupingBy(profile -> normalize(profile.getChain())));
         enabledProfiles.forEach((chain, rows) -> {
             if (rows.size() > 1) {
                 anomalies.add(new AnomalyView(
                         "MULTIPLE_ENABLED_NETWORKS", "ERROR", chain, null,
                         "Only one network can be enabled per chain at a time: "
-                                + rows.stream().map(ProfileRow::network).collect(Collectors.joining(", "))));
+                                + rows.stream().map(AccountChainProfile::getNetwork).collect(Collectors.joining(", "))));
             }
         });
 
-        Set<String> enabledProfileKeys = profiles.stream()
-                .filter(ProfileRow::enabled)
-                .map(profile -> profileKey(profile.chain(), profile.network()))
+        Set<NetworkKey> enabledProfileKeys = profiles.stream()
+                .filter(AccountChainProfile::getEnabled)
+                .map(profile -> profileKey(profile.getChain(), profile.getNetwork()))
                 .collect(Collectors.toSet());
-        Set<String> enabledRpcKeys = rpcNodes.stream()
-                .filter(RpcRow::enabled)
+        Set<NetworkKey> enabledRpcKeys = rpcNodes.stream()
+                .filter(Overview::enabled)
                 .filter(this::currentEnvironment)
                 .map(rpc -> profileKey(rpc.chain(), rpc.network()))
                 .collect(Collectors.toSet());
-        for (ProfileRow profile : profiles) {
-            if (!profile.enabled()) {
+        for (AccountChainProfile profile : profiles) {
+            if (!profile.getEnabled()) {
                 continue;
             }
-            if (production && !WalletEnvironmentPolicy.isProductionNetwork(profile.network())) {
+            if (production && !WalletEnvironmentPolicy.isProductionNetwork(profile.getNetwork())) {
                 anomalies.add(new AnomalyView(
-                        "NON_PRODUCTION_NETWORK", "ERROR", profile.chain(), profile.network(),
+                        "NON_PRODUCTION_NETWORK", "ERROR", profile.getChain(), profile.getNetwork(),
                         "Production cannot enable a non-production network."));
             }
-            if (!enabledRpcKeys.contains(profileKey(profile.chain(), profile.network()))) {
+            if (!enabledRpcKeys.contains(profileKey(profile.getChain(), profile.getNetwork()))) {
                 anomalies.add(new AnomalyView(
-                        "RPC_NODE_MISSING", "ERROR", profile.chain(), profile.network(),
+                        "RPC_NODE_MISSING", "ERROR", profile.getChain(), profile.getNetwork(),
                         "No enabled RPC node is configured for environment " + environment + "."));
             }
         }
 
-        Map<String, AssetRow> activeAssets = assets.stream()
-                .filter(AssetRow::active)
+        Map<AssetKey, ChainAsset> activeAssets = assets.stream()
+                .filter(ChainAsset::getActive)
                 .collect(Collectors.toMap(
-                        asset -> assetKey(asset.chain(), asset.symbol()),
+                        asset -> assetKey(asset.getChain(), asset.getSymbol()),
                         asset -> asset,
                         (left, right) -> left));
-        Set<String> enabledTokenAssets = new LinkedHashSet<>();
-        for (TokenRow token : tokens) {
+        Set<AssetKey> enabledTokenAssets = new LinkedHashSet<>();
+        for (TokenConfiguration token : tokens) {
             if (!token.enabled()) {
                 continue;
             }
-            String tokenAssetKey = assetKey(token.chain(), token.symbol());
+            AssetKey tokenAssetKey = assetKey(token.chain(), token.symbol());
             enabledTokenAssets.add(tokenAssetKey);
             if (token.network().isBlank()) {
                 anomalies.add(new AnomalyView(
@@ -294,31 +237,28 @@ public class WalletConfigOverviewService {
                         "TOKEN_NETWORK_DISABLED", "ERROR", token.chain(), token.network(),
                         token.symbol() + " has no matching enabled chain profile."));
             }
-            AssetRow asset = activeAssets.get(tokenAssetKey);
+            ChainAsset asset = activeAssets.get(tokenAssetKey);
             if (asset == null) {
                 anomalies.add(new AnomalyView(
                         "TOKEN_ASSET_MISSING", "ERROR", token.chain(), token.network(),
                         token.symbol() + " has no matching active chain asset."));
-            } else if (!sameContract(token.contractAddress(), asset.contractAddress())) {
+            } else if (!sameContract(token.contractAddress(), asset.getContractAddress())) {
                 anomalies.add(new AnomalyView(
                         "TOKEN_CONTRACT_MISMATCH", "ERROR", token.chain(), token.network(),
                         token.symbol() + " contract differs from chain_asset."));
             }
         }
-        for (AssetRow asset : activeAssets.values()) {
-            if (!enabledTokenAssets.contains(assetKey(asset.chain(), asset.symbol()))) {
+        for (ChainAsset asset : activeAssets.values()) {
+            if (!enabledTokenAssets.contains(assetKey(asset.getChain(), asset.getSymbol()))) {
                 anomalies.add(new AnomalyView(
-                        "ASSET_TOKEN_MISSING", "ERROR", asset.chain(), null,
-                        asset.symbol() + " has no matching enabled token configuration."));
+                        "ASSET_TOKEN_MISSING", "ERROR", asset.getChain(), null,
+                        asset.getSymbol() + " has no matching enabled token configuration."));
             }
         }
         return List.copyOf(anomalies);
     }
 
-    /**
-     * 获取或查询 {@code chainStatus} 对应的数据，并向调用方返回当前业务状态。
-     */
-    private ChainStatusView chainStatus(ProfileRow profile,
+    private ChainStatusView chainStatus(AccountChainProfile profile,
                                         GlobalSwitches global,
                                         boolean keysetConfigured,
                                         boolean production,
@@ -326,15 +266,15 @@ public class WalletConfigOverviewService {
                                         int tokenCount,
                                         int rpcNodeCount) {
         TaskSwitches configured = new TaskSwitches(
-                profile.scanEnabled(), profile.withdrawEnabled(),
-                profile.collectionEnabled(), profile.transferEnabled());
+                profile.getScanEnabled(), profile.getWithdrawEnabled(),
+                profile.getCollectionEnabled(), profile.getTransferEnabled());
         TaskSwitches effective = new TaskSwitches(
-                global.effective(profile.enabled(), global.taskEnabled(TASK_SCAN, profile.scanEnabled())),
-                global.effective(profile.enabled(), global.taskEnabled(TASK_WITHDRAW, profile.withdrawEnabled())),
-                global.effective(profile.enabled(), global.taskEnabled(TASK_COLLECTION, profile.collectionEnabled())),
-                global.effective(profile.enabled(), global.taskEnabled(TASK_TRANSFER, profile.transferEnabled())));
+                global.effective(profile.getEnabled(), global.taskEnabled(TASK_SCAN, profile.getScanEnabled())),
+                global.effective(profile.getEnabled(), global.taskEnabled(TASK_WITHDRAW, profile.getWithdrawEnabled())),
+                global.effective(profile.getEnabled(), global.taskEnabled(TASK_COLLECTION, profile.getCollectionEnabled())),
+                global.effective(profile.getEnabled(), global.taskEnabled(TASK_TRANSFER, profile.getTransferEnabled())));
         LinkedHashSet<String> blockers = new LinkedHashSet<>();
-        if (!profile.enabled()) {
+        if (!profile.getEnabled()) {
             blockers.add("Chain profile is disabled.");
         } else {
             if (!keysetConfigured) {
@@ -346,22 +286,22 @@ public class WalletConfigOverviewService {
             if (enabledNetworkCount > 1) {
                 blockers.add("Only one network can be enabled per chain at a time.");
             }
-            if (production && !WalletEnvironmentPolicy.isProductionNetwork(profile.network())) {
+            if (production && !WalletEnvironmentPolicy.isProductionNetwork(profile.getNetwork())) {
                 blockers.add("This network is not allowed in production.");
             }
             if (!global.walletEnabled()) {
                 blockers.add("Wallet master switch is off.");
             }
-            if (profile.scanEnabled() && !global.scanEnabled()) {
+            if (profile.getScanEnabled() && !global.scanEnabled()) {
                 blockers.add("Global scan switch is off.");
             }
-            if (profile.withdrawEnabled() && !global.withdrawEnabled()) {
+            if (profile.getWithdrawEnabled() && !global.withdrawEnabled()) {
                 blockers.add("Global withdrawal switch is off.");
             }
-            if (profile.collectionEnabled() && !global.collectionEnabled()) {
+            if (profile.getCollectionEnabled() && !global.collectionEnabled()) {
                 blockers.add("Global collection switch is off.");
             }
-            if (profile.transferEnabled() && !global.transferEnabled()) {
+            if (profile.getTransferEnabled() && !global.transferEnabled()) {
                 blockers.add("Global transfer switch is off.");
             }
             if (!configured.anyEnabled()) {
@@ -369,7 +309,7 @@ public class WalletConfigOverviewService {
             }
         }
         String status;
-        if (!profile.enabled()) {
+        if (!profile.getEnabled()) {
             status = "DISABLED";
         } else if (!blockers.isEmpty()) {
             status = "BLOCKED";
@@ -379,89 +319,43 @@ public class WalletConfigOverviewService {
             status = "ACTIVE";
         }
         return new ChainStatusView(
-                profile.id(), profile.chain(), profile.network(), profile.family(),
-                profile.enabled(), configured, effective, tokenCount, rpcNodeCount,
+                profile.getId(), profile.getChain(), profile.getNetwork(), profile.getFamily(),
+                profile.getEnabled(), configured, effective, tokenCount, rpcNodeCount,
                 status, List.copyOf(blockers));
     }
-    /**
-     * 写入或更新 {@code enabledTokenCounts} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    private Map<String, Integer> enabledTokenCounts(List<TokenRow> tokens) {
-        Map<String, Integer> counts = new HashMap<>();
-        tokens.stream().filter(TokenRow::enabled).forEach(token ->
+    private Map<NetworkKey, Integer> enabledTokenCounts(List<TokenConfiguration> tokens) {
+        Map<NetworkKey, Integer> counts = new HashMap<>();
+        tokens.stream().filter(TokenConfiguration::enabled).forEach(token ->
                 counts.merge(profileKey(token.chain(), token.network()), 1, Integer::sum));
         return counts;
     }
-    /**
-     * 写入或更新 {@code enabledRpcCounts} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    private Map<String, Integer> enabledRpcCounts(List<RpcRow> nodes) {
-        Map<String, Integer> counts = new HashMap<>();
-        nodes.stream().filter(RpcRow::enabled).filter(this::currentEnvironment).forEach(node ->
+    private Map<NetworkKey, Integer> enabledRpcCounts(List<Overview> nodes) {
+        Map<NetworkKey, Integer> counts = new HashMap<>();
+        nodes.stream().filter(Overview::enabled).filter(this::currentEnvironment).forEach(node ->
                 counts.merge(profileKey(node.chain(), node.network()), 1, Integer::sum));
         return counts;
     }
-    /**
-     * 获取或查询 {@code currentEnvironment} 对应的数据，并向调用方返回当前业务状态。
-     */
-    private boolean currentEnvironment(RpcRow row) {
+    private boolean currentEnvironment(Overview row) {
         return environment.equalsIgnoreCase(row.environment());
     }
 
-    /**
-     * 执行 {@code sameContract} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static boolean sameContract(String left, String right) {
-        return !left.isBlank() && !right.isBlank() && left.trim().equalsIgnoreCase(right.trim());
+        return left != null && right != null && !left.isBlank() && !right.isBlank()
+                && left.trim().equalsIgnoreCase(right.trim());
     }
-    /**
-     * 获取或查询 {@code profileKey} 对应的数据，并向调用方返回当前业务状态。
-     */
-    private static String profileKey(String chain, String network) {
-        return normalize(chain) + "|" + normalize(network);
+    private static NetworkKey profileKey(String chain, String network) {
+        return new NetworkKey(normalize(chain), normalize(network));
     }
-    /**
-     * 获取或查询 {@code assetKey} 对应的数据，并向调用方返回当前业务状态。
-     */
-    private static String assetKey(String chain, String symbol) {
-        return normalize(chain) + "|" + normalize(symbol);
+    private static AssetKey assetKey(String chain, String symbol) {
+        return new AssetKey(normalize(chain), normalize(symbol));
     }
-    /**
-     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
-    /**
-     * 转换或计算 {@code normalizeEnvironment} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalizeEnvironment(String value) {
         return value == null || value.isBlank() ? "dev" : value.trim();
     }
-    /**
-     * 转换或计算 {@code stringValue} 对应的值，统一金额、格式和边界规则。
-     */
-    private static String stringValue(Object value) {
-        return value == null ? "" : String.valueOf(value).trim();
-    }
-    /**
-     * 转换或计算 {@code longValue} 对应的值，统一金额、格式和边界规则。
-     */
-    private static long longValue(Object value) {
-        return value instanceof Number number ? number.longValue() : Long.parseLong(stringValue(value));
-    }
-    /**
-     * 转换或计算 {@code booleanValue} 对应的值，统一金额、格式和边界规则。
-     */
-    private static boolean booleanValue(Object value, boolean defaultValue) {
-        if (value == null) {
-            return defaultValue;
-        }
-        return value instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(value));
-    }
-    /**
-     * 校验 {@code requirePlatformAdmin} 对应的前置条件，不满足时抛出明确异常。
-     */
+
     private static void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin()) {
             throw new CustodyForbiddenException("platform administrator required");
@@ -486,7 +380,6 @@ public class WalletConfigOverviewService {
             List<AnomalyView> anomalies,
             Instant generatedAt) {
     }
-
 
     public record StatisticsView(
             int configuredChainProfileCount,
@@ -532,37 +425,6 @@ public class WalletConfigOverviewService {
             String message) {
     }
 
-    private record ProfileRow(
-            long id,
-            String chain,
-            String network,
-            String family,
-            boolean enabled,
-            boolean scanEnabled,
-            boolean withdrawEnabled,
-            boolean collectionEnabled,
-            boolean transferEnabled) {
-    }
-
-    private record TokenRow(
-            String chain,
-            String network,
-            String symbol,
-            String contractAddress,
-            boolean enabled) {
-    }
-
-    private record AssetRow(
-            String chain,
-            String symbol,
-            String contractAddress,
-            boolean active) {
-    }
-
-    private record RpcRow(
-            String chain,
-            String network,
-            String environment,
-            boolean enabled) {
-    }
+    private record NetworkKey(String chain, String network) { }
+    private record AssetKey(String chain, String symbol) { }
 }

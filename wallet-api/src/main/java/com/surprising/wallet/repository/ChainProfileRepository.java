@@ -1,12 +1,12 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Map;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Optional;
 
 /**
@@ -14,6 +14,13 @@ import java.util.Optional;
  */
 @Repository
 public class ChainProfileRepository {
+    private static final String COLUMNS = """
+            id, chain, network, family, runtime_currency_id, bip44_coin_type,
+            native_symbol, rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+            default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model,
+            scan_batch_size, scan_enabled, withdraw_enabled, collection_enabled,
+            transfer_enabled, scan_start_height, scan_max_blocks_per_run, created_at, updated_at
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -22,66 +29,25 @@ public class ChainProfileRepository {
         this.jdbc = jdbc;
     }
 
-    /** 查询全部链配置。 */
-    public List<Map<String, Object>> listAll() {
-        return jdbc.queryForList("""
-                select id, chain, network, family, runtime_currency_id, bip44_coin_type,
-                       native_symbol, rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                       default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model,
-                       scan_batch_size, scan_enabled, withdraw_enabled, collection_enabled,
-                       transfer_enabled, scan_start_height, scan_max_blocks_per_run,
-                       created_at, updated_at
-                  from chain_profile
-                 order by chain, network
-                """);
+    public List<AccountChainProfile> listAll() {
+        return queryAccount("order by chain, network");
     }
 
-    /** 按 ID 查询链配置。 */
-    public Optional<Map<String, Object>> findById(long id) {
-        try {
-            return Optional.of(jdbc.queryForMap("""
-                    select id, chain, network, family, runtime_currency_id, bip44_coin_type,
-                           native_symbol, rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                           default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model,
-                           scan_batch_size, scan_enabled, withdraw_enabled, collection_enabled,
-                           transfer_enabled, scan_start_height, scan_max_blocks_per_run,
-                           created_at, updated_at
-                      from chain_profile where id = ?
-                    """, id));
-        } catch (EmptyResultDataAccessException ignored) {
-            return Optional.empty();
-        }
+    public List<AccountChainProfile> listByChain(String chain) {
+        return queryAccount("where upper(chain)=upper(?) order by network", chain);
     }
 
-    /** 按链和网络查询链配置。 */
-    public Optional<Map<String, Object>> findByChainAndNetwork(String chain, String network) {
-        try {
-            return Optional.of(jdbc.queryForMap("""
-                    select id, chain, network, family, chain_id, native_symbol,
-                           default_fee_rate, dust_threshold, enabled,
-                           scan_enabled, withdraw_enabled, collection_enabled, transfer_enabled
-                      from chain_profile
-                     where upper(chain) = upper(?) and lower(network) = lower(?)
-                    """, chain, network));
-        } catch (EmptyResultDataAccessException ignored) {
-            return Optional.empty();
-        }
+    public Optional<AccountChainProfile> findById(long id) {
+        return queryAccount("where id = ?", id).stream().findFirst();
     }
 
-    /** 查询用于 token 校验的链配置。 */
-    public Optional<Map<String, Object>> findTokenProfile(String chain, String network) {
-        return findByChainAndNetwork(chain, network);
+    public Optional<AccountChainProfile> findByChainAndNetwork(String chain, String network) {
+        return queryAccount("where upper(chain) = upper(?) and lower(network) = lower(?)", chain, network)
+                .stream().findFirst();
     }
 
-    /** 查询指定链上启用提现的链配置。 */
-    public List<Map<String, Object>> listEnabledForWithdrawal(String chain) {
-        return jdbc.queryForList("""
-                select id, chain, network, family, native_symbol, default_fee_rate,
-                       dust_threshold, enabled, withdraw_enabled
-                  from chain_profile
-                 where upper(chain) = upper(?) and enabled = true and withdraw_enabled = true
-                 order by id
-                """, chain);
+    public List<AccountChainProfile> listEnabledForWithdrawal(String chain) {
+        return queryAccount("where upper(chain) = upper(?) and enabled=true and withdraw_enabled=true order by id", chain);
     }
 
     /** 创建链配置并返回主键。 */
@@ -219,29 +185,40 @@ public class ChainProfileRepository {
         return queryAccount(enabledOnly ? "where enabled = true order by chain, network" : "order by chain, network");
     }
 
-    /** 查询账户链配置。 */
     private List<AccountChainProfile> queryAccount(String predicate, Object... args) {
-        String sql = """
-                select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-                       rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
-                       dust_threshold, enabled, chain_id, gas_policy, fee_model,
-                       scan_batch_size, scan_enabled,
-                       withdraw_enabled, collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                  from chain_profile
-                """ + predicate;
-        return jdbc.query(sql, (rs, rowNum) -> AccountChainProfile.builder()
-                .chain(rs.getString("chain")).network(rs.getString("network")).family(rs.getString("family"))
-                .runtimeCurrencyId(rs.getInt("runtime_currency_id")).bip44CoinType(rs.getInt("bip44_coin_type"))
-                .nativeSymbol(rs.getString("native_symbol")).rpcUrl(rs.getString("rpc_url"))
-                .explorerUrl(rs.getString("explorer_url")).depositConfirmations(rs.getInt("deposit_confirmations"))
+        return jdbc.query("select " + COLUMNS + " from chain_profile " + predicate,
+                (rs, rowNum) -> mapProfile(rs), args);
+    }
+
+    private static AccountChainProfile mapProfile(ResultSet rs) throws SQLException {
+        var created = rs.getTimestamp("created_at");
+        var updated = rs.getTimestamp("updated_at");
+        return AccountChainProfile.builder()
+                .id(rs.getObject("id", Long.class))
+                .chain(rs.getString("chain"))
+                .network(rs.getString("network"))
+                .family(rs.getString("family"))
+                .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                .bip44CoinType(rs.getInt("bip44_coin_type"))
+                .nativeSymbol(rs.getString("native_symbol"))
+                .rpcUrl(rs.getString("rpc_url"))
+                .explorerUrl(rs.getString("explorer_url"))
+                .depositConfirmations(rs.getInt("deposit_confirmations"))
                 .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
                 .defaultFee(rs.getObject("default_fee_rate", Long.class))
-                .dustThreshold(rs.getObject("dust_threshold", Long.class)).enabled(rs.getBoolean("enabled"))
-                .chainId(rs.getObject("chain_id", Long.class)).gasPolicy(rs.getString("gas_policy"))
-                .feeModel(rs.getString("fee_model")).scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
-                .scanEnabled(rs.getBoolean("scan_enabled")).withdrawEnabled(rs.getBoolean("withdraw_enabled"))
-                .collectionEnabled(rs.getBoolean("collection_enabled")).transferEnabled(rs.getBoolean("transfer_enabled"))
+                .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                .enabled(rs.getBoolean("enabled"))
+                .chainId(rs.getObject("chain_id", Long.class))
+                .gasPolicy(rs.getString("gas_policy"))
+                .feeModel(rs.getString("fee_model"))
+                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
+                .scanEnabled(rs.getBoolean("scan_enabled"))
+                .withdrawEnabled(rs.getBoolean("withdraw_enabled"))
+                .collectionEnabled(rs.getBoolean("collection_enabled"))
+                .transferEnabled(rs.getBoolean("transfer_enabled"))
                 .scanStartHeight(rs.getObject("scan_start_height", Long.class))
-                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class)).build(), args);
+                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
+                .createdAt(created == null ? null : created.toInstant())
+                .updatedAt(updated == null ? null : updated.toInstant()).build();
     }
 }

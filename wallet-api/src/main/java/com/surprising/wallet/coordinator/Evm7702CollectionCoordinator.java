@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.web3j.crypto.Hash;
 import org.web3j.utils.Numeric;
 import java.math.BigDecimal;
+import com.surprising.wallet.chain.model.ChainAsset;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -184,14 +185,14 @@ public class Evm7702CollectionCoordinator {
     public Optional<Batch> claimNextBatch(String chain, String network) {
         var resolved = configurations.requireActive(chain, network);
         Configuration config = resolved.config();
-        List<Map<String, Object>> assets = chainAssetRepository.listActiveByChain(chain);
+        List<ChainAsset> assets = chainAssetRepository.listActiveByChain(chain);
         List<TokenConfiguration> tokenConfigs = tokenConfigRepository.listCollectEnabled(chain, network);
         CandidateGroup group = null;
         for (Map<String, Object> record : collectionRecordRepository.listClaimable(chain, 500)) {
             UUID tenantId = (UUID) record.get("tenant_id");
             UUID custodyId = (UUID) record.get("custody_address_id");
             String assetSymbol = String.valueOf(record.get("asset_symbol"));
-            Map<String, Object> asset = assets.stream().filter(row -> assetSymbol.equalsIgnoreCase(String.valueOf(row.get("symbol")))).findFirst().orElse(null);
+            ChainAsset asset = assets.stream().filter(row -> assetSymbol.equalsIgnoreCase(row.getSymbol())).findFirst().orElse(null);
             if (asset == null) {
                 continue;
             }
@@ -206,7 +207,7 @@ public class Evm7702CollectionCoordinator {
             if (hot == null) {
                 continue;
             }
-            boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
+            boolean nativeAsset = Boolean.TRUE.equals(asset.getNativeAsset());
             TokenConfiguration token = tokenConfigs.stream().filter(row -> assetSymbol.equalsIgnoreCase(row.symbol())).findFirst().orElse(null);
             if ((!nativeAsset && token == null) || (nativeAsset && !config.nativeCollectionEnabled())) {
                 continue;
@@ -216,7 +217,7 @@ public class Evm7702CollectionCoordinator {
                     assetSymbol,
                     String.valueOf(record.get("to_address")),
                     nativeAsset ? "0x0000000000000000000000000000000000000000" : token.contractAddress(),
-                    ((Number) asset.get("decimals")).intValue());
+                    asset.getDecimals());
             break;
         }
         if (group == null) {

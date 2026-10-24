@@ -40,6 +40,10 @@ class RuntimeConfigurationIntegrationTest {
             assertFalse(profiles.listProfiles(true).isEmpty());
             for (var profile : profiles.listProfiles(true)) {
                 assertEquals(profile, profiles.findAccount(profile.getChain(), profile.getNetwork()).orElseThrow());
+                assertEquals(profile, profiles.findById(profile.getId()).orElseThrow());
+                assertEquals(profile, profiles.findByChainAndNetwork(profile.getChain(), profile.getNetwork()).orElseThrow());
+                assertNotNull(profile.getCreatedAt());
+                assertNotNull(profile.getUpdatedAt());
             }
             assertTrue(profiles.listProfiles(false).stream().anyMatch(profile -> !profile.getEnabled()));
             var assets = new ChainAssetRepository(jdbc);
@@ -93,6 +97,16 @@ class RuntimeConfigurationIntegrationTest {
             var nodes = rpc.listRuntimeNodes("ETH", profile.getNetwork(), "TYPED-RUNTIME", "rpc");
             assertEquals(List.of("all", "rpc"), nodes.stream().map(node -> node.getPurpose()).toList());
             assertEquals(50, nodes.getFirst().getMinRequestIntervalMs());
+            assertEquals(nodes.getFirst(), rpc.findById(nodes.getFirst().getId(), "ETH", profile.getNetwork()).orElseThrow());
+            assertTrue(rpc.listByChain("ETH", profile.getNetwork()).contains(nodes.getFirst()));
+            Instant checked = Instant.parse("2026-01-01T00:00:00Z");
+            rpc.updateProbe(nodes.getFirst().getId(), checked, 17, 200, null);
+            var checkedNode = rpc.findById(nodes.getFirst().getId(), "ETH", profile.getNetwork()).orElseThrow();
+            assertEquals(checked, checkedNode.getLastCheckedAt());
+            assertEquals(17L, checkedNode.getLastLatencyMs());
+            assertEquals(200, checkedNode.getLastHttpStatus());
+            assertNotNull(checkedNode.getCreatedAt());
+            assertNotNull(checkedNode.getUpdatedAt());
             assertEquals(List.of("all", "rpc", "scan"), rpc
                     .listRuntimeNodes("ETH", profile.getNetwork(), "typed-runtime", null).stream()
                     .map(node -> node.getPurpose()).toList());

@@ -8,13 +8,21 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 /**
  * chain_rpc_node 单表仓储。
  */
 @Repository
 public class ChainRpcNodeRepository {
+    private static final String COLUMNS = """
+            id, chain, network, environment, node_label, purpose, connection_type,
+            rpc_url, auth_type, auth_header_name, api_key, api_key_ref, username, username_ref, password, password_ref,
+            priority, min_request_interval_ms, enabled, renewal_due_at, remark,
+            last_checked_at, last_latency_ms, last_http_status, last_error, created_at, updated_at
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -23,40 +31,30 @@ public class ChainRpcNodeRepository {
         this.jdbc = jdbc;
     }
 
-    /** 查询指定链和网络的 RPC 节点。 */
-    public List<Map<String, Object>> listByChain(String chain, String network) {
-        return jdbc.queryForList("""
-                select id, chain, network, environment, node_label, purpose, connection_type,
-                       rpc_url, auth_type, auth_header_name, api_key, api_key_ref,
-                       username, username_ref, password, password_ref,
-                       priority, min_request_interval_ms, enabled, renewal_due_at, remark,
-                       last_checked_at, last_latency_ms, last_http_status, last_error,
-                       created_at, updated_at
-                  from chain_rpc_node
-                 where chain = ? and network = ?
-                 order by environment, purpose, priority, id
-                """, chain, network);
+    public List<ChainRpcNode> listByChain(String chain, String network) {
+        return query("where chain=? and network=? order by environment, purpose, priority, id", chain, network);
     }
 
-    /** 查询全部 RPC 节点概览字段。 */
-    public List<Map<String, Object>> listOverview() {
-        return jdbc.queryForList("""
-                select chain, network, environment, enabled
-                  from chain_rpc_node
+    public List<Overview> listOverview() {
+        return jdbc.query("""
+                select chain, network, environment, enabled from chain_rpc_node
                  order by chain, network, environment, priority, id
-                """);
+                """, (rs, rowNum) -> new Overview(rs.getString("chain"), rs.getString("network"),
+                rs.getString("environment"), rs.getBoolean("enabled")));
     }
 
-    /** 查询指定节点。 */
-    public Map<String, Object> findById(long id, String chain, String network) {
-        return jdbc.queryForMap("""
-                select id, environment, node_label, purpose, connection_type, rpc_url,
-                       auth_type, auth_header_name, api_key, username, password, priority,
-                       min_request_interval_ms, enabled, renewal_due_at, remark
-                  from chain_rpc_node
-                 where id = ? and chain = ? and network = ?
-                """, id, chain, network);
+    public List<NetworkCount> countByNetwork() {
+        return jdbc.query("select chain, network, count(*) as total from chain_rpc_node group by chain, network",
+                (rs, rowNum) -> new NetworkCount(rs.getString("chain"), rs.getString("network"),
+                        Math.toIntExact(rs.getLong("total"))));
     }
+
+    public Optional<ChainRpcNode> findById(long id, String chain, String network) {
+        return query("where id=? and chain=? and network=?", id, chain, network).stream().findFirst();
+    }
+
+    public record Overview(String chain, String network, String environment, boolean enabled) { }
+    public record NetworkCount(String chain, String network, int total) { }
 
     /** 将 RPC 节点迁移到新的链或网络名称。 */
     public int moveChain(String currentChain, String currentNetwork,
@@ -68,34 +66,20 @@ public class ChainRpcNodeRepository {
                 """, targetChain, targetNetwork, currentChain, currentNetwork);
     }
 
-    /** 查询链启用校验所需的节点。 */
-    public List<Map<String, Object>> listEnabledForPurpose(
-            String chain, String network, String environment, String purpose) {
-        return jdbc.queryForList("""
-                select environment, node_label, purpose, connection_type, rpc_url, auth_type,
-                       auth_header_name, api_key, username, password, priority,
-                       min_request_interval_ms, enabled, renewal_due_at, remark
-                  from chain_rpc_node
-                 where upper(chain) = upper(?) and lower(network) = lower(?)
-                   and lower(environment) = lower(?) and lower(purpose) = lower(?) and enabled = true
+    public List<ChainRpcNode> listEnabledForPurpose(String chain, String network, String environment, String purpose) {
+        return query("""
+                where upper(chain)=upper(?) and lower(network)=lower(?)
+                  and lower(environment)=lower(?) and lower(purpose)=lower(?) and enabled=true
                 """, chain, network, environment, purpose);
     }
 
-    /** 查询 token 合约校验所需的首个 JSON-RPC 节点。 */
-    public List<Map<String, Object>> listTokenValidationNodes(
-            String chain, String network, String environment) {
-        return jdbc.queryForList("""
-                select id, environment, node_label, purpose, connection_type, rpc_url,
-                       auth_type, auth_header_name, api_key, username, password, priority,
-                       min_request_interval_ms, enabled, renewal_due_at, remark
-                  from chain_rpc_node
-                 where upper(chain) = upper(?) and lower(network) = lower(?)
-                   and lower(environment) = lower(?) and enabled = true
-                   and connection_type ilike '%JSON_RPC%' and rpc_url ~* '^https?://'
-                 order by case when lower(purpose) = 'rpc' then 0
-                               when lower(purpose) = 'scan' then 1 else 2 end,
-                          priority, id
-                 limit 1
+    public List<ChainRpcNode> listTokenValidationNodes(String chain, String network, String environment) {
+        return query("""
+                where upper(chain)=upper(?) and lower(network)=lower(?)
+                  and lower(environment)=lower(?) and enabled=true
+                  and connection_type ilike '%JSON_RPC%' and rpc_url ~* '^https?://'
+                order by case when lower(purpose)='rpc' then 0 when lower(purpose)='scan' then 1 else 2 end,
+                         priority, id limit 1
                 """, chain, network, environment);
     }
 
@@ -172,27 +156,49 @@ public class ChainRpcNodeRepository {
             order = "priority, purpose, id";
             args.add(purpose);
         }
-        return jdbc.query("""
-                select id, chain, network, environment, node_label, purpose, connection_type,
-                       rpc_url, auth_type, auth_header_name, api_key, api_key_ref,
-                       username, username_ref, password, password_ref,
-                       priority, min_request_interval_ms, enabled, renewal_due_at, remark
-                  from chain_rpc_node
-                 where chain = ? and network = ? and lower(environment) = lower(?) and enabled = true
-                """ + predicate + " order by " + order, (rs, rowNum) -> {
-                    var renewal = rs.getTimestamp("renewal_due_at");
-                    return ChainRpcNode.builder().id(rs.getLong("id"))
-                            .chain(rs.getString("chain")).network(rs.getString("network"))
-                            .environment(rs.getString("environment")).nodeLabel(rs.getString("node_label"))
-                            .purpose(rs.getString("purpose")).connectionType(rs.getString("connection_type"))
-                            .rpcUrl(rs.getString("rpc_url")).authType(rs.getString("auth_type"))
-                            .authHeaderName(rs.getString("auth_header_name")).apiKey(rs.getString("api_key"))
-                            .apiKeyRef(rs.getString("api_key_ref")).username(rs.getString("username"))
-                            .usernameRef(rs.getString("username_ref")).password(rs.getString("password"))
-                            .passwordRef(rs.getString("password_ref")).priority(rs.getInt("priority"))
-                            .minRequestIntervalMs(rs.getObject("min_request_interval_ms", Integer.class))
-                            .enabled(rs.getBoolean("enabled")).renewalDueAt(renewal == null ? null : renewal.toInstant())
-                            .remark(rs.getString("remark")).build();
-                }, args.toArray());
+        return query("""
+                where chain = ? and network = ? and lower(environment) = lower(?) and enabled = true
+                """ + predicate + " order by " + order, args.toArray());
+    }
+
+    private List<ChainRpcNode> query(String predicate, Object... args) {
+        return jdbc.query("select " + COLUMNS + " from chain_rpc_node " + predicate,
+                (rs, rowNum) -> mapNode(rs), args);
+    }
+
+    private static ChainRpcNode mapNode(ResultSet rs) throws SQLException {
+        return ChainRpcNode.builder()
+                .id(rs.getObject("id", Long.class))
+                .chain(rs.getString("chain"))
+                .network(rs.getString("network"))
+                .environment(rs.getString("environment"))
+                .nodeLabel(rs.getString("node_label"))
+                .purpose(rs.getString("purpose"))
+                .connectionType(rs.getString("connection_type"))
+                .rpcUrl(rs.getString("rpc_url"))
+                .authType(rs.getString("auth_type"))
+                .authHeaderName(rs.getString("auth_header_name"))
+                .apiKey(rs.getString("api_key"))
+                .apiKeyRef(rs.getString("api_key_ref"))
+                .username(rs.getString("username"))
+                .usernameRef(rs.getString("username_ref"))
+                .password(rs.getString("password"))
+                .passwordRef(rs.getString("password_ref"))
+                .priority(rs.getInt("priority"))
+                .minRequestIntervalMs(rs.getObject("min_request_interval_ms", Integer.class))
+                .enabled(rs.getBoolean("enabled"))
+                .renewalDueAt(instant(rs.getTimestamp("renewal_due_at")))
+                .remark(rs.getString("remark"))
+                .lastCheckedAt(instant(rs.getTimestamp("last_checked_at")))
+                .lastLatencyMs(rs.getObject("last_latency_ms", Long.class))
+                .lastHttpStatus(rs.getObject("last_http_status", Integer.class))
+                .lastError(rs.getString("last_error"))
+                .createdAt(instant(rs.getTimestamp("created_at")))
+                .updatedAt(instant(rs.getTimestamp("updated_at")))
+                .build();
+    }
+
+    private static Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
     }
 }

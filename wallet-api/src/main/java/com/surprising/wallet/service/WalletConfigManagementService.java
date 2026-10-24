@@ -1,6 +1,9 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.chain.model.TokenConfiguration;
+import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.model.PageView;
 import tools.jackson.databind.JsonNode;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
@@ -20,7 +23,8 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -60,22 +64,10 @@ public class WalletConfigManagementService {
     private final DepositRecordRepository depositRecordRepository;
     private final WithdrawalOrderRepository withdrawalOrderRepository;
     private final CollectionRecordRepository collectionRecordRepository;
-    /**
-     * 保存 {@code audits}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyAuditRepository audits;
-    /**
-     * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
-     */
     private final String environment;
-    /**
-     * 保存 {@code rpcClient}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final WalletRpcClient rpcClient;
 
-    /**
-     * 构造 {@code WalletConfigManagementService}，初始化该组件运行所需的状态和依赖。
-     */
     public WalletConfigManagementService(WalletRuntimeConfigService runtimeConfig,
                                          ChainProfileRepository chainProfileRepository,
                                          ChainRpcNodeRepository rpcNodeRepository,
@@ -105,9 +97,7 @@ public class WalletConfigManagementService {
         this.rpcClient = rpcClient;
     }
 
-    /**
-     * 获取或查询 {@code listChains} 对应的数据，供调用方读取当前状态。
-     */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public List<ChainView> listChains(CustodyPrincipal actor, String search, Boolean enabled,
                                       String network, String family, String token,
                                       Boolean scanEnabled, Boolean withdrawEnabled,
@@ -118,7 +108,6 @@ public class WalletConfigManagementService {
         String familyFilter = normalize(family);
         String tokenFilter = normalize(token);
         return chainRows().stream()
-                .map(this::chainView)
                 .filter(row -> query.isEmpty()
                         || normalize(row.chain()).contains(query)
                         || normalize(row.network()).contains(query)
@@ -135,24 +124,23 @@ public class WalletConfigManagementService {
                 .filter(row -> transferEnabled == null || row.transferEnabled() == transferEnabled)
                 .toList();
     }
-    /**
-     * 获取或查询 {@code getChain} 对应的数据，供调用方读取当前状态。
-     */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public ChainDetailView getChain(CustodyPrincipal actor, long id) {
         requirePlatformAdmin(actor);
-        ChainView chain = requireChain(id);
-        List<RpcNodeView> rpcNodes = listRpcNodesInternal(id);
-        List<TokenView> tokens = listTokensInternal("", chain.chain(), null).stream()
-                .filter(token -> token.network().equalsIgnoreCase(chain.network()))
-                .toList();
-        List<String> checks = chainChecks(chain, rpcNodes, tokens);
-        return new ChainDetailView(chain, rpcNodes, tokens, checks,
+        AccountChainProfile profile = requireChain(id);
+        List<RpcNodeView> rpcNodes = listRpcNodesInternal(profile);
+        var configured = tokenConfigRepository.listByChainAndNetwork(profile.getChain(), profile.getNetwork());
+        var assets = chainAssetRepository.listDefinitionsByChain(profile.getChain()).stream().collect(Collectors.toMap(
+                row -> new AssetKey(row.getChain(), row.getSymbol()), row -> row));
+        var runtime = runtimeConfig.globalSwitches();
+        List<TokenView> tokens = configured.stream()
+                .sorted(java.util.Comparator.comparing(row -> normalize(row.symbol())))
+                .map(row -> tokenView(row, runtime, assets.get(new AssetKey(row.chain(), row.symbol())), profile)).toList();
+        ChainView chain = chainView(profile, configured.stream().map(TokenConfiguration::symbol).sorted().toList(), rpcNodes.size());
+        return new ChainDetailView(chain, rpcNodes, tokens, chainChecks(chain, rpcNodes, tokens),
                 WalletEnvironmentPolicy.isProduction(environment), environment);
     }
 
-    /**
-     * 构建或生成 {@code createChain} 对应的结果，并执行输入和状态校验。
-     */
     @Transactional
     public ChainDetailView createChain(CustodyPrincipal actor, ChainCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
@@ -174,20 +162,17 @@ public class WalletConfigManagementService {
         return getChain(actor, id);
     }
 
-    /**
-     * 设置或更新 {@code updateChain} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional
     public ChainDetailView updateChain(CustodyPrincipal actor, long id,
                                        ChainCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
-        ChainView current = requireChain(id);
+        AccountChainProfile current = requireChain(id);
         ChainValues values = mergeChain(current, command);
         validateChainValues(values);
-        if ((!current.chain().equalsIgnoreCase(values.chain())
-                || !current.network().equalsIgnoreCase(values.network())
-                || current.runtimeCurrencyId() != values.runtimeCurrencyId()
-                || current.bip44CoinType() != values.bip44CoinType()) && chainHasRuntimeData(current.chain())) {
+        if ((!current.getChain().equalsIgnoreCase(values.chain())
+                || !current.getNetwork().equalsIgnoreCase(values.network())
+                || current.getRuntimeCurrencyId() != values.runtimeCurrencyId()
+                || current.getBip44CoinType() != values.bip44CoinType()) && chainHasRuntimeData(current.getChain())) {
             throw new IllegalStateException("chain identity, network, runtime currency and BIP44 coin type are locked after addresses or transactions exist");
         }
         if (values.enabled()) {
@@ -200,12 +185,12 @@ public class WalletConfigManagementService {
                 values.gasPolicy(), values.feeModel(), values.scanBatchSize(), values.scanEnabled(),
                 values.withdrawEnabled(), values.collectionEnabled(), values.transferEnabled(),
                 values.scanStartHeight(), values.scanMaxBlocksPerRun());
-        if (!current.chain().equalsIgnoreCase(values.chain())
-                || !current.network().equalsIgnoreCase(values.network())) {
-            rpcNodeRepository.moveChain(current.chain(), current.network(), values.chain(), values.network());
-            tokenConfigRepository.moveChain(current.chain(), current.network(), values.chain(), values.network());
-            if (!current.chain().equalsIgnoreCase(values.chain())) {
-                chainAssetRepository.moveChain(current.chain(), values.chain());
+        if (!current.getChain().equalsIgnoreCase(values.chain())
+                || !current.getNetwork().equalsIgnoreCase(values.network())) {
+            rpcNodeRepository.moveChain(current.getChain(), current.getNetwork(), values.chain(), values.network());
+            tokenConfigRepository.moveChain(current.getChain(), current.getNetwork(), values.chain(), values.network());
+            if (!current.getChain().equalsIgnoreCase(values.chain())) {
+                chainAssetRepository.moveChain(current.getChain(), values.chain());
             }
         }
         audit(actor, "WALLET_CHAIN.UPDATE", "CHAIN_PROFILE", String.valueOf(id), sourceIp,
@@ -213,21 +198,18 @@ public class WalletConfigManagementService {
         return getChain(actor, id);
     }
 
-    /**
-     * 设置或更新 {@code updateChainSwitches} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional
     public ChainDetailView updateChainSwitches(CustodyPrincipal actor, long id,
                                                ChainSwitchCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
-        ChainView current = requireChain(id);
+        AccountChainProfile current = requireChain(id);
         if (command == null || command.enabled() == null || command.scanEnabled() == null
                 || command.withdrawEnabled() == null || command.collectionEnabled() == null
                 || command.transferEnabled() == null) {
             throw new IllegalArgumentException("all chain switches are required");
         }
         if (command.enabled()) {
-            validateCanEnable(current.chain(), current.network(), id);
+            validateCanEnable(current.getChain(), current.getNetwork(), id);
         }
         chainProfileRepository.updateSwitches(id, command.enabled(), command.scanEnabled(),
                 command.withdrawEnabled(), command.collectionEnabled(), command.transferEnabled());
@@ -235,110 +217,106 @@ public class WalletConfigManagementService {
                 "{\"enabled\":" + command.enabled() + "}");
         return getChain(actor, id);
     }
-    /**
-     * 获取或查询 {@code listRpcNodes} 对应的数据，供调用方读取当前状态。
-     */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public List<RpcNodeView> listRpcNodes(CustodyPrincipal actor, long chainId) {
         requirePlatformAdmin(actor);
-        requireChain(chainId);
-        return listRpcNodesInternal(chainId);
+        return listRpcNodesInternal(requireChain(chainId));
     }
 
-    /**
-     * 构建或生成 {@code createRpcNode} 对应的结果，并执行输入和状态校验。
-     */
     @Transactional
     public RpcNodeView createRpcNode(CustodyPrincipal actor, long chainId,
                                      RpcNodeCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
-        ChainView chain = requireChain(chainId);
-        RpcValues values = mergeRpc(null, command, chain);
+        AccountChainProfile chain = requireChain(chainId);
+        ChainRpcNode values = mergeRpc(null, command);
         validateRpc(values);
         long id = rpcNodeRepository.insert(
-                chain.chain(), chain.network(), values.environment(), values.nodeLabel(), values.purpose(),
-                values.connectionType(), values.rpcUrl(), values.authType(), values.authHeaderName(),
-                values.apiKey(), values.username(), values.password(), values.priority(),
-                values.minRequestIntervalMs(), values.enabled(), values.renewalDueAt(), values.remark());
+                chain.getChain(), chain.getNetwork(), values.getEnvironment(), values.getNodeLabel(), values.getPurpose(),
+                values.getConnectionType(), values.getRpcUrl(), values.getAuthType(), values.getAuthHeaderName(),
+                values.getApiKey(), values.getUsername(), values.getPassword(), values.getPriority(),
+                values.getMinRequestIntervalMs(), values.getEnabled(), values.getRenewalDueAt(), values.getRemark());
         audit(actor, "WALLET_RPC.CREATE", "CHAIN_RPC_NODE", String.valueOf(id), sourceIp,
                 rpcAudit(values));
-        return requireRpcNode(chainId, id);
+        return rpcView(requireRpcNode(chain, id));
     }
 
-    /**
-     * 设置或更新 {@code updateRpcNode} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional
     public RpcNodeView updateRpcNode(CustodyPrincipal actor, long chainId, long nodeId,
                                      RpcNodeCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
-        ChainView chain = requireChain(chainId);
-        RpcStored current = requireRpcStored(chain, nodeId);
-        RpcValues values = mergeRpc(current, command, chain);
+        AccountChainProfile chain = requireChain(chainId);
+        ChainRpcNode current = requireRpcNode(chain, nodeId);
+        ChainRpcNode values = mergeRpc(current, command);
         validateRpc(values);
-        if (current.enabled() && (!values.enabled()
-                || !current.purpose().equalsIgnoreCase(values.purpose())
-                || !current.environment().equalsIgnoreCase(values.environment()))) {
-            validateCanDisableRpc(chain, nodeId, current.purpose(), current.environment());
+        if (current.getEnabled() && (!values.getEnabled()
+                || !current.getPurpose().equalsIgnoreCase(values.getPurpose())
+                || !current.getEnvironment().equalsIgnoreCase(values.getEnvironment()))) {
+            validateCanDisableRpc(chain, nodeId, current.getPurpose(), current.getEnvironment());
         }
-        rpcNodeRepository.update(nodeId, chain.chain(), chain.network(), values.environment(),
-                values.nodeLabel(), values.purpose(), values.connectionType(), values.rpcUrl(),
-                values.authType(), values.authHeaderName(), values.apiKey(), values.username(),
-                values.password(), values.priority(), values.minRequestIntervalMs(), values.enabled(),
-                values.renewalDueAt(), values.remark());
+        rpcNodeRepository.update(nodeId, chain.getChain(), chain.getNetwork(), values.getEnvironment(),
+                values.getNodeLabel(), values.getPurpose(), values.getConnectionType(), values.getRpcUrl(),
+                values.getAuthType(), values.getAuthHeaderName(), values.getApiKey(), values.getUsername(),
+                values.getPassword(), values.getPriority(), values.getMinRequestIntervalMs(), values.getEnabled(),
+                values.getRenewalDueAt(), values.getRemark());
         audit(actor, "WALLET_RPC.UPDATE", "CHAIN_RPC_NODE", String.valueOf(nodeId), sourceIp,
                 rpcAudit(values));
-        return requireRpcNode(chainId, nodeId);
+        return rpcView(requireRpcNode(chain, nodeId));
     }
 
-    /**
-     * 删除或清理 {@code deleteRpcNode} 对应的数据，并处理相关状态收敛。
-     */
     @Transactional
     public void deleteRpcNode(CustodyPrincipal actor, long chainId, long nodeId, String sourceIp) {
         requirePlatformAdmin(actor);
-        ChainView chain = requireChain(chainId);
-        RpcStored node = requireRpcStored(chain, nodeId);
-        if (node.enabled()) {
+        AccountChainProfile chain = requireChain(chainId);
+        ChainRpcNode node = requireRpcNode(chain, nodeId);
+        if (node.getEnabled()) {
             throw new IllegalStateException("disable the RPC node before deleting it");
         }
-        rpcNodeRepository.delete(nodeId, chain.chain(), chain.network());
+        rpcNodeRepository.delete(nodeId, chain.getChain(), chain.getNetwork());
         audit(actor, "WALLET_RPC.DELETE", "CHAIN_RPC_NODE", String.valueOf(nodeId), sourceIp,
-                "{\"chain\":" + json(chain.chain()) + ",\"network\":" + json(chain.network()) + "}");
+                "{\"chain\":" + json(chain.getChain()) + ",\"network\":" + json(chain.getNetwork()) + "}");
     }
-    /**
-     * 执行 {@code testRpcNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public RpcTestView testRpcNode(CustodyPrincipal actor, long chainId, long nodeId) {
         requirePlatformAdmin(actor);
-        ChainView chain = requireChain(chainId);
-        RpcStored node = requireRpcStored(chain, nodeId);
+        AccountChainProfile chain = requireChain(chainId);
+        ChainRpcNode node = requireRpcNode(chain, nodeId);
         WalletRpcClient.ProbeResult result = rpcClient.probe(
-                node.rpcUrl(), node.connectionType(), node.authType(), node.authHeaderName(),
-                node.apiKey(), node.username(), node.password());
+                node.getRpcUrl(), node.getConnectionType(), node.getAuthType(), node.getAuthHeaderName(),
+                node.getApiKey(), node.getUsername(), node.getPassword());
         return saveRpcTest(nodeId, new RpcTestView(
                 result.success(), result.statusCode(), result.latencyMs(),
                 result.error(), result.checkedAt()));
     }
 
-    /**
-     * 获取或查询 {@code listTokens} 对应的数据，供调用方读取当前状态。
-     */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public List<TokenView> listTokens(CustodyPrincipal actor, String search, String chain,
-                                      String network, String standard, Boolean enabled,
-                                      Boolean effectiveEnabled) {
+                                      String network, String standard, Boolean enabled, Boolean effectiveEnabled) {
         requirePlatformAdmin(actor);
+        String query = normalize(search);
+        String chainFilter = normalize(chain);
         String networkFilter = normalize(network);
         String standardFilter = normalize(standard);
-        return listTokensInternal(search, chain, enabled).stream()
+        var configured = chainFilter.isEmpty() ? tokenConfigRepository.listAll() : tokenConfigRepository.listByChain(chainFilter);
+        var selected = configured.stream()
                 .filter(row -> networkFilter.isEmpty() || normalize(row.network()).equals(networkFilter))
                 .filter(row -> standardFilter.isEmpty() || normalize(row.standard()).equals(standardFilter))
-                .filter(row -> effectiveEnabled == null || row.effectiveEnabled() == effectiveEnabled)
-                .toList();
+                .filter(row -> enabled == null || row.enabled() == enabled)
+                .filter(row -> query.isEmpty() || normalize(row.symbol()).contains(query)
+                        || normalize(row.contractAddress()).contains(query))
+                .sorted(java.util.Comparator.comparing((TokenConfiguration row) -> normalize(row.symbol()))
+                        .thenComparing(row -> normalize(row.chain()))).toList();
+        if (selected.isEmpty()) return List.of();
+        GlobalSwitches runtime = runtimeConfig.globalSwitches();
+        var profileRows = chainFilter.isEmpty() ? chainProfileRepository.listAll() : chainProfileRepository.listByChain(chainFilter);
+        var profiles = profileRows.stream().collect(Collectors.toMap(
+                row -> profileKey(row.getChain(), row.getNetwork()), row -> row, (left, right) -> left));
+        var assetRows = chainFilter.isEmpty() ? chainAssetRepository.listDefinitions() : chainAssetRepository.listDefinitionsByChain(chainFilter);
+        var assets = assetRows.stream().collect(Collectors.toMap(
+                row -> new AssetKey(row.getChain(), row.getSymbol()), row -> row));
+        return selected.stream().map(row -> tokenView(row, runtime, assets.get(new AssetKey(row.chain(), row.symbol())),
+                        profiles.get(profileKey(row.chain(), row.network()))))
+                .filter(row -> effectiveEnabled == null || row.effectiveEnabled() == effectiveEnabled).toList();
     }
 
-    /**
-     * 构建或生成 {@code createToken} 对应的结果，并执行输入和状态校验。
-     */
     @Transactional
     public TokenView createToken(CustodyPrincipal actor, TokenCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
@@ -358,9 +336,6 @@ public class WalletConfigManagementService {
         return requireToken(id);
     }
 
-    /**
-     * 设置或更新 {@code updateToken} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional
     public TokenView updateToken(CustodyPrincipal actor, long id,
                                  TokenCommand command, String sourceIp) {
@@ -393,9 +368,6 @@ public class WalletConfigManagementService {
         return requireToken(id);
     }
 
-    /**
-     * 设置或更新 {@code updateTokenStatus} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional
     public TokenView updateTokenStatus(CustodyPrincipal actor, long id,
                                        TokenStatusCommand command, String sourceIp) {
@@ -426,9 +398,6 @@ public class WalletConfigManagementService {
                 "{\"enabled\":" + command.enabled() + "}");
         return requireToken(id);
     }
-    /**
-     * 执行 {@code auditLog} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public PageView<Map<String, Object>> auditLog(CustodyPrincipal actor, int limit, int offset) {
         requirePlatformAdmin(actor);
         int pageSize = Math.min(Math.max(limit, 1), 200);
@@ -438,75 +407,28 @@ public class WalletConfigManagementService {
                 audits.countPlatform(),
                 pageSize, pageOffset);
     }
-    /**
-     * 获取或查询 {@code listRpcNodesInternal} 对应的数据，供调用方读取当前状态。
-     */
-    private List<RpcNodeView> listRpcNodesInternal(long chainId) {
-        ChainView chain = requireChain(chainId);
-        return rpcNodeRepository.listByChain(chain.chain(), chain.network()).stream()
+    private List<RpcNodeView> listRpcNodesInternal(AccountChainProfile profile) {
+        return rpcNodeRepository.listByChain(profile.getChain(), profile.getNetwork()).stream()
                 .map(this::rpcView).toList();
     }
-    /**
-     * 获取或查询 {@code listTokensInternal} 对应的数据，供调用方读取当前状态。
-     */
-    private List<TokenView> listTokensInternal(String search, String chain, Boolean enabled) {
-        String query = normalize(search);
-        String chainFilter = normalize(chain);
-        GlobalSwitches runtime = runtimeConfig.globalSwitches();
-        return tokenConfigRepository.listAll().stream()
-                .filter(row -> chainFilter.isEmpty() || normalize(row.chain()).equals(chainFilter))
-                .filter(row -> enabled == null || row.enabled() == enabled)
-                .filter(row -> query.isEmpty() || normalize(row.symbol()).contains(query)
-                        || normalize(row.contractAddress()).contains(query))
-                .sorted(java.util.Comparator.comparing((TokenConfiguration row) -> normalize(row.symbol()))
-                        .thenComparing(row -> normalize(row.chain())))
-                .map(row -> tokenView(row, runtime)).toList();
-    }
 
-    /**
-     * 校验 {@code requireChain} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private ChainView requireChain(long id) {
-        return chainProfileRepository.findById(id).map(this::decorateChainRow)
-                .map(this::chainView)
+    private AccountChainProfile requireChain(long id) {
+        return chainProfileRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("chain profile not found"));
     }
-    /**
-     * 校验 {@code requireRpcNode} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private RpcNodeView requireRpcNode(long chainId, long nodeId) {
-        return listRpcNodesInternal(chainId).stream().filter(node -> node.id() == nodeId).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("RPC node not found"));
+
+    private ChainRpcNode requireRpcNode(AccountChainProfile chain, long nodeId) {
+        return rpcNodeRepository.findById(nodeId, chain.getChain(), chain.getNetwork())
+                .orElseThrow(() -> new IllegalArgumentException("RPC node not found for chain profile"));
     }
-    /**
-     * 校验 {@code requireRpcStored} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private RpcStored requireRpcStored(ChainView chain, long nodeId) {
-        try {
-            Map<String, Object> row = rpcNodeRepository.findById(nodeId, chain.chain(), chain.network());
-            return new RpcStored(longValue(row.get("id")), string(row.get("environment")),
-                    string(row.get("node_label")), string(row.get("purpose")),
-                    string(row.get("connection_type")), string(row.get("rpc_url")),
-                    string(row.get("auth_type")), nullable(row.get("auth_header_name")),
-                    nullable(row.get("api_key")), nullable(row.get("username")), nullable(row.get("password")),
-                    intValue(row.get("priority")), intValue(row.get("min_request_interval_ms")),
-                    bool(row.get("enabled")), instant(row.get("renewal_due_at")), nullable(row.get("remark")));
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-            throw new IllegalArgumentException("RPC node not found for chain profile");
-        }
-    }
-    /**
-     * 校验 {@code requireToken} 对应的前置条件，不满足时抛出明确异常。
-     */
     private TokenView requireToken(long id) {
         TokenConfiguration row = tokenConfigRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("token not found"));
-        return tokenView(row, runtimeConfig.globalSwitches());
+        return tokenView(row, runtimeConfig.globalSwitches(),
+                chainAssetRepository.find(row.chain(), row.symbol()).orElse(null),
+                chainProfileRepository.findByChainAndNetwork(row.chain(), row.network()).orElse(null));
     }
 
-    /**
-     * 校验 {@code validateCanEnable} 对应的前置条件，不满足时抛出明确异常。
-     */
     private void validateCanEnable(String chain, String network, Long currentId) {
         if (WalletEnvironmentPolicy.isProduction(environment)
                 && !WalletEnvironmentPolicy.isProductionNetwork(network)) {
@@ -518,40 +440,27 @@ public class WalletConfigManagementService {
         }
         boolean hasTokens = tokenConfigRepository.countByChain(chain) > 0;
         for (String purpose : WalletRpcPolicy.requiredPurposes(chain, network, hasTokens)) {
-            List<Map<String, Object>> nodes = rpcNodeRepository.listEnabledForPurpose(
+            List<ChainRpcNode> nodes = rpcNodeRepository.listEnabledForPurpose(
                     chain, network, environment, purpose);
             if (nodes.isEmpty()) {
                 throw new IllegalStateException("configure an enabled " + purpose
                         + " RPC node for environment " + environment + " before enabling this chain");
             }
-            nodes.forEach(row -> validateRpc(new RpcValues(
-                    string(row.get("environment")), string(row.get("node_label")),
-                    string(row.get("purpose")), string(row.get("connection_type")),
-                    string(row.get("rpc_url")), string(row.get("auth_type")),
-                    nullable(row.get("auth_header_name")), nullable(row.get("api_key")),
-                    nullable(row.get("username")), nullable(row.get("password")),
-                    intValue(row.get("priority")), intValue(row.get("min_request_interval_ms")),
-                    true, instant(row.get("renewal_due_at")), nullable(row.get("remark")))));
+            nodes.forEach(this::validateRpc);
         }
     }
-    /**
-     * 校验 {@code validateCanDisableRpc} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void validateCanDisableRpc(ChainView chain, long nodeId, String purpose, String nodeEnvironment) {
-        if (!chain.enabled() || !WalletRpcPolicy.requiredPurposes(
-                chain.chain(), chain.network(), chain.tokenCount() > 0).contains(normalizeLower(purpose))
+    private void validateCanDisableRpc(AccountChainProfile chain, long nodeId, String purpose, String nodeEnvironment) {
+        if (!chain.getEnabled() || !WalletRpcPolicy.requiredPurposes(
+                chain.getChain(), chain.getNetwork(), tokenConfigRepository.existsByChainAndNetwork(chain.getChain(), chain.getNetwork())).contains(normalizeLower(purpose))
                 || !environment.equalsIgnoreCase(nodeEnvironment)) {
             return;
         }
         long alternatives = rpcNodeRepository.countEnabledAlternatives(
-                chain.chain(), chain.network(), environment, purpose, nodeId);
+                chain.getChain(), chain.getNetwork(), environment, purpose, nodeId);
         if (alternatives == 0) {
             throw new IllegalStateException("an enabled chain must retain an enabled RPC node for required purpose " + purpose);
         }
     }
-    /**
-     * 校验 {@code validateChainValues} 对应的前置条件，不满足时抛出明确异常。
-     */
     private void validateChainValues(ChainValues value) {
         required(value.chain(), "chain");
         required(value.network(), "network");
@@ -573,17 +482,14 @@ public class WalletConfigManagementService {
             throw new IllegalArgumentException("chain numeric settings are invalid");
         }
     }
-    /**
-     * 校验 {@code validateRpc} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void validateRpc(RpcValues value) {
-        required(value.environment(), "environment");
-        required(value.nodeLabel(), "nodeLabel");
-        required(value.purpose(), "purpose");
-        required(value.connectionType(), "connectionType");
-        required(value.rpcUrl(), "rpcUrl");
+    private void validateRpc(ChainRpcNode value) {
+        required(value.getEnvironment(), "environment");
+        required(value.getNodeLabel(), "nodeLabel");
+        required(value.getPurpose(), "purpose");
+        required(value.getConnectionType(), "connectionType");
+        required(value.getRpcUrl(), "rpcUrl");
         try {
-            URI uri = URI.create(value.rpcUrl());
+            URI uri = URI.create(value.getRpcUrl());
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
             if (!List.of("http", "https", "ws", "wss").contains(scheme)
                     || uri.getHost() == null || uri.getUserInfo() != null) {
@@ -592,27 +498,24 @@ public class WalletConfigManagementService {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("rpcUrl must be an absolute HTTP or WebSocket URL");
         }
-        if (WalletRpcPolicy.containsPlaceholder(value.rpcUrl())
-                || WalletRpcPolicy.containsPlaceholder(value.apiKey())
-                || WalletRpcPolicy.containsPlaceholder(value.username())
-                || WalletRpcPolicy.containsPlaceholder(value.password())) {
+        if (WalletRpcPolicy.containsPlaceholder(value.getRpcUrl())
+                || WalletRpcPolicy.containsPlaceholder(value.getApiKey())
+                || WalletRpcPolicy.containsPlaceholder(value.getUsername())
+                || WalletRpcPolicy.containsPlaceholder(value.getPassword())) {
             throw new IllegalArgumentException("RPC URL and credentials cannot contain placeholders");
         }
-        if (value.enabled() && WalletRpcPolicy.requiresApiKey(value.authType(), value.connectionType())
-                && blank(value.apiKey())) {
+        if (value.getEnabled() && WalletRpcPolicy.requiresApiKey(value.getAuthType(), value.getConnectionType())
+                && blank(value.getApiKey())) {
             throw new IllegalArgumentException("API key is required by the selected RPC authentication");
         }
-        if (value.enabled() && WalletRpcPolicy.requiresUsernamePassword(value.authType())
-                && (blank(value.username()) || blank(value.password()))) {
+        if (value.getEnabled() && WalletRpcPolicy.requiresUsernamePassword(value.getAuthType())
+                && (blank(value.getUsername()) || blank(value.getPassword()))) {
             throw new IllegalArgumentException("username and password are required by the selected RPC authentication");
         }
-        if (value.priority() < 0 || value.minRequestIntervalMs() < 0) {
+        if (value.getPriority() < 0 || value.getMinRequestIntervalMs() < 0) {
             throw new IllegalArgumentException("RPC priority and request interval must not be negative");
         }
     }
-    /**
-     * 校验 {@code validateToken} 对应的前置条件，不满足时抛出明确异常。
-     */
     private void validateToken(TokenValues value) {
         required(value.chain(), "chain");
         required(value.network(), "network");
@@ -649,39 +552,30 @@ public class WalletConfigManagementService {
                 || !value.gasStrategy().matches("^[A-Za-z0-9._:-]*$"))) {
             throw new IllegalArgumentException("gasStrategy contains unsupported characters");
         }
-        TokenChainProfile profile = requireTokenChainProfile(value);
+        AccountChainProfile profile = requireTokenChainProfile(value);
         if (value.enabled()) {
-            if (!profile.enabled()) {
+            if (!Boolean.TRUE.equals(profile.getEnabled())) {
                 throw new IllegalStateException("enable the matching chain network before enabling this token");
             }
-            if (profile.evm()) {
+            if ((profile.getFamily() != null && profile.getFamily().toUpperCase(Locale.ROOT).contains("EVM"))) {
                 validateEvmTokenContract(value, profile);
             }
         }
     }
-    /**
-     * 校验 {@code requireTokenChainProfile} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private TokenChainProfile requireTokenChainProfile(TokenValues value) {
-        return chainProfileRepository.findTokenProfile(value.chain(), value.network())
-                .map(row -> new TokenChainProfile(string(row.get("family")),
-                        nullableLong(row.get("chain_id")), bool(row.get("enabled"))))
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "token must reference an existing chain and network"));
+    private AccountChainProfile requireTokenChainProfile(TokenValues value) {
+        return chainProfileRepository.findByChainAndNetwork(value.chain(), value.network())
+                .orElseThrow(() -> new IllegalArgumentException("token must reference an existing chain and network"));
     }
-    /**
-     * 校验 {@code validateEvmTokenContract} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void validateEvmTokenContract(TokenValues value, TokenChainProfile profile) {
+    private void validateEvmTokenContract(TokenValues value, AccountChainProfile profile) {
         String address = value.contractAddress();
         if (!address.matches("(?i)^0x[0-9a-f]{40}$")
                 || address.matches("(?i)^0x0{40}$")) {
             throw new IllegalArgumentException("EVM contractAddress must be a non-zero 20-byte hex address");
         }
-        RpcStored rpc = requireTokenValidationRpc(value.chain(), value.network());
-        if (profile.chainId() != null) {
+        ChainRpcNode rpc = requireTokenValidationRpc(value.chain(), value.network());
+        if (profile.getChainId() != null) {
             BigInteger observedChainId = quantity(evmRpc(rpc, "eth_chainId", "[]"), "chain id");
-            if (!observedChainId.equals(BigInteger.valueOf(profile.chainId()))) {
+            if (!observedChainId.equals(BigInteger.valueOf(profile.getChainId()))) {
                 throw new IllegalStateException("token validation RPC chain id does not match chain profile");
             }
         }
@@ -703,34 +597,16 @@ public class WalletConfigManagementService {
             throw new IllegalArgumentException("configured symbol does not match the token contract");
         }
     }
-    /**
-     * 校验 {@code requireTokenValidationRpc} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private RpcStored requireTokenValidationRpc(String chain, String network) {
-        return rpcNodeRepository.listTokenValidationNodes(chain, network, environment).stream()
-                .map(row -> new RpcStored(
-                longValue(row.get("id")), string(row.get("environment")),
-                string(row.get("node_label")), string(row.get("purpose")),
-                string(row.get("connection_type")), string(row.get("rpc_url")),
-                string(row.get("auth_type")), nullable(row.get("auth_header_name")),
-                nullable(row.get("api_key")), nullable(row.get("username")),
-                nullable(row.get("password")), intValue(row.get("priority")),
-                intValue(row.get("min_request_interval_ms")), bool(row.get("enabled")),
-                instant(row.get("renewal_due_at")), nullable(row.get("remark"))))
-                .findFirst().orElseThrow(() -> new IllegalStateException(
+    private ChainRpcNode requireTokenValidationRpc(String chain, String network) {
+        return rpcNodeRepository.listTokenValidationNodes(chain, network, environment).stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException(
                         "an enabled HTTP JSON-RPC node is required to validate an EVM token"));
     }
-    /**
-     * 执行 {@code evmRpc} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private JsonNode evmRpc(RpcStored node, String method, String params) {
+    private JsonNode evmRpc(ChainRpcNode node, String method, String params) {
         return rpcClient.jsonRpc(
-                node.rpcUrl(), node.connectionType(), node.authType(), node.authHeaderName(),
-                node.apiKey(), node.username(), node.password(), method, params);
+                node.getRpcUrl(), node.getConnectionType(), node.getAuthType(), node.getAuthHeaderName(),
+                node.getApiKey(), node.getUsername(), node.getPassword(), method, params);
     }
-    /**
-     * 执行 {@code quantity} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static BigInteger quantity(JsonNode result, String field) {
         String value = textResult(result, field);
         if (!value.matches("(?i)^0x[0-9a-f]+$")) {
@@ -738,18 +614,12 @@ public class WalletConfigManagementService {
         }
         return new BigInteger(Numeric.cleanHexPrefix(value), 16);
     }
-    /**
-     * 执行 {@code textResult} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String textResult(JsonNode result, String field) {
         if (!result.isTextual() || result.asText().isBlank()) {
             throw new IllegalStateException(field + " returned an empty result");
         }
         return result.asText();
     }
-    /**
-     * 编码 {@code abiString} 对应的数据，生成链上或接口所需的表示。
-     */
     private static String abiString(String encoded) {
         if (!encoded.matches("(?i)^0x[0-9a-f]*$")) {
             throw new IllegalStateException("token symbol returned invalid ABI data");
@@ -781,9 +651,6 @@ public class WalletConfigManagementService {
         }
         return symbol;
     }
-    /**
-     * 校验 {@code validateTokenAmount} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void validateTokenAmount(BigDecimal amount, String field, int decimals) {
         if (amount == null) return;
         BigDecimal normalized = amount.stripTrailingZeros();
@@ -793,23 +660,14 @@ public class WalletConfigManagementService {
                     + " must be non-negative with at most " + Math.min(decimals, 18) + " fraction digits");
         }
     }
-    /**
-     * 写入或更新 {@code upsertAsset} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     private void upsertAsset(TokenValues value) {
         chainAssetRepository.upsertNonNative(value.chain(), value.symbol(), value.standard(),
                 value.contractAddress(), value.decimals(), value.enabled(), value.minWithdraw(),
                 value.minWithdraw());
     }
-    /**
-     * 设置或更新 {@code setAssetActive} 对应的状态，并保持相关业务字段一致。
-     */
     private void setAssetActive(String chain, String symbol, boolean active) {
         chainAssetRepository.updateActive(chain, symbol, active);
     }
-    /**
-     * 获取或查询 {@code chainChecks} 对应的数据，并向调用方返回当前业务状态。
-     */
     private List<String> chainChecks(ChainView chain, List<RpcNodeView> rpcNodes, List<TokenView> tokens) {
         LinkedHashSet<String> checks = new LinkedHashSet<>();
         if (WalletEnvironmentPolicy.isProduction(environment)
@@ -829,47 +687,40 @@ public class WalletConfigManagementService {
         }
         return List.copyOf(checks);
     }
-    /**
-     * 执行 {@code mergeChain} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private ChainValues mergeChain(ChainView current, ChainCommand command) {
+    private ChainValues mergeChain(AccountChainProfile current, ChainCommand command) {
         if (command == null) throw new IllegalArgumentException("chain body is required");
         return new ChainValues(
-                upper(or(command.chain(), current == null ? null : current.chain())),
-                lower(or(command.network(), current == null ? null : current.network())),
-                upper(or(command.family(), current == null ? null : current.family())),
-                or(command.runtimeCurrencyId(), current == null ? null : current.runtimeCurrencyId(), 0),
-                or(command.bip44CoinType(), current == null ? null : current.bip44CoinType(), 0),
-                upper(or(command.nativeSymbol(), current == null ? null : current.nativeSymbol())),
-                or(command.explorerUrl(), current == null ? null : current.explorerUrl()),
-                or(command.depositConfirmations(), current == null ? null : current.depositConfirmations(), 1),
-                or(command.withdrawConfirmations(), current == null ? null : current.withdrawConfirmations(), 1),
-                or(command.defaultFeeRate(), current == null ? null : current.defaultFeeRate()),
-                or(command.dustThreshold(), current == null ? null : current.dustThreshold()),
-                or(command.enabled(), current == null ? null : current.enabled(), false),
-                or(command.chainId(), current == null ? null : current.chainId()),
-                or(command.gasPolicy(), current == null ? null : current.gasPolicy()),
-                or(command.feeModel(), current == null ? null : current.feeModel(),
+                upper(or(command.chain(), current == null ? null : current.getChain())),
+                lower(or(command.network(), current == null ? null : current.getNetwork())),
+                upper(or(command.family(), current == null ? null : current.getFamily())),
+                or(command.runtimeCurrencyId(), current == null ? null : current.getRuntimeCurrencyId(), 0),
+                or(command.bip44CoinType(), current == null ? null : current.getBip44CoinType(), 0),
+                upper(or(command.nativeSymbol(), current == null ? null : current.getNativeSymbol())),
+                or(command.explorerUrl(), current == null ? null : current.getExplorerUrl()),
+                or(command.depositConfirmations(), current == null ? null : current.getDepositConfirmations(), 1),
+                or(command.withdrawConfirmations(), current == null ? null : current.getWithdrawConfirmations(), 1),
+                or(command.defaultFeeRate(), current == null ? null : current.getDefaultFee()),
+                or(command.dustThreshold(), current == null ? null : current.getDustThreshold()),
+                or(command.enabled(), current == null ? null : current.getEnabled(), false),
+                or(command.chainId(), current == null ? null : current.getChainId()),
+                or(command.gasPolicy(), current == null ? null : current.getGasPolicy()),
+                or(command.feeModel(), current == null ? null : current.getFeeModel(),
                         EvmFeeModel.STANDARD.configValue()),
-                or(command.scanBatchSize(), current == null ? null : current.scanBatchSize(), 100),
-                or(command.scanEnabled(), current == null ? null : current.scanEnabled(), false),
-                or(command.withdrawEnabled(), current == null ? null : current.withdrawEnabled(), false),
-                or(command.collectionEnabled(), current == null ? null : current.collectionEnabled(), false),
-                or(command.transferEnabled(), current == null ? null : current.transferEnabled(), false),
-                or(command.scanStartHeight(), current == null ? null : current.scanStartHeight(), 0L),
-                or(command.scanMaxBlocksPerRun(), current == null ? null : current.scanMaxBlocksPerRun(), 0L));
+                or(command.scanBatchSize(), current == null ? null : current.getScanBatchSize(), 100),
+                or(command.scanEnabled(), current == null ? null : current.getScanEnabled(), false),
+                or(command.withdrawEnabled(), current == null ? null : current.getWithdrawEnabled(), false),
+                or(command.collectionEnabled(), current == null ? null : current.getCollectionEnabled(), false),
+                or(command.transferEnabled(), current == null ? null : current.getTransferEnabled(), false),
+                or(command.scanStartHeight(), current == null ? null : current.getScanStartHeight(), 0L),
+                or(command.scanMaxBlocksPerRun(), current == null ? null : current.getScanMaxBlocksPerRun(), 0L));
     }
-    /**
-     * 执行 {@code mergeRpc} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private RpcValues mergeRpc(RpcStored current, RpcNodeCommand command, ChainView chain) {
+    private ChainRpcNode mergeRpc(ChainRpcNode current, RpcNodeCommand command) {
         if (command == null) throw new IllegalArgumentException("RPC body is required");
-        String authType = upper(or(command.authType(), current == null ? "NONE" : current.authType()));
-        String connectionType = upper(or(command.connectionType(),
-                current == null ? "HTTP_JSON_RPC" : current.connectionType()));
-        String apiKey = secret(command.apiKey(), current == null ? null : current.apiKey());
-        String username = secret(command.username(), current == null ? null : current.username());
-        String password = secret(command.password(), current == null ? null : current.password());
+        String authType = upper(or(command.authType(), current == null ? "NONE" : current.getAuthType()));
+        String connectionType = upper(or(command.connectionType(), current == null ? "HTTP_JSON_RPC" : current.getConnectionType()));
+        String apiKey = secret(command.apiKey(), current == null ? null : current.getApiKey());
+        String username = secret(command.username(), current == null ? null : current.getUsername());
+        String password = secret(command.password(), current == null ? null : current.getPassword());
         if ("NONE".equals(authType) && !"BLOCKFROST".equals(connectionType)) {
             apiKey = null;
             username = null;
@@ -880,22 +731,19 @@ public class WalletConfigManagementService {
         } else if (WalletRpcPolicy.requiresUsernamePassword(authType)) {
             apiKey = null;
         }
-        return new RpcValues(lower(or(command.environment(), current == null ? environment : current.environment())),
-                or(command.nodeLabel(), current == null ? null : current.nodeLabel()),
-                lower(or(command.purpose(), current == null ? "rpc" : current.purpose())),
-                connectionType,
-                or(command.rpcUrl(), current == null ? null : current.rpcUrl()), authType,
-                or(command.authHeaderName(), current == null ? null : current.authHeaderName()),
-                apiKey, username, password,
-                or(command.priority(), current == null ? null : current.priority(), 100),
-                or(command.minRequestIntervalMs(), current == null ? null : current.minRequestIntervalMs(), 0),
-                or(command.enabled(), current == null ? null : current.enabled(), false),
-                or(command.renewalDueAt(), current == null ? null : current.renewalDueAt()),
-                or(command.remark(), current == null ? null : current.remark()));
+        return ChainRpcNode.builder()
+                .environment(lower(or(command.environment(), current == null ? environment : current.getEnvironment())))
+                .nodeLabel(or(command.nodeLabel(), current == null ? null : current.getNodeLabel()))
+                .purpose(lower(or(command.purpose(), current == null ? "rpc" : current.getPurpose())))
+                .connectionType(connectionType).rpcUrl(or(command.rpcUrl(), current == null ? null : current.getRpcUrl()))
+                .authType(authType).authHeaderName(or(command.authHeaderName(), current == null ? null : current.getAuthHeaderName()))
+                .apiKey(apiKey).username(username).password(password)
+                .priority(or(command.priority(), current == null ? null : current.getPriority(), 100))
+                .minRequestIntervalMs(or(command.minRequestIntervalMs(), current == null ? null : current.getMinRequestIntervalMs(), 0))
+                .enabled(or(command.enabled(), current == null ? null : current.getEnabled(), false))
+                .renewalDueAt(or(command.renewalDueAt(), current == null ? null : current.getRenewalDueAt()))
+                .remark(or(command.remark(), current == null ? null : current.getRemark())).build();
     }
-    /**
-     * 执行 {@code mergeToken} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private TokenValues mergeToken(TokenView current, TokenCommand command) {
         if (command == null) throw new IllegalArgumentException("token body is required");
         return new TokenValues(upper(or(command.chain(), current == null ? null : current.chain())),
@@ -914,75 +762,53 @@ public class WalletConfigManagementService {
                 or(command.gasStrategy(), current == null ? null : current.gasStrategy()),
                 or(command.confirmationRequired(), current == null ? null : current.confirmationRequired()));
     }
-    /**
-     * 获取或查询 {@code chainView} 对应的数据，并向调用方返回当前业务状态。
-     */
-    private ChainView chainView(Map<String, Object> row) {
-        return new ChainView(longValue(row.get("id")), string(row.get("chain")), string(row.get("network")),
-                string(row.get("family")), intValue(row.get("runtime_currency_id")),
-                intValue(row.get("bip44_coin_type")), string(row.get("native_symbol")),
-                nullable(row.get("explorer_url")), intValue(row.get("deposit_confirmations")),
-                intValue(row.get("withdraw_confirmations")), nullableLong(row.get("default_fee_rate")),
-                nullableLong(row.get("dust_threshold")), bool(row.get("enabled")), nullableLong(row.get("chain_id")),
-                nullable(row.get("gas_policy")),
-                string(row.get("fee_model")),
-                intValue(row.get("scan_batch_size")),
-                bool(row.get("scan_enabled")), bool(row.get("withdraw_enabled")),
-                bool(row.get("collection_enabled")), bool(row.get("transfer_enabled")),
-                longValue(row.get("scan_start_height")), longValue(row.get("scan_max_blocks_per_run")),
-                splitCsv(string(row.get("token_symbols"))),
-                intValue(row.get("token_count")), intValue(row.get("rpc_count")),
-                instant(row.get("created_at")), instant(row.get("updated_at")));
+    private ChainView chainView(AccountChainProfile row, List<String> tokens, int rpcCount) {
+        return new ChainView(row.getId(), row.getChain(), row.getNetwork(), row.getFamily(),
+                row.getRuntimeCurrencyId(), row.getBip44CoinType(), row.getNativeSymbol(), row.getExplorerUrl(),
+                row.getDepositConfirmations(), row.getWithdrawConfirmations(), row.getDefaultFee(), row.getDustThreshold(),
+                Boolean.TRUE.equals(row.getEnabled()), row.getChainId(), row.getGasPolicy(), row.getFeeModel(),
+                intValue(row.getScanBatchSize()), Boolean.TRUE.equals(row.getScanEnabled()),
+                Boolean.TRUE.equals(row.getWithdrawEnabled()), Boolean.TRUE.equals(row.getCollectionEnabled()),
+                Boolean.TRUE.equals(row.getTransferEnabled()), longValue(row.getScanStartHeight()),
+                longValue(row.getScanMaxBlocksPerRun()), List.copyOf(tokens), tokens.size(), rpcCount,
+                row.getCreatedAt(), row.getUpdatedAt());
     }
 
     /** 为链配置补充同一链网络下的代币和 RPC 统计，替代数据库跨表查询。 */
-    private Map<String, Object> decorateChainRow(Map<String, Object> row) {
-        Map<String, Object> decorated = new LinkedHashMap<>(row);
-        String chain = string(row.get("chain"));
-        String network = string(row.get("network"));
-        List<TokenConfiguration> tokens = tokenConfigRepository.listByChainAndNetwork(chain, network);
-        decorated.put("token_symbols", tokens.stream().map(TokenConfiguration::symbol)
-                .sorted().collect(java.util.stream.Collectors.joining(",")));
-        decorated.put("token_count", tokens.size());
-        decorated.put("rpc_count", rpcNodeRepository.listByChain(chain, network).size());
-        return decorated;
-    }
 
     /** 查询并补充全部链配置的展示字段。 */
-    private List<Map<String, Object>> chainRows() {
-        return chainProfileRepository.listAll().stream().map(this::decorateChainRow).toList();
+    private List<ChainView> chainRows() {
+        Map<NetworkKey, List<String>> tokens = new HashMap<>();
+        for (var token : tokenConfigRepository.listAll()) {
+            tokens.computeIfAbsent(profileKey(token.chain(), token.network()), ignored -> new ArrayList<>())
+                    .add(token.symbol());
+        }
+        tokens.values().forEach(symbols -> symbols.sort(String::compareTo));
+        var rpcCounts = rpcNodeRepository.countByNetwork().stream().collect(Collectors.toMap(
+                row -> new NetworkKey(row.chain(), row.network()), row -> row.total()));
+        return chainProfileRepository.listAll().stream().map(profile -> chainView(profile,
+                tokens.getOrDefault(profileKey(profile.getChain(), profile.getNetwork()), List.of()),
+                rpcCounts.getOrDefault(new NetworkKey(profile.getChain(), profile.getNetwork()), 0))).toList();
     }
 
-    /**
-     * 执行 {@code rpcView} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private RpcNodeView rpcView(Map<String, Object> row) {
-        return new RpcNodeView(longValue(row.get("id")), string(row.get("environment")),
-                string(row.get("node_label")), string(row.get("purpose")),
-                string(row.get("connection_type")), string(row.get("rpc_url")),
-                string(row.get("auth_type")), nullable(row.get("auth_header_name")),
-                !blank(nullable(row.get("api_key"))), !blank(nullable(row.get("username"))),
-                !blank(nullable(row.get("password"))), intValue(row.get("priority")),
-                intValue(row.get("min_request_interval_ms")), bool(row.get("enabled")),
-                instant(row.get("renewal_due_at")), nullable(row.get("remark")),
-                instant(row.get("last_checked_at")), nullableLong(row.get("last_latency_ms")),
-                nullableInteger(row.get("last_http_status")), nullable(row.get("last_error")),
-                instant(row.get("created_at")), instant(row.get("updated_at")));
+    private RpcNodeView rpcView(ChainRpcNode row) {
+        return new RpcNodeView(row.getId(), row.getEnvironment(), row.getNodeLabel(), row.getPurpose(),
+                row.getConnectionType(), row.getRpcUrl(), row.getAuthType(), row.getAuthHeaderName(),
+                !blank(row.getApiKey()), !blank(row.getUsername()), !blank(row.getPassword()),
+                intValue(row.getPriority()), intValue(row.getMinRequestIntervalMs()), Boolean.TRUE.equals(row.getEnabled()),
+                row.getRenewalDueAt(), row.getRemark(), row.getLastCheckedAt(), row.getLastLatencyMs(),
+                row.getLastHttpStatus(), row.getLastError(), row.getCreatedAt(), row.getUpdatedAt());
     }
-    /**
-     * 编码 {@code tokenView} 对应的数据，生成链上或接口所需的表示。
-     */
-    private TokenView tokenView(TokenConfiguration row, GlobalSwitches runtime) {
+    private TokenView tokenView(TokenConfiguration row, GlobalSwitches runtime,
+            ChainAsset asset, AccountChainProfile profile) {
         boolean configured = row.enabled();
-        boolean assetActive = chainAssetRepository.find(row.chain(), row.symbol())
-                .map(asset -> bool(asset.get("active"))).orElse(false);
-        Map<String, Object> profile = chainProfileRepository.findByChainAndNetwork(row.chain(), row.network())
-                .orElse(Map.of());
-        boolean chainEnabled = bool(profile.get("enabled"));
-        boolean anyTaskEnabled = runtime.taskEnabled(TASK_SCAN, bool(profile.get("scan_enabled")))
-                || runtime.taskEnabled(TASK_WITHDRAW, bool(profile.get("withdraw_enabled")))
-                || runtime.taskEnabled(TASK_COLLECTION, bool(profile.get("collection_enabled")) && row.collectEnabled())
-                || runtime.taskEnabled(TASK_TRANSFER, bool(profile.get("transfer_enabled")));
+        boolean assetActive = asset != null && Boolean.TRUE.equals(asset.getActive());
+        boolean chainEnabled = profile != null && Boolean.TRUE.equals(profile.getEnabled());
+        boolean anyTaskEnabled = profile != null && (
+                runtime.taskEnabled(TASK_SCAN, Boolean.TRUE.equals(profile.getScanEnabled()))
+                || runtime.taskEnabled(TASK_WITHDRAW, Boolean.TRUE.equals(profile.getWithdrawEnabled()))
+                || runtime.taskEnabled(TASK_COLLECTION, Boolean.TRUE.equals(profile.getCollectionEnabled()) && row.collectEnabled())
+                || runtime.taskEnabled(TASK_TRANSFER, Boolean.TRUE.equals(profile.getTransferEnabled())));
         List<String> blockers = new ArrayList<>();
         if (!runtime.walletEnabled()) blockers.add("Wallet master switch is off.");
         if (!configured) blockers.add("Token is disabled.");
@@ -990,16 +816,13 @@ public class WalletConfigManagementService {
         if (!chainEnabled) blockers.add("Chain network is disabled.");
         if (chainEnabled && !anyTaskEnabled) blockers.add("No wallet task is effectively enabled for this chain.");
         return new TokenView(row.id(), row.chain(), row.network(), row.symbol(), row.standard(),
-                row.contractAddress(), nullable(row.contractAddressBase58()), nullable(row.contractAddressHex()), row.decimals(), configured,
-                row.collectEnabled(), decimal(row.minDeposit()), decimal(row.minWithdraw()), decimal(row.collectThreshold()),
+                row.contractAddress(), nullable(row.contractAddressBase58()), nullable(row.contractAddressHex()), row.decimals(),
+                configured, row.collectEnabled(), row.minDeposit(), row.minWithdraw(), row.collectThreshold(),
                 nullable(row.gasStrategy()), row.confirmationRequired(), assetActive, chainEnabled,
                 configured && assetActive && runtime.effective(chainEnabled, anyTaskEnabled),
                 List.copyOf(blockers), row.createdAt(), row.updatedAt());
     }
 
-    /**
-     * 获取或查询 {@code chainHasRuntimeData} 对应的数据，并向调用方返回当前业务状态。
-     */
     private boolean chainHasRuntimeData(String chain) {
         return chainAddressRepository.existsByChain(chain)
                 || ledgerBalanceRepository.existsByChain(chain)
@@ -1007,9 +830,6 @@ public class WalletConfigManagementService {
                 || withdrawalOrderRepository.existsByChain(chain)
                 || collectionRecordRepository.existsByChain(chain);
     }
-    /**
-     * 编码 {@code tokenHasRuntimeData} 对应的数据，生成链上或接口所需的表示。
-     */
     private boolean tokenHasRuntimeData(String chain, String symbol) {
         return chainAddressRepository.existsByChainAndAsset(chain, symbol)
                 || ledgerBalanceRepository.existsByChainAndAsset(chain, symbol)
@@ -1017,161 +837,73 @@ public class WalletConfigManagementService {
                 || withdrawalOrderRepository.existsByChainAndAsset(chain, symbol)
                 || collectionRecordRepository.existsByChainAndAsset(chain, symbol);
     }
-    /**
-     * 记录或保存 {@code saveRpcTest} 对应的数据，并遵守幂等和事务约束。
-     */
     private RpcTestView saveRpcTest(long nodeId, RpcTestView result) {
         rpcNodeRepository.updateProbe(nodeId, result.checkedAt(), result.latencyMs(),
                 result.statusCode(), result.error());
         return result;
     }
 
-    /**
-     * 执行 {@code audit} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private void audit(CustodyPrincipal actor, String action, String resourceType,
                        String resourceId, String sourceIp, String details) {
         audits.insert(UUID.randomUUID(), null, "PLATFORM_USER", actor.actorId().toString(), action,
                 resourceType, resourceId, sourceIp, details);
     }
-    /**
-     * 校验 {@code requirePlatformAdmin} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin() || actor.tenantId() != null) {
             throw new CustodyForbiddenException("platform administrator access is required");
         }
     }
-    /**
-     * 执行 {@code rpcAudit} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static String rpcAudit(RpcValues value) {
-        return "{\"environment\":" + json(value.environment()) + ",\"purpose\":"
-                + json(value.purpose()) + ",\"enabled\":" + value.enabled()
+    private static String rpcAudit(ChainRpcNode value) {
+        return "{\"environment\":" + json(value.getEnvironment()) + ",\"purpose\":"
+                + json(value.getPurpose()) + ",\"enabled\":" + value.getEnabled()
                 + ",\"credentialsConfigured\":"
-                + (!blank(value.apiKey()) || !blank(value.username()) || !blank(value.password())) + "}";
+                + (!blank(value.getApiKey()) || !blank(value.getUsername()) || !blank(value.getPassword())) + "}";
     }
-    /**
-     * 编码 {@code tokenAudit} 对应的数据，生成链上或接口所需的表示。
-     */
     private static String tokenAudit(TokenValues value) {
         return "{\"chain\":" + json(value.chain()) + ",\"network\":" + json(value.network())
                 + ",\"symbol\":" + json(value.symbol()) + ",\"enabled\":" + value.enabled() + "}";
     }
-    /**
-     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
-     */
     private static String json(String value) {
         if (value == null) return "null";
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"")
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
     }
-    /**
-     * 校验 {@code required} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void required(String value, String field) {
         if (blank(value)) throw new IllegalArgumentException(field + " is required");
     }
-    /**
-     * 转换或计算 {@code secret} 对应的值，统一金额、格式和边界规则。
-     */
     private static String secret(String requested, String current) {
         return requested == null || requested.isBlank() ? current : requested;
     }
 
-    /**
-     * 校验 {@code blank} 对应的输入或状态，失败时抛出明确异常。
-     */
     private static boolean blank(String value) { return value == null || value.isBlank(); }
-    /**
-     * 转换或计算 {@code string} 对应的值，统一金额、格式和边界规则。
-     */
-    private static String string(Object value) { return value == null ? "" : String.valueOf(value); }
+
     /** 将数据库值转换为可空字符串，保留 {@code null} 语义。 */
     private static String nullable(Object value) { return value == null ? null : String.valueOf(value); }
 
     /** 将数据库数值安全转换为金额字段使用的 {@link BigDecimal}。 */
-    private static BigDecimal decimal(Object value) {
-        if (value == null) return null;
-        return value instanceof BigDecimal decimal ? decimal : new BigDecimal(String.valueOf(value));
-    }
-    /**
-     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static String normalize(String value) { return value == null ? "" : value.trim().toUpperCase(Locale.ROOT); }
-    /**
-     * 转换或计算 {@code normalizeLower} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalizeLower(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT); }
-    /**
-     * 转换或计算 {@code upper} 对应的值，统一金额、格式和边界规则。
-     */
     private static String upper(String value) { return value == null ? null : value.trim().toUpperCase(Locale.ROOT); }
-    /**
-     * 执行 {@code splitCsv} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     /** 将字符串规范化为小写，供不区分大小写的配置比较使用。 */
     private static String lower(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
 
     /** 将逗号分隔的配置值拆分为列表，空值返回空列表。 */
-    private static List<String> splitCsv(String value) {
-        return value == null || value.isBlank() ? List.of() : List.of(value.split(","));
-    }
-    /**
-     * 转换或计算 {@code bool} 对应的值，统一金额、格式和边界规则。
-     */
-    private static boolean bool(Object value) { return value instanceof Boolean b ? b : Boolean.parseBoolean(string(value)); }
-    /**
-     * 转换或计算 {@code intValue} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static int intValue(Object value) { return value == null ? 0 : ((Number) value).intValue(); }
-    /**
-     * 转换或计算 {@code nullableInteger} 对应的值，统一金额、格式和边界规则。
-     */
-    private static Integer nullableInteger(Object value) { return value == null ? null : ((Number) value).intValue(); }
-    /**
-     * 转换或计算 {@code longValue} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static long longValue(Object value) { return value == null ? 0 : ((Number) value).longValue(); }
-    /**
-     * 转换或计算 {@code nullableLong} 对应的值，统一金额、格式和边界规则。
-     */
-    private static Long nullableLong(Object value) { return value == null ? null : ((Number) value).longValue(); }
-    /**
-     * 转换或计算 {@code instant} 对应的值，统一金额、格式和边界规则。
-     */
-    private static Instant instant(Object value) {
-        if (value == null) return null;
-        if (value instanceof Instant result) return result;
-        if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
-        if (value instanceof java.time.OffsetDateTime offset) return offset.toInstant();
-        return null;
-    }
-    /**
-     * 转换或计算 {@code or} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static <T> T or(T requested, T current) { return requested == null ? current : requested; }
-    /**
-     * 转换或计算 {@code or} 对应的值，统一金额、格式和边界规则。
-     */
     private static int or(Integer requested, Integer current, int fallback) {
         return requested != null ? requested : current != null ? current : fallback;
     }
-    /**
-     * 转换或计算 {@code or} 对应的值，统一金额、格式和边界规则。
-     */
     private static String or(String requested, String current, String fallback) {
         return requested != null ? requested : current != null ? current : fallback;
     }
-    /**
-     * 转换或计算 {@code or} 对应的值，统一金额、格式和边界规则。
-     */
     private static long or(Long requested, Long current, long fallback) {
         return requested != null ? requested : current != null ? current : fallback;
     }
-    /**
-     * 转换或计算 {@code or} 对应的值，统一金额、格式和边界规则。
-     */
     private static boolean or(Boolean requested, Boolean current, boolean fallback) {
         return requested != null ? requested : current != null ? current : fallback;
     }
@@ -1220,16 +952,6 @@ public class WalletConfigManagementService {
                               Instant createdAt, Instant updatedAt) {}
     public record RpcTestView(boolean success, Integer statusCode, long latencyMs,
                               String error, Instant checkedAt) {}
-    private record RpcStored(long id, String environment, String nodeLabel, String purpose,
-                             String connectionType, String rpcUrl, String authType,
-                             String authHeaderName, String apiKey, String username, String password,
-                             int priority, int minRequestIntervalMs, boolean enabled,
-                             Instant renewalDueAt, String remark) {}
-    private record RpcValues(String environment, String nodeLabel, String purpose,
-                             String connectionType, String rpcUrl, String authType,
-                             String authHeaderName, String apiKey, String username, String password,
-                             int priority, int minRequestIntervalMs, boolean enabled,
-                             Instant renewalDueAt, String remark) {}
 
     public record TokenCommand(String chain, String network, String symbol, String standard,
                                String contractAddress, String contractAddressBase58,
@@ -1249,12 +971,11 @@ public class WalletConfigManagementService {
                                String contractAddressHex, int decimals, boolean enabled,
                                boolean collectEnabled, BigDecimal minDeposit, BigDecimal minWithdraw,
                                BigDecimal collectThreshold, String gasStrategy, Integer confirmationRequired) {}
-    private record TokenChainProfile(String family, Long chainId, boolean enabled) {
-        /**
-         * 执行 {@code evm} 对应的辅助逻辑，完成数据处理并维护状态边界。
-         */
-        boolean evm() {
-            return family != null && family.toUpperCase(Locale.ROOT).contains("EVM");
-        }
+
+    private static NetworkKey profileKey(String chain, String network) {
+        return new NetworkKey(normalize(chain), normalize(network));
     }
+
+    private record NetworkKey(String chain, String network) { }
+    private record AssetKey(String chain, String symbol) { }
 }

@@ -67,6 +67,11 @@ class CustodyControlPlaneQueriesIntegrationTest {
         context.registerBean(com.surprising.wallet.service.CustodyTenantChainService.class,
                 () -> CustodyTestSupport.tenantChains(jdbc,
                         org.mockito.Mockito.mock(com.surprising.wallet.chain.BlockchainRuntimeService.class)));
+        context.registerBean(com.surprising.wallet.service.WalletConfigManagementService.class,
+                () -> com.surprising.wallet.service.WalletConfigTestSupport.management(jdbc,
+                        new com.surprising.wallet.service.WalletRuntimeConfigService(
+                                new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                                new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc))));
         context.refresh();
         queries = context.getBean(CustodyTenantQueryService.class);
     }
@@ -256,6 +261,143 @@ class CustodyControlPlaneQueriesIntegrationTest {
         assertEquals(21, sent.size(), "existing SENT tasks must not be discovered or sent again");
         assertEquals(21, jdbc.queryForObject("select count(*) from custody_dev_faucet_funding where status='SENT'",
                 Integer.class));
+    }
+
+    @Test
+    void configurationChainListBatchesTokenAndRpcCountsAcrossDisabledNetworks() {
+        var profiles = new com.surprising.wallet.repository.ChainProfileRepository(jdbc);
+        var profile = profiles.findAccountByChain("ETH").orElseThrow();
+        new com.surprising.wallet.repository.TokenConfigRepository(jdbc).insert("ETH", profile.getNetwork(),
+                "COUNT_ONLY", "ERC20", "0x" + "12".repeat(20), null, null, 6, false,
+                BigDecimal.ZERO, BigDecimal.ZERO, false, BigDecimal.ZERO, "NATIVE", 1);
+        var runtime = new com.surprising.wallet.service.WalletRuntimeConfigService(profiles,
+                new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc));
+        var service = context.getBean(com.surprising.wallet.service.WalletConfigManagementService.class);
+        dataSource.selects.set(0);
+        var rows = service.listChains(CustodyTestSupport.platformAdmin(), "", null, "", "", "",
+                null, null, null, null);
+        int queries = dataSource.selects.get();
+        assertTrue(rows.size() > 20);
+        assertTrue(rows.stream().anyMatch(row -> !row.enabled()));
+        var row = rows.stream().filter(value -> "ETH".equals(value.chain())
+                && profile.getNetwork().equals(value.network())).findFirst().orElseThrow();
+        assertTrue(row.tokenSymbols().contains("COUNT_ONLY"), "disabled tokens still count as configured");
+        assertEquals(jdbc.queryForObject("select count(*) from token_config where chain='ETH' and network=?",
+                Integer.class, profile.getNetwork()), row.tokenCount());
+        assertEquals(jdbc.queryForObject("select count(*) from chain_rpc_node where chain='ETH' and network=?",
+                Integer.class, profile.getNetwork()), row.rpcCount());
+        assertNotNull(row.createdAt());
+        assertNotNull(row.updatedAt());
+        assertTrue(queries <= 3, "chain summaries must read each table once; SELECTs=" + queries);
+        assertTrue(dataSource.snapshots.get() > 0, "configuration list must use its real read transaction");
+        dataSource.selects.set(0);
+        var detail = service.getChain(CustodyTestSupport.platformAdmin(), row.id());
+        int detailQueries = dataSource.selects.get();
+        assertEquals(row, detail.chain());
+        assertTrue(detailQueries <= 5, "detail must reuse its profile and configured rows; SELECTs=" + detailQueries);
+    }
+
+    @Test
+    void configurationTokenListBatchesProfilesAndAssetsAndPreservesNetworkAndEffectiveFilters() {
+        var profiles = new com.surprising.wallet.repository.ChainProfileRepository(jdbc);
+        var profile = profiles.findAccountByChain("ETH").orElseThrow();
+        var tokens = new com.surprising.wallet.repository.TokenConfigRepository(jdbc);
+        var assets = new com.surprising.wallet.repository.ChainAssetRepository(jdbc);
+        for (int i = 0; i < 20; i++) {
+            String symbol = "BATCH_TOKEN_" + i;
+            String contract = "0x" + String.format(Locale.ROOT, "%040x", 1000L + i);
+            tokens.insert("ETH", profile.getNetwork(), symbol, "ERC20", contract, null, null,
+                    6, i % 2 == 0, new BigDecimal("0.123456"), BigDecimal.ZERO, false,
+                    BigDecimal.ZERO, "NATIVE", 1);
+            assets.upsertNonNative("ETH", symbol, "ERC20", contract, 6, i % 3 != 0,
+                    BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+        String closedNetwork = jdbc.queryForObject("select network from chain_profile where chain='ETH' and enabled=false limit 1",
+                String.class);
+        tokens.insert("ETH", closedNetwork, "BATCH_TOKEN_2", "ERC20", "0x" + "34".repeat(20), null, null,
+                6, false, new BigDecimal("0.123456"), BigDecimal.ZERO, false, BigDecimal.ZERO, "NATIVE", 1);
+        jdbc.update("update chain_profile set scan_enabled=true where chain='ETH' and enabled=true");
+        var settings = new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc);
+        settings.upsertBoolean("global.all.enabled", true);
+        settings.upsertBoolean("global.scan.enabled", true);
+        var service = context.getBean(com.surprising.wallet.service.WalletConfigManagementService.class);
+        dataSource.selects.set(0);
+        var rows = service.listTokens(CustodyTestSupport.platformAdmin(), "BATCH_TOKEN_", "ETH", "", "", null, null);
+        int queries = dataSource.selects.get();
+        assertEquals(21, rows.size());
+        var closed = rows.stream().filter(row -> closedNetwork.equals(row.network())).findFirst().orElseThrow();
+        assertFalse(closed.chainEnabled());
+        assertFalse(closed.effectiveEnabled());
+        assertTrue(closed.blockers().contains("Chain network is disabled."));
+        var selected = service.listTokens(CustodyTestSupport.platformAdmin(), "BATCH_TOKEN_", "ETH",
+                profile.getNetwork(), "ERC20", null, true);
+        assertEquals(6, selected.size());
+        assertTrue(selected.stream().allMatch(row -> row.enabled() && row.assetActive() && row.effectiveEnabled()));
+        assertEquals(0, new BigDecimal("0.123456").compareTo(selected.getFirst().minDeposit()));
+        assertTrue(queries <= 4, "token enrichment must batch its metadata; SELECTs=" + queries);
+        assertTrue(dataSource.snapshots.get() > 0, "token views must use their real read transaction");
+    }
+
+    @Test
+    void typedRpcUpdatesPreserveCredentialsAndCannotRemoveTheLastRequiredNode() throws Exception {
+        var profiles = new com.surprising.wallet.repository.ChainProfileRepository(jdbc);
+        var profile = profiles.findAccountByChain("ETH").orElseThrow();
+        jdbc.update("update chain_rpc_node set enabled=false where chain='ETH' and network=? and environment='test' and purpose='rpc'",
+                profile.getNetwork());
+        var service = context.getBean(com.surprising.wallet.service.WalletConfigManagementService.class);
+        assertTrue(org.springframework.aop.support.AopUtils.isAopProxy(service));
+        var actor = CustodyTestSupport.platformAdmin();
+        var created = service.createRpcNode(actor, profile.getId(),
+                new com.surprising.wallet.service.WalletConfigManagementService.RpcNodeCommand(
+                        "test", "typed-rpc-write", "rpc", "HTTP_JSON_RPC", "http://127.0.0.1:1",
+                        "BEARER", null, "synthetic-only-key", null, null, 100, 0, true, null, null), "127.0.0.1");
+        var updated = service.updateRpcNode(actor, profile.getId(), created.id(),
+                new com.surprising.wallet.service.WalletConfigManagementService.RpcNodeCommand(
+                        null, null, null, null, null, null, null, null, null, null, 17, null, null, null, null), "127.0.0.1");
+        assertEquals(17, updated.priority());
+        assertTrue(updated.apiKeyConfigured());
+        var stored = new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc)
+                .findById(created.id(), "ETH", profile.getNetwork()).orElseThrow();
+        assertEquals("synthetic-only-key", stored.getApiKey());
+        var mapper = new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper();
+        var json = mapper.readTree(mapper.writeValueAsString(updated));
+        assertTrue(json.path("apiKeyConfigured").asBoolean());
+        assertFalse(json.has("apiKey"));
+        assertFalse(mapper.writeValueAsString(updated).contains("synthetic-only-key"));
+        assertThrows(IllegalStateException.class, () -> service.deleteRpcNode(actor, profile.getId(), created.id(), "127.0.0.1"));
+        var refusal = assertThrows(IllegalStateException.class, () -> service.updateRpcNode(actor, profile.getId(), created.id(),
+                new com.surprising.wallet.service.WalletConfigManagementService.RpcNodeCommand(
+                        null, null, null, null, null, null, null, null, null, null, null, null, false, null, null), "127.0.0.1"));
+        assertTrue(refusal.getMessage().contains("retain an enabled RPC node"));
+        assertTrue(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc)
+                .findById(created.id(), "ETH", profile.getNetwork()).orElseThrow().getEnabled());
+    }
+
+    @Test
+    void rpcCreationRollsBackItsRowWhenConfigurationAuditFails() {
+        var profile = new com.surprising.wallet.repository.ChainProfileRepository(jdbc).findAccountByChain("ETH").orElseThrow();
+        var service = context.getBean(com.surprising.wallet.service.WalletConfigManagementService.class);
+        assertTrue(org.springframework.aop.support.AopUtils.isAopProxy(service));
+        jdbc.execute("""
+                create function reject_config_audit_test() returns trigger language plpgsql as $$
+                begin
+                    if NEW.action='WALLET_RPC.CREATE' then raise exception 'configuration audit rejected by test'; end if;
+                    return NEW;
+                end $$
+                """);
+        jdbc.execute("create trigger reject_config_audit_test before insert on custody_audit_log for each row execute function reject_config_audit_test()");
+        try {
+            assertThrows(org.springframework.dao.DataAccessException.class,
+                    () -> service.createRpcNode(CustodyTestSupport.platformAdmin(), profile.getId(),
+                            new com.surprising.wallet.service.WalletConfigManagementService.RpcNodeCommand(
+                                    "test", "typed-rpc-reject", "rpc", "HTTP_JSON_RPC", "http://127.0.0.1:1",
+                                    "NONE", null, null, null, null, 100, 0, false, null, null), "127.0.0.1"));
+            assertEquals(0, jdbc.queryForObject("select count(*) from chain_rpc_node where node_label='typed-rpc-reject'", Integer.class));
+            assertEquals(0, jdbc.queryForObject("select count(*) from custody_audit_log where action='WALLET_RPC.CREATE'", Integer.class));
+        } finally {
+            jdbc.execute("drop trigger reject_config_audit_test on custody_audit_log");
+            jdbc.execute("drop function reject_config_audit_test()");
+        }
     }
 
     private UUID address(String chain, String account, BigDecimal balance, boolean gas) {
