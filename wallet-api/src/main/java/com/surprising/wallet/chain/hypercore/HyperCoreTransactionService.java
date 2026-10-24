@@ -5,12 +5,14 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.repository.AccountSequenceRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.HyperCoreRepository;
+import com.surprising.wallet.repository.HyperCoreActionRepository;
+import com.surprising.wallet.repository.HyperCoreTokenMetadataRepository;
+import java.sql.Timestamp;
+import java.time.Instant;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.math.BigDecimal;
 import java.util.Locale;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
@@ -33,33 +35,22 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class HyperCoreTransactionService {
 
-    /** 链标识 */
     private static final String CHAIN = "HYPERCORE";
 
-    /** API 客户端 */
     private final HyperCoreApiClient apiClient;
 
-    /** EIP-712 签名器 */
     private final HyperCoreSigner signer;
 
-    /** HyperCore 数据仓库 */
-    private final HyperCoreRepository hyperCoreRepository;
+    private final HyperCoreActionRepository actions;
+    private final HyperCoreTokenMetadataRepository tokenMetadata;
     private final CollectionRecordRepository collectionRecordRepository;
     private final AccountSequenceRepository accountSequenceRepository;
 
-
-    /** Secp256k1 密钥服务 */
     private final AccountSecp256k1KeyService keyService;
 
-    /**
-     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
-     */
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final WithdrawalSettlementService settlements;
 
-    /**
-     * 发送或广播 {@code sendUsd} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendUsd(AccountChainProfile profile, ChainAddressRecord from,
                           String destination, BigDecimal amount) {
         long nonce = nextNonce(from);
@@ -73,9 +64,6 @@ public class HyperCoreTransactionService {
         return submit("usdSend", "USDC", from.getAddress(), destination, amount, nonce, action, signature);
     }
 
-    /**
-     * 发送或广播 {@code sendSpot} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendSpot(AccountChainProfile profile, ChainAddressRecord from,
                            TokenDefinition token, String destination, BigDecimal amount) {
         long nonce = nextNonce(from);
@@ -91,22 +79,17 @@ public class HyperCoreTransactionService {
     }
 
     public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String actionId) {
-        if (!hyperCoreRepository.actionAccepted(actionId)) {
+        if (!actions.accepted(actionId)) {
             return false;
         }
         return settlements.confirm(tenantId, CHAIN, orderNo, actionId);
     }
-    /**
-     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
+
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String actionId) {
-        return hyperCoreRepository.actionAccepted(actionId)
+        return actions.accepted(actionId)
                 && collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, actionId) == 1;
     }
 
-    /**
-     * 发送或广播 {@code submit} 对应的链上请求，并返回节点处理结果。
-     */
     private String submit(String actionType, String symbol, String fromAddress, String destination,
                           BigDecimal amount, long nonce, ObjectNode action, ObjectNode signature) {
         String actionId = "HC-" + actionType + "-" + fromAddress.toLowerCase(Locale.ROOT) + "-" + nonce;
@@ -115,49 +98,39 @@ public class HyperCoreTransactionService {
         body.put("nonce", nonce);
         body.set("signature", signature);
         String requestPayload = body.toString();
-        hyperCoreRepository.createAction(actionId, actionType, symbol,
-                fromAddress, normalizeAddress(destination), amount, nonce, requestPayload);
+        actions.create(actionId, actionType, CHAIN, symbol,
+                fromAddress, normalizeAddress(destination), amount, nonce, requestPayload, Timestamp.from(Instant.now()));
         try {
             JsonNode response = apiClient.postExchange(body);
             if (!"ok".equalsIgnoreCase(response.path("status").asText())) {
                 throw new IllegalStateException("HyperCore exchange rejected action: " + response);
             }
-            hyperCoreRepository.markActionAccepted(actionId, response.toString());
+            actions.markAccepted(actionId, response.toString(), Timestamp.from(Instant.now()));
             return actionId;
         } catch (RuntimeException e) {
-            hyperCoreRepository.markActionFailed(actionId, e.getMessage());
+            actions.markFailed(actionId, e.getMessage(), Timestamp.from(Instant.now()));
             throw e;
         }
     }
-    /**
-     * 执行 {@code wireToken} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
     private String wireToken(AccountChainProfile profile, TokenDefinition token) {
-        return hyperCoreRepository.tokenNameBySymbol(profile.getNetwork(), token.getSymbol())
+        return tokenMetadata.findName(profile.getNetwork(), token.getSymbol())
                 .orElse(token.getSymbol());
     }
-    /**
-     * 执行 {@code nextNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
     private long nextNonce(ChainAddressRecord from) {
         return accountSequenceRepository.reserve(CHAIN, normalizeAddress(from.getAddress()), System.currentTimeMillis());
     }
-    /**
-     * 判断 {@code isMainnet} 对应的条件是否成立，并返回明确的布尔结果。
-     */
+
     private static boolean isMainnet(AccountChainProfile profile) {
         String network = profile.getNetwork() == null ? "" : profile.getNetwork().toLowerCase(Locale.ROOT);
         return network.equals("mainnet") || network.equals("main");
     }
-    /**
-     * 转换或计算 {@code amountString} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static String amountString(BigDecimal amount) {
         return amount.stripTrailingZeros().toPlainString();
     }
-    /**
-     * 转换或计算 {@code normalizeAddress} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static String normalizeAddress(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
     }

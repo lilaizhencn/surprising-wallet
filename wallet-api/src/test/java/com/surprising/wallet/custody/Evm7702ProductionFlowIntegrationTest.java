@@ -23,7 +23,7 @@ import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WalletSystemConfigRepository;
@@ -180,8 +180,8 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
         ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
-        CustodyTenantChainRepository tenantChainRepository =
-                new CustodyTenantChainRepository(jdbc);
+        CustodyTenantChainTableRepository tenantChainRepository =
+                new CustodyTenantChainTableRepository(jdbc);
         chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
                 jdbc,
                 com.surprising.wallet.testutil.DepositTestSupport.projection(
@@ -218,8 +218,7 @@ class Evm7702ProductionFlowIntegrationTest {
         WalletRuntimeConfigService runtimeConfig =
                 new WalletRuntimeConfigService(new ChainProfileRepository(jdbc),
                         new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc));
-        CustodyTenantChainService tenantChainService = new CustodyTenantChainService(
-                tenantChainRepository, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), null);
+        CustodyTenantChainService tenantChainService = com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, org.mockito.Mockito.mock(com.surprising.wallet.chain.BlockchainRuntimeService.class));
         CustodyWithdrawalExecutionService withdrawalExecution =
                 new CustodyWithdrawalExecutionService(
                         chainRepository.withdrawalOrderRepository,

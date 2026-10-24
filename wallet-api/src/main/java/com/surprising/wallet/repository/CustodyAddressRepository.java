@@ -29,6 +29,14 @@ public class CustodyAddressRepository {
                 (rs, rowNum) -> mapAddress(rs), tenantId, new SqlArrayValue("uuid", ids.toArray()));
     }
 
+    public List<CustodyAddressRecord> listActiveForTenantsAndChains(List<UUID> tenantIds, List<String> chains) {
+        if (tenantIds.isEmpty() || chains.isEmpty()) return List.of();
+        return jdbc.query("select " + COLUMNS + """
+                 from custody_address where tenant_id=any(?) and chain=any(?) and status='ACTIVE'
+                """, (rs, rowNum) -> mapAddress(rs), new SqlArrayValue("uuid", tenantIds.toArray()),
+                new SqlArrayValue("varchar", chains.toArray()));
+    }
+
     public Map<UUID, Long> countByTenants(List<UUID> ids) {
         if (ids.isEmpty()) return Map.of();
         return jdbc.query("select tenant_id, count(*) as total from custody_address where tenant_id=any(?) group by tenant_id",
@@ -114,14 +122,6 @@ public class CustodyAddressRepository {
                   from custody_address
                  where tenant_id = ?
                 """, tenantId);
-    }
-
-    /** 查询全部托管地址字段，供开发水龙头服务组合租户和链配置。 */
-    public List<Map<String, Object>> listAll() {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain, network, address, status, source
-                  from custody_address
-                """);
     }
 
     /** 查询启用的托管地址及其链地址主键。 */

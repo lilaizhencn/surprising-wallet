@@ -10,7 +10,7 @@ import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.CustodyAddressService;
@@ -796,10 +796,10 @@ class CustodyOperationsIntegrationTest {
                     """, administratorId, tenantId, slug + "@example.test");
             var principal = new CustodyPrincipal(CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN", Set.of("*"));
-            var chains = new CustodyTenantChainRepository(jdbc);
+            var chains = new CustodyTenantChainTableRepository(jdbc);
             var runtime = new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
                             new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null);
-            var service = new CustodyTenantChainService(chains, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), runtime);
+            var service = com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, runtime);
             Set<String> expected = java.util.Arrays.stream(ChainType.values())
                     .map(Enum::name).collect(java.util.stream.Collectors.toSet());
             assertEquals(expected, service.list(principal).stream()
@@ -817,12 +817,7 @@ class CustodyOperationsIntegrationTest {
     @Test
     void tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain() {
         transactions.executeWithoutResult(status -> {
-            CustodyTenantChainRepository chainRepository =
-                    new CustodyTenantChainRepository(jdbc);
-            CustodyTenantChainService service = new CustodyTenantChainService(
-                    chainRepository, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)
-            );
+            CustodyTenantChainService service = com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null));
             jdbc.update("""
                     update chain_profile
                        set scan_enabled = true,
@@ -846,10 +841,10 @@ class CustodyOperationsIntegrationTest {
 
             assertThrows(CustodyForbiddenException.class,
                     () -> service.requireActive(tenantId, "TRON"));
-            assertFalse(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
-            assertFalse(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
+            assertThrows(CustodyForbiddenException.class, () -> service.requireWithdrawalEnabled(tenantId, "TRON", "USDT"));
             var opened = service.setEnabled(principal, "TRON", true, "127.0.0.1");
             assertTrue(opened.enabled());
+            assertTrue(opened.scanEnabled());
             service.requireActive(tenantId, "TRON");
             assertTrue(service.list(principal).stream()
                     .anyMatch(chain -> chain.chain().equals("TRON") && chain.enabled()));
@@ -859,8 +854,7 @@ class CustodyOperationsIntegrationTest {
                     .filter(row -> row.symbol().equals("USDT"))
                     .findFirst().orElseThrow();
             assertTrue(enabledToken.platformEnabled());
-            assertTrue(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
-            assertTrue(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
+            service.requireWithdrawalEnabled(tenantId, "TRON", "USDT");
             Long tokenConfigId = jdbc.queryForObject("""
                     select id from token_config
                      where chain = 'TRON' and symbol = 'USDT' and enabled = true
@@ -872,11 +866,9 @@ class CustodyOperationsIntegrationTest {
                     .filter(row -> row.symbol().equals("USDT"))
                     .findFirst().orElseThrow();
             assertFalse(platformDisabledToken.platformEnabled());
-            assertFalse(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
-            assertFalse(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
+            assertThrows(CustodyForbiddenException.class, () -> service.requireWithdrawalEnabled(tenantId, "TRON", "USDT"));
             jdbc.update("update token_config set enabled = true where id = ?", tokenConfigId);
-            assertTrue(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
-            assertTrue(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
+            service.requireWithdrawalEnabled(tenantId, "TRON", "USDT");
 
             var closed = service.setEnabled(principal, "TRON", false, "127.0.0.1");
             assertFalse(closed.enabled());
@@ -896,8 +888,8 @@ class CustodyOperationsIntegrationTest {
     @Test
     void userAddressCreationIsIdempotentAndSharedAcrossEvmChains() {
         transactions.executeWithoutResult(status -> {
-            CustodyTenantChainRepository tenantChainRepository =
-                    new CustodyTenantChainRepository(jdbc);
+            CustodyTenantChainTableRepository tenantChainRepository =
+                    new CustodyTenantChainTableRepository(jdbc);
             UUID tenantId = createTenant();
             UUID administratorId = UUID.randomUUID();
             String slug = jdbc.queryForObject(
@@ -914,10 +906,7 @@ class CustodyOperationsIntegrationTest {
             CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
 
                    new StableEvmRuntime(jdbc),
-                    new CustodyTenantChainService(
-                            tenantChainRepository, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)
-                    ));
+                    com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN",
@@ -983,7 +972,7 @@ class CustodyOperationsIntegrationTest {
     @Test
     void fundedWithdrawalAddressLookupChoosesOlderAddressWithAssetBalance() {
         transactions.executeWithoutResult(status -> {
-            CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
+            CustodyTenantChainTableRepository tenantChains = new CustodyTenantChainTableRepository(jdbc);
             UUID tenantId = createTenant();
             UUID administratorId = UUID.randomUUID();
             String slug = jdbc.queryForObject(
@@ -996,9 +985,7 @@ class CustodyOperationsIntegrationTest {
             tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
             CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
             new StableEvmRuntime(jdbc),
-                    new CustodyTenantChainService(tenantChains, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)
-                    ));
+                    com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
                     "TENANT_ADMIN", Set.of("addresses:read", "addresses:write"));
@@ -1047,8 +1034,8 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, 'Asset administrator', 'test-only-hash',
                             'TENANT_ADMIN', 'ACTIVE')
                     """, administratorId, tenantId, slug + "@example.test");
-            CustodyTenantChainRepository chainRepository =
-                    new CustodyTenantChainRepository(jdbc);
+            CustodyTenantChainTableRepository chainRepository =
+                    new CustodyTenantChainTableRepository(jdbc);
             chainRepository.setStatus(tenantId, "TRON", "ACTIVE", administratorId);
 
             CustodyAssetDashboardService service = com.surprising.wallet.testutil.CustodyTestSupport.assets(jdbc);
@@ -1090,8 +1077,8 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, 'Dashboard administrator', 'test-only-hash',
                             'TENANT_ADMIN', 'ACTIVE')
                     """, administratorId, tenantId, slug + "@example.test");
-            CustodyTenantChainRepository chainRepository =
-                    new CustodyTenantChainRepository(jdbc);
+            CustodyTenantChainTableRepository chainRepository =
+                    new CustodyTenantChainTableRepository(jdbc);
             int namespace = jdbc.queryForObject(
                     "select derivation_namespace from custody_tenant where id = ?",
                     Integer.class, tenantId);

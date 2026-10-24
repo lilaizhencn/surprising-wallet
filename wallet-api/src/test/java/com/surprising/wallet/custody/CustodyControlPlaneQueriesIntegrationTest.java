@@ -64,6 +64,9 @@ class CustodyControlPlaneQueriesIntegrationTest {
         context.registerBean(CustodyTenantService.class, () -> CustodyTestSupport.tenants(jdbc));
         context.registerBean(CustodyGasService.class, () -> CustodyTestSupport.gas(jdbc));
         context.registerBean(CustodyAssetDashboardService.class, () -> CustodyTestSupport.assets(jdbc));
+        context.registerBean(com.surprising.wallet.service.CustodyTenantChainService.class,
+                () -> CustodyTestSupport.tenantChains(jdbc,
+                        org.mockito.Mockito.mock(com.surprising.wallet.chain.BlockchainRuntimeService.class)));
         context.refresh();
         queries = context.getBean(CustodyTenantQueryService.class);
     }
@@ -184,6 +187,75 @@ class CustodyControlPlaneQueriesIntegrationTest {
         assertTrue(failure.getMessage().contains("still processing"), failure.getMessage());
         org.mockito.Mockito.verifyNoInteractions(execution);
         assertEquals(0, jdbc.queryForObject("select count(*) from custody_withdrawal where tenant_id=?", Integer.class, TENANT));
+    }
+
+    @Test
+    void tenantChainListUsesBoundedTypedReadsAndAnActualConsistentSnapshot() {
+        dataSource.selects.set(0);
+        var rows = context.getBean(com.surprising.wallet.service.CustodyTenantChainService.class)
+                .list(CustodyTestSupport.tenantAdmin(TENANT));
+        int selects = dataSource.selects.get();
+        assertTrue(rows.size() > 10, "fixture must exercise many enabled chains");
+        assertTrue(selects <= 7, "tenant chain reads must not grow per chain; SELECTs=" + selects);
+        assertTrue(dataSource.snapshots.get() > 0, "chain list must use its normal Spring transaction");
+        assertTrue(rows.stream().anyMatch(row -> "BTC".equals(row.chain())), "typed profiles must retain UTXO chains");
+        for (var row : rows) {
+            assertTrue(row.assetSymbols().contains(row.nativeSymbol()));
+            var network = new com.surprising.wallet.repository.TokenConfigRepository(jdbc)
+                    .listByChainAndNetwork(row.chain(), row.network());
+            for (var token : row.tokens()) assertTrue(network.stream().anyMatch(config ->
+                    config.symbol().equals(token.symbol()) && java.util.Objects.equals(config.contractAddress(), token.contractAddress())
+                            && config.enabled() == token.platformEnabled()), row.chain() + "/" + row.network());
+        }
+    }
+
+    @Test
+    void faucetBatchesDiscoveryAndKeepsConsoleGasAndDuplicateFundingRules() {
+        for (int i = 0; i < 20; i++) address("ETH", "faucet-customer-" + i, BigDecimal.ZERO, false);
+        UUID gas = address("ETH", "faucet-gas", BigDecimal.ZERO, true);
+        UUID console = address("ETH", "faucet-console", BigDecimal.ZERO, false);
+        jdbc.update("update custody_address set source='CONSOLE' where id in (?, ?)", gas, console);
+        jdbc.update("update chain_profile set scan_enabled=true where chain='ETH' and enabled=true");
+        jdbc.update("update token_config set enabled=false where chain='ETH'");
+        var actor = UUID.randomUUID();
+        new CustodyTenantUserRepository(jdbc).insertTenantAdmin(actor, TENANT,
+                "faucet-admin@example.test", "Faucet admin", "fixture-password-hash");
+        new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc)
+                .setStatus(TENANT, "ETH", "ACTIVE", actor);
+        var properties = new com.surprising.wallet.devfaucet.DevFaucetProperties();
+        properties.setEnabled(true);
+        properties.setBatchSize(100);
+        properties.getEvm().setFromAddress("0x" + "ab".repeat(20));
+        var sent = new java.util.ArrayList<com.surprising.wallet.devfaucet.DevFaucetFunding>();
+        com.surprising.wallet.service.DevFaucetRpcClient rpc = funding -> {
+            sent.add(funding);
+            return "0x" + String.format("%064x", sent.size());
+        };
+        var faucet = new com.surprising.wallet.service.DevFaucetService(properties,
+                new com.surprising.wallet.repository.DevFaucetFundingRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+                new CustodyTenantTableRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc),
+                new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                new com.surprising.wallet.repository.ChainAssetRepository(jdbc),
+                new com.surprising.wallet.repository.TokenConfigRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyDepositRepository(jdbc), rpc,
+                new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new tools.jackson.databind.ObjectMapper(),
+                new com.surprising.wallet.devfaucet.DevFaucetAmountGenerator(), "test");
+        faucet.validate();
+        dataSource.selects.set(0);
+        faucet.runOnce();
+        int selects = dataSource.selects.get();
+        assertEquals(21, sent.size());
+        assertTrue(selects <= 10, "discovery must batch its chain and existence reads; SELECTs=" + selects);
+        assertEquals(1, sent.stream().filter(row -> row.custodyAddressId().equals(gas)
+                && "TENANT_GAS".equals(row.purpose()) && "ETH".equals(row.assetSymbol())).count());
+        assertFalse(sent.stream().anyMatch(row -> row.custodyAddressId().equals(console)));
+        faucet.runOnce();
+        assertEquals(21, sent.size(), "existing SENT tasks must not be discovered or sent again");
+        assertEquals(21, jdbc.queryForObject("select count(*) from custody_dev_faucet_funding where status='SENT'",
+                Integer.class));
     }
 
     private UUID address(String chain, String account, BigDecimal balance, boolean gas) {

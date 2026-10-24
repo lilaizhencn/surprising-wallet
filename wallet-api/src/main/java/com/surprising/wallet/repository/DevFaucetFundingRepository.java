@@ -22,14 +22,17 @@ public class DevFaucetFundingRepository {
         this.jdbc = jdbc;
     }
 
-    /** 判断同一托管地址、资产和用途是否已有资金记录。 */
-    public boolean exists(UUID custodyAddressId, String assetSymbol, String purpose) {
-        return !jdbc.queryForList("""
-                select id from custody_dev_faucet_funding
-                 where custody_address_id = ? and asset_symbol = ? and purpose = ?
-                 limit 1
-                """, custodyAddressId, assetSymbol, purpose).isEmpty();
+    public List<FundingKey> existingForAddresses(List<UUID> addressIds) {
+        if (addressIds.isEmpty()) return List.of();
+        return jdbc.query("""
+                select custody_address_id, asset_symbol, purpose from custody_dev_faucet_funding
+                 where custody_address_id=any(?)
+                """, (rs, rowNum) -> new FundingKey(rs.getObject("custody_address_id", UUID.class),
+                rs.getString("asset_symbol"), rs.getString("purpose")),
+                new org.springframework.jdbc.support.SqlArrayValue("uuid", addressIds.toArray()));
     }
+
+    public record FundingKey(UUID custodyAddressId, String assetSymbol, String purpose) { }
 
     /** 创建资金任务。 */
     public boolean create(UUID tenantId, UUID custodyAddressId, String chain, String network,

@@ -4,7 +4,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.math.BigDecimal;
@@ -241,7 +241,7 @@ class CustodyDepositFinalityIntegrationTest {
                     id, tenant_id, email, display_name, password_hash, role, status)
                 values (?, ?, ?, 'Finality administrator', 'hash', 'TENANT_ADMIN', 'ACTIVE')
                 """, userId, tenantId, "finality-" + suffix.substring(0, 10) + "@test.invalid");
-        new CustodyTenantChainRepository(jdbc).setStatus(tenantId, "ETH", "ACTIVE", userId);
+        new CustodyTenantChainTableRepository(jdbc).setStatus(tenantId, "ETH", "ACTIVE", userId);
         Long chainAddressId = value("""
                 insert into chain_address(
                     tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,

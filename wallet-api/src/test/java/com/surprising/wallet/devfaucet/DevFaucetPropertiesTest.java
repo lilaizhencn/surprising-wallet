@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
-import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,7 +36,7 @@ class DevFaucetPropertiesTest {
     @Test
     void randomAmountsStayInsideConfiguredAtomicRange() {
         DevFaucetProperties properties = validProperties();
-        DevFaucetAmountGenerator generator = new DevFaucetAmountGenerator(new Random(17));
+        DevFaucetAmountGenerator generator = new DevFaucetAmountGenerator();
 
         for (int i = 0; i < 100; i++) {
             BigDecimal amount = generator.next(properties.getEvm().getUsdt());

@@ -78,13 +78,8 @@ public class CustodyGasAccountRepository {
                 """, UUID.class, tenantId);
     }
 
-    /** 查询启用的 Gas 账户关联字段。 */
-    public List<Map<String, Object>> listActive() {
-        return jdbc.queryForList("""
-                select tenant_id, custody_address_id
-                  from custody_gas_account
-                 where status = 'ACTIVE'
-                """);
+    public List<UUID> listActiveAddressIds() {
+        return jdbc.queryForList("select custody_address_id from custody_gas_account where status='ACTIVE'", UUID.class);
     }
 
     /** 查询租户指定链上的启用 Gas 账户。 */

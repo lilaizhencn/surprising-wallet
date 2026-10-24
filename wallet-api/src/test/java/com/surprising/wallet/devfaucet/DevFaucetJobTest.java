@@ -1,209 +1,123 @@
 package com.surprising.wallet.devfaucet;
 
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.CustodyAuditRepository;
+import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
+import com.surprising.wallet.chain.model.TokenConfiguration;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.job.devfaucet.DevFaucetJob;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.service.DevFaucetRpcClient;
+import com.surprising.wallet.service.DevFaucetService;
+import java.math.BigDecimal;
+import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
+import tools.jackson.databind.ObjectMapper;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import com.surprising.wallet.job.devfaucet.DevFaucetJob;
-import com.surprising.wallet.service.DevFaucetService;
-import com.surprising.wallet.repository.DevFaucetRepository;
-import com.surprising.wallet.service.DevFaucetRpcClient;
-
-/**
- * 验证 {@code DevFaucetJobTest} 覆盖的业务流程、边界条件和异常行为。
- */
 class DevFaucetJobTest {
-    /**
-     * 验证 {@code selectsTheProductionConstructorWhenSpringCreatesTheJob} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
     @Test
-    void selectsTheProductionConstructorWhenSpringCreatesTheJob() {
-        try (AnnotationConfigApplicationContext context =
-                     new AnnotationConfigApplicationContext()) {
-            context.getEnvironment().getPropertySources().addFirst(
-                    new MapPropertySource("dev-faucet-test", Map.of(
-                            "sw.wallet.dev-faucet.enabled", "true",
-                            "sw.app.env.name", "test")));
-            context.registerBean(DevFaucetProperties.class,
-                    DevFaucetPropertiesTest::validProperties);
-            context.registerBean(DevFaucetRepository.class,
-                    () -> new FakeRepository(List.of()));
-            context.registerBean(DevFaucetRpcClient.class, FakeRpcClient::new);
-            context.registerBean(CustodyAuditRepository.class, FakeAuditRepository::new);
+    void springCreatesTheServiceAndJobWithTheirOnlyConstructors() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("dev-faucet-test",
+                    Map.of("sw.wallet.dev-faucet.enabled", "true", "sw.app.env.name", "test")));
+            context.registerBean(DevFaucetProperties.class, DevFaucetPropertiesTest::validProperties);
+            for (Class<?> type : List.of(DevFaucetFundingRepository.class, CustodyAddressRepository.class,
+                    CustodyTenantTableRepository.class, CustodyTenantChainTableRepository.class,
+                    CustodyGasAccountRepository.class, ChainProfileRepository.class, ChainAssetRepository.class,
+                    TokenConfigRepository.class, CustodyDepositRepository.class, CustodyAuditRepository.class,
+                    DevFaucetRpcClient.class)) registerMock(context, type);
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
-            context.register(DevFaucetService.class, DevFaucetJob.class);
+            context.register(DevFaucetService.class, DevFaucetJob.class, DevFaucetAmountGenerator.class);
             context.refresh();
-
             assertEquals(1, context.getBeansOfType(DevFaucetJob.class).size());
         }
     }
 
-    /**
-     * 验证 {@code fundsNativeAndTokensOncePerApiAddressAndNativeOnlyForGasAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void fundsNativeAndTokensOncePerApiAddressAndNativeOnlyForGasAddress() {
-        UUID tenantId = UUID.randomUUID();
-        UUID customerAddressId = UUID.randomUUID();
-        UUID gasAddressId = UUID.randomUUID();
-        FakeRepository repository = new FakeRepository(List.of(
-                candidate(tenantId, customerAddressId, "ETH", "ETH", null, 18,
-                        "CUSTOMER_DEPOSIT"),
-                candidate(tenantId, customerAddressId, "ETH", "USDT", "0x"
-                                + "11".repeat(20), 6, "CUSTOMER_DEPOSIT"),
-                candidate(tenantId, customerAddressId, "ETH", "USDC", "0x"
-                                + "22".repeat(20), 6, "CUSTOMER_DEPOSIT"),
-                candidate(tenantId, gasAddressId, "ETH", "ETH", null, 18,
-                        "TENANT_GAS")));
-        FakeRpcClient rpc = new FakeRpcClient();
-        DevFaucetProperties properties = DevFaucetPropertiesTest.validProperties();
-        DevFaucetService service = new DevFaucetService(
-                properties, repository, rpc, new FakeAuditRepository(),
-                new ObjectMapper(), new DevFaucetAmountGenerator(new java.util.Random(1)), "test");
+    private static <T> void registerMock(AnnotationConfigApplicationContext context, Class<T> type) {
+        context.registerBean(type, () -> mock(type));
+    }
 
+    @Test
+    void discoversNativeAndMatchingTokensForApiCustomersButOnlyNativeForGasAndDoesNotRepeatFunding() {
+        UUID tenant = UUID.randomUUID();
+        UUID customer = UUID.randomUUID();
+        UUID gas = UUID.randomUUID();
+        UUID console = UUID.randomUUID();
+        var fundings = mock(DevFaucetFundingRepository.class);
+        var addresses = mock(CustodyAddressRepository.class);
+        var tenants = mock(CustodyTenantTableRepository.class);
+        var chains = mock(CustodyTenantChainTableRepository.class);
+        var gasAccounts = mock(CustodyGasAccountRepository.class);
+        var profiles = mock(ChainProfileRepository.class);
+        var assets = mock(ChainAssetRepository.class);
+        var tokens = mock(TokenConfigRepository.class);
+        when(tenants.listActiveIds()).thenReturn(List.of(tenant));
+        when(chains.listActiveByTenants(List.of(tenant))).thenReturn(List.of(
+                new CustodyTenantChainTableRepository.TenantChain(tenant, "ETH")));
+        when(gasAccounts.listActiveAddressIds()).thenReturn(List.of(gas));
+        when(profiles.listProfiles(true)).thenReturn(List.of(AccountChainProfile.builder()
+                .chain("ETH").network("devtest").scanEnabled(true).build()));
+        when(addresses.listActiveForTenantsAndChains(List.of(tenant), List.of("BTC", "ETH")))
+                .thenReturn(List.of(address(tenant, customer, "API"), address(tenant, gas, "CONSOLE"),
+                        address(tenant, console, "CONSOLE")));
+        when(assets.listActiveDefinitions()).thenReturn(List.of(
+                asset("ETH", null, true, 18), asset("USDT", "0x11", false, 6),
+                asset("USDC", "0x22", false, 6)));
+        when(tokens.listAll()).thenReturn(List.of(token("USDT", "0x11", "devtest"),
+                token("USDC", "0x22", "devtest"), token("USDT", "0x33", "other-network")));
+        var created = new LinkedHashMap<DevFaucetFundingRepository.FundingKey, DevFaucetFunding>();
+        when(fundings.existingForAddresses(anyList())).thenAnswer(ignored -> List.copyOf(created.keySet()));
+        when(fundings.create(any(), any(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                nullable(String.class), anyInt(), any())).thenAnswer(call -> {
+            UUID address = call.getArgument(1);
+            String symbol = call.getArgument(4);
+            String purpose = call.getArgument(5);
+            var funding = new DevFaucetFunding(UUID.randomUUID(), tenant, address, call.getArgument(2),
+                    call.getArgument(3), symbol, purpose, call.getArgument(6), call.getArgument(7),
+                    call.getArgument(8), call.getArgument(9), 0);
+            return created.putIfAbsent(new DevFaucetFundingRepository.FundingKey(address, symbol, purpose), funding) == null;
+        });
+        Set<UUID> sent = new HashSet<>();
+        when(fundings.due(anyInt(), anyInt())).thenAnswer(ignored -> created.values().stream()
+                .filter(row -> !sent.contains(row.id())).toList());
+        when(fundings.markSending(any())).thenReturn(true);
+        doAnswer(call -> { sent.add(call.getArgument(0)); return null; }).when(fundings).markSent(any(), any());
+        var rpc = mock(DevFaucetRpcClient.class);
+        when(rpc.send(any())).thenReturn("test-transaction");
+        var service = new DevFaucetService(DevFaucetPropertiesTest.validProperties(), fundings, addresses,
+                tenants, chains, gasAccounts, profiles, assets, tokens, mock(CustodyDepositRepository.class),
+                rpc, mock(CustodyAuditRepository.class), new ObjectMapper(), new DevFaucetAmountGenerator(), "test");
         service.validate();
         service.runOnce();
         service.runOnce();
-
-        assertEquals(4, rpc.sent.size());
-        assertEquals(List.of("ETH", "USDT", "USDC", "ETH"),
-                rpc.sent.stream().map(DevFaucetFunding::assetSymbol).toList());
-        assertEquals(4, repository.sent);
-        assertEquals(new BigDecimal("1.000000"),
-                rpc.sent.getLast().requestedAmount());
+        assertEquals(4, sent.size());
+        assertEquals(Set.of("ETH", "USDT", "USDC"), created.values().stream()
+                .filter(row -> row.custodyAddressId().equals(customer)).map(DevFaucetFunding::assetSymbol)
+                .collect(java.util.stream.Collectors.toSet()));
+        var gasFunding = created.values().stream().filter(row -> row.custodyAddressId().equals(gas)).toList();
+        assertEquals(1, gasFunding.size());
+        assertEquals("TENANT_GAS", gasFunding.getFirst().purpose());
+        assertEquals(new BigDecimal("1.000000"), gasFunding.getFirst().requestedAmount());
+        assertFalse(created.values().stream().anyMatch(row -> row.custodyAddressId().equals(console)));
+        verify(rpc, times(4)).send(any());
     }
 
-    /**
-     * 验证 {@code candidate} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static DevFaucetRepository.Candidate candidate(
-            UUID tenantId, UUID addressId, String chain, String asset,
-            String contract, int decimals, String purpose) {
-        return new DevFaucetRepository.Candidate(
-                tenantId, addressId, chain, "devtest", asset, purpose,
-                "0x" + "ab".repeat(20), contract, decimals);
+    private static CustodyAddressRecord address(UUID tenant, UUID id, String source) {
+        return new CustodyAddressRecord(id, tenant, 1, "ETH", "devtest", "0xab", null, "customer", null,
+                null, source, "ACTIVE", 1, 1, 0, null, null);
     }
 
-    /**
-     * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeRepository extends DevFaucetRepository {
-        /**
-         * 保存 {@code undiscovered}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private List<Candidate> undiscovered;
-        /**
-         * 保存 {@code due}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private final List<DevFaucetFunding> due = new ArrayList<>();
-        /**
-         * 保存 {@code sent}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private int sent;
-
-        /**
-         * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        private FakeRepository(List<Candidate> candidates) {
-            super(null);
-            this.undiscovered = new ArrayList<>(candidates);
-        }
-
-        /**
-         * 验证 {@code discover} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<Candidate> discover(int limit) {
-            List<Candidate> result = List.copyOf(undiscovered);
-            undiscovered = List.of();
-            return result;
-        }
-
-        /**
-         * 验证 {@code create} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean create(Candidate candidate, BigDecimal amount) {
-            due.add(new DevFaucetFunding(
-                    UUID.randomUUID(), candidate.tenantId(), candidate.custodyAddressId(),
-                    candidate.chain(), candidate.network(), candidate.assetSymbol(),
-                    candidate.purpose(), candidate.address(), candidate.contractAddress(),
-                    candidate.decimals(), amount, 0));
-            return true;
-        }
-
-        /**
-         * 验证 {@code due} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<DevFaucetFunding> due(int limit, int maxAttempts) {
-            List<DevFaucetFunding> result = List.copyOf(due);
-            due.clear();
-            return result;
-        }
-
-        /** 标记水龙头资金记录已进入发送状态。 */
-        @Override public boolean markSending(UUID id) { return true; }
-
-        /** 标记水龙头资金记录已发送，并保存交易哈希。 */
-        @Override public void markSent(UUID id, String txHash) { sent++; }
-
-        /** 回收超过发送时限仍未完成的水龙头资金记录。 */
-        @Override public int recoverStaleSending(Duration age) { return 0; }
-
-        /** 对已确认的水龙头资金记录执行对账并返回处理数量。 */
-        @Override public int reconcileConfirmed() { return 0; }
+    private static ChainAsset asset(String symbol, String contract, boolean nativeAsset, int decimals) {
+        return ChainAsset.builder().chain("ETH").symbol(symbol).contractAddress(contract)
+                .nativeAsset(nativeAsset).decimals(decimals).active(true).build();
     }
 
-    /**
-     * 测试替身 {@code FakeRpcClient}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeRpcClient implements DevFaucetRpcClient {
-        /**
-         * 保存 {@code sent}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private final List<DevFaucetFunding> sent = new ArrayList<>();
-
-        /**
-         * 验证 {@code send} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public String send(DevFaucetFunding funding) {
-            sent.add(funding);
-            return "0x" + String.format("%064x", sent.size());
-        }
-    }
-
-    /**
-     * 测试替身 {@code FakeAuditRepository}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeAuditRepository extends CustodyAuditRepository {
-        /**
-         * 验证 {@code FakeAuditRepository} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        private FakeAuditRepository() {
-            super(new org.springframework.jdbc.core.JdbcTemplate());
-        }
-
-        /**
-         * 验证 {@code audit} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int insert(UUID id, UUID tenantId, String actorType, String actorId, String action,
-                          String resourceType, String resourceId, String sourceIp,
-                          String detailsJson) {
-            return 1;
-        }
+    private static TokenConfiguration token(String symbol, String contract, String network) {
+        return new TokenConfiguration(1, "ETH", network, symbol, "ERC20", contract, null, null, 6,
+                true, true, null, null, null, null, null, null, null);
     }
 }

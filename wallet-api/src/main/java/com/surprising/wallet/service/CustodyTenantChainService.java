@@ -1,74 +1,60 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
+import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
+import com.surprising.wallet.repository.Evm7702ConfigRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import com.surprising.wallet.exception.CustodyForbiddenException;
-import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyGasAccountRepository;
-import com.surprising.wallet.repository.CustodyAddressRepository;
-import com.surprising.wallet.repository.CustodyAuditRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
-
-/**
- * 租户链配置服务，管理租户启用的链和资产列表。
- *
- * <p>控制租户能访问哪些链（如 ETH、BTC、TRON），以及每条链上的资产类型。
- * 链启用状态由平台管理员配置，租户只能操作已启用的链。
- */
+/** 租户链开关、资产权限和链列表；所有组合均使用对应单表仓储。 */
 @Service
+@RequiredArgsConstructor
 public class CustodyTenantChainService {
-    /** 租户链配置数据访问 */
-    private final CustodyTenantChainRepository chains;
+    private final CustodyTenantChainTableRepository chains;
+    private final ChainProfileRepository profiles;
+    private final ChainAssetRepository assets;
+    private final TokenConfigRepository tokenConfigs;
+    private final Evm7702ConfigRepository evmConfigs;
     private final CustodyGasAccountRepository gasAccounts;
     private final CustodyAddressRepository addresses;
     private final CustodyAuditRepository audits;
-    /**
-     * 校验启用链的实际运行时配置。
-     */
     private final BlockchainRuntimeService runtime;
-    /**
-     * 构造 {@code CustodyTenantChainService}，初始化该组件运行所需的状态和依赖。
-     */
-    public CustodyTenantChainService(CustodyTenantChainRepository chains,
-                                     CustodyGasAccountRepository gasAccounts,
-                                     CustodyAddressRepository addresses,
-                                     CustodyAuditRepository audits,
-                                     BlockchainRuntimeService runtime) {
-        this.chains = chains;
-        this.gasAccounts = gasAccounts;
-        this.addresses = addresses;
-        this.audits = audits;
-        this.runtime = runtime;
-    }
-    /**
-     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
-     */
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public List<ChainView> list(CustodyPrincipal principal) {
         requireScope(principal, "chains:read");
-        Map<String, CustodyAddressRecord> addresses = gasAddresses(principal.tenantId());
-        return chains.list(principal.tenantId()).stream()
-                .map(row -> toView(row, addresses.get(row.chain())))
-                .toList();
+        return listForTenant(principal.tenantId());
     }
 
-    /**
-     * 设置或更新 {@code setEnabled} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public ChainView setEnabled(CustodyPrincipal principal, String chainValue,
                                 boolean enabled, String sourceIp) {
         requireTenantAdmin(principal);
         String chain = normalizeChain(chainValue);
-        if (!chains.platformChainEnabled(chain)) {
+        if (profiles.findAccountByChain(chain).isEmpty()) {
             throw new IllegalArgumentException("chain is not enabled by the platform");
         }
         runtime.requireRuntime(chain);
@@ -79,44 +65,76 @@ public class CustodyTenantChainService {
                 enabled ? "TENANT_CHAIN.OPEN" : "TENANT_CHAIN.CLOSE",
                 "TENANT_CHAIN", chain, sourceIp,
                 "{\"chain\":\"" + chain + "\",\"status\":\"" + status + "\"}");
-        Map<String, CustodyAddressRecord> addresses = gasAddresses(principal.tenantId());
-        return chains.list(principal.tenantId()).stream()
-                .filter(row -> row.chain().equals(chain))
-                .map(row -> toView(row, addresses.get(row.chain())))
-                .findFirst()
+        return listForTenant(principal.tenantId()).stream()
+                .filter(row -> row.chain().equals(chain)).findFirst()
                 .orElseThrow(() -> new IllegalStateException("tenant chain status was not persisted"));
     }
-    /**
-     * 校验 {@code requireActive} 对应的前置条件，不满足时抛出明确异常。
-     */
+
     public void requireActive(UUID tenantId, String chainValue) {
         String chain = normalizeChain(chainValue);
-        if (!chains.active(tenantId, chain)) {
-            throw new CustodyForbiddenException(
-                    "chain " + chain + " is not open for this tenant");
-        }
-    }
-    /**
-     * 校验 {@code requireWithdrawalEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    public void requireWithdrawalEnabled(UUID tenantId, String chainValue, String symbolValue) {
-        String chain = normalizeChain(chainValue);
-        String symbol = normalizeSymbol(symbolValue);
-        if (!chains.withdrawalEnabled(tenantId, chain, symbol)) {
-            throw new CustodyForbiddenException(
-                    symbol + " withdrawals are not enabled on " + chain + " for this tenant");
+        if (profiles.findAccountByChain(chain).isEmpty() || !chains.active(tenantId, chain)) {
+            throw new CustodyForbiddenException("chain " + chain + " is not open for this tenant");
         }
     }
 
-    /**
-     * 将数据库开关和资产配置投影为租户可见的链信息。
-     */
+    public void requireWithdrawalEnabled(UUID tenantId, String chainValue, String symbolValue) {
+        String chain = normalizeChain(chainValue);
+        String symbol = normalizeSymbol(symbolValue);
+        AccountChainProfile profile = profiles.findAccountByChain(chain).orElse(null);
+        if (profile != null && chains.active(tenantId, chain)
+                && Boolean.TRUE.equals(profile.getWithdrawEnabled())
+                && Boolean.TRUE.equals(profile.getTransferEnabled())) {
+            ChainAsset asset = assets.findActiveDefinition(chain, symbol).orElse(null);
+            if (asset != null && (Boolean.TRUE.equals(asset.getNativeAsset())
+                    || tokenConfigs.findEnabled(chain, profile.getNetwork(), symbol).isPresent())) {
+                return;
+            }
+        }
+        throw new CustodyForbiddenException(
+                symbol + " withdrawals are not enabled on " + chain + " for this tenant");
+    }
+
+    private List<ChainView> listForTenant(UUID tenant) {
+        var statuses = chains.list(tenant).stream().collect(Collectors.toMap(
+                row -> row.chain().toUpperCase(Locale.ROOT), row -> row));
+        var gas = gasAddresses(tenant);
+        Map<String, Map<String, ChainAsset>> assetsByChain = new HashMap<>();
+        for (var asset : assets.listActiveDefinitions()) {
+            if (!Boolean.TRUE.equals(asset.getNativeAsset())) {
+                assetsByChain.computeIfAbsent(asset.getChain().toUpperCase(Locale.ROOT),
+                        ignored -> new HashMap<>()).put(asset.getSymbol().toUpperCase(Locale.ROOT), asset);
+            }
+        }
+        Map<ChainNetwork, List<TokenView>> tokens = new HashMap<>();
+        for (var token : tokenConfigs.listAll()) {
+            var asset = assetsByChain.getOrDefault(token.chain().toUpperCase(Locale.ROOT), Map.of())
+                    .get(token.symbol().toUpperCase(Locale.ROOT));
+            if (asset != null) {
+                tokens.computeIfAbsent(new ChainNetwork(token.chain(), token.network()),
+                        ignored -> new ArrayList<>()).add(new TokenView(asset.getSymbol(), token.standard(),
+                        token.contractAddress(), token.decimals(), token.enabled(), token.minDeposit()));
+            }
+        }
+        tokens.values().forEach(rows -> rows.sort(Comparator.comparing(TokenView::symbol)));
+        Set<ChainNetwork> evm = new HashSet<>();
+        for (var config : evmConfigs.listAll()) {
+            if ("ACTIVE".equals(config.status())) evm.add(new ChainNetwork(config.chain(), config.network()));
+        }
+        return profiles.listProfiles(true).stream().map(profile -> {
+            String chain = profile.getChain();
+            ChainNetwork network = new ChainNetwork(chain, profile.getNetwork());
+            return toView(profile, statuses.get(chain.toUpperCase(Locale.ROOT)), gas.get(chain),
+                    tokens.getOrDefault(network, List.of()), evm.contains(network));
+        }).toList();
+    }
+
+    // 只需归集地址元数据；避免依赖 GasService 形成 Gas → Address → TenantChain 的循环。
     private Map<String, CustodyAddressRecord> gasAddresses(UUID tenant) {
         var gas = gasAccounts.listByTenant(tenant);
         var rows = addresses.findByIds(tenant, gas.stream()
                 .map(CustodyGasAccountRepository.Definition::custodyAddressId).toList()).stream()
-                .collect(java.util.stream.Collectors.toMap(row -> row.id(), row -> row));
-        Map<String, CustodyAddressRecord> result = new java.util.HashMap<>();
+                .collect(Collectors.toMap(CustodyAddressRecord::id, row -> row));
+        Map<String, CustodyAddressRecord> result = new HashMap<>();
         for (var account : gas) {
             var address = rows.get(account.custodyAddressId());
             if (address == null) throw new IllegalStateException("gas custody address is missing");
@@ -125,36 +143,30 @@ public class CustodyTenantChainService {
         return result;
     }
 
-    private ChainView toView(CustodyTenantChainRepository.ChainRecord row,
-                             CustodyAddressRecord address) {
-        List<TokenView> tokens = row.tokens().stream()
-                .map(CustodyTenantChainService::tokenView)
-                .toList();
+    private static ChainView toView(AccountChainProfile profile,
+            CustodyTenantChainTableRepository.ChainRow row, CustodyAddressRecord address,
+            List<TokenView> tokens, boolean evm) {
+        tokens = List.copyOf(tokens);
         List<String> enabledAssets = java.util.stream.Stream.concat(
-                        java.util.stream.Stream.of(row.nativeSymbol()),
-                        tokens.stream().filter(TokenView::platformEnabled).map(TokenView::symbol))
-                .distinct().toList();
-        return new ChainView(
-                row.chain(), row.network(), row.family(), row.nativeSymbol(),
-                row.eip7702Enabled(),
-                enabledAssets, tokens, row.status(), "ACTIVE".equals(row.status()),
-                row.scanEnabled(), row.withdrawalEnabled(), row.transferEnabled(),
-                address == null ? null : address.id(),
-                address == null ? null : address.address(),
-                address == null ? null : address.memo(),
-                row.openedAt(), row.closedAt());
+                java.util.stream.Stream.of(profile.getNativeSymbol()),
+                tokens.stream().filter(TokenView::platformEnabled).map(TokenView::symbol)).distinct().toList();
+        String status = row == null ? "CLOSED" : row.status();
+        return new ChainView(profile.getChain(), profile.getNetwork(), profile.getFamily(), profile.getNativeSymbol(),
+                evm, enabledAssets, tokens, status, "ACTIVE".equals(status),
+                Boolean.TRUE.equals(profile.getScanEnabled()), Boolean.TRUE.equals(profile.getWithdrawEnabled()),
+                Boolean.TRUE.equals(profile.getTransferEnabled()),
+                address == null ? null : address.id(), address == null ? null : address.address(),
+                address == null ? null : address.memo(), row == null ? null : row.openedAt(),
+                row == null ? null : row.closedAt());
     }
-    /**
-     * 编码 {@code tokenView} 对应的数据，生成链上或接口所需的表示。
-     */
-    private static TokenView tokenView(CustodyTenantChainRepository.TokenRecord row) {
-        return new TokenView(
-                row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
-                row.platformEnabled(), row.minDeposit());
+
+    private record ChainNetwork(String chain, String network) {
+        private ChainNetwork {
+            chain = chain.toUpperCase(Locale.ROOT);
+            network = network.toLowerCase(Locale.ROOT);
+        }
     }
-    /**
-     * 转换或计算 {@code normalizeChain} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static String normalizeChain(String value) {
         String chain = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!chain.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -162,9 +174,7 @@ public class CustodyTenantChainService {
         }
         return chain;
     }
-    /**
-     * 转换或计算 {@code normalizeSymbol} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static String normalizeSymbol(String value) {
         String symbol = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!symbol.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -172,17 +182,13 @@ public class CustodyTenantChainService {
         }
         return symbol;
     }
-    /**
-     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
-     */
+
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");
         }
     }
-    /**
-     * 校验 {@code requireTenantAdmin} 对应的前置条件，不满足时抛出明确异常。
-     */
+
     private static void requireTenantAdmin(CustodyPrincipal principal) {
         requireScope(principal, "chains:write");
         if (!"TENANT_ADMIN".equals(principal.role())) {

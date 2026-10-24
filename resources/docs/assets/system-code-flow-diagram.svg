@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2440" viewBox="0 0 1180 2440">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2630" viewBox="0 0 1180 2630">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -297,4 +297,9 @@
   <text x="50" y="2312" style="font:13px sans-serif;fill:#1e293b">领取 → Nonce / 已签名尝试 / Gas 同事务 → 外部广播 → 提交或 UNKNOWN 同事务</text>
   <text x="50" y="2346" style="font:13px sans-serif;fill:#1e293b">回执 / 区块 / 日志 → 原配置版本 → 项目身份 / 订单结算 / Gas 共同提交</text>
   <text x="50" y="2380" style="font:13px sans-serif;fill:#1e293b">正常 Spring 事务代理验证；拒绝尝试更新时父批次回滚；历史确认不检查中继启用</text>
+  <rect x="30" y="2425" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="2453" style="font:13px sans-serif;fill:#1e293b">租户链 API → 单表批量类型记录 → 按链 / 网络公开视图；开关与审计同事务</text>
+  <text x="50" y="2487" style="font:13px sans-serif;fill:#1e293b">开发补币：恢复 / 对账 → 批量候选与排重 → 唯一创建 / 条件领取 → 发送状态 / 审计</text>
+  <text x="50" y="2521" style="font:13px sans-serif;fill:#1e293b">HyperCore 扫描 → 快照业务事务 → 初始行锁 / 观察余额 → 正差额充值 / 账本 / 租户投影</text>
+  <text x="50" y="2555" style="font:13px sans-serif;fill:#1e293b">并发首次扫描只入账一次；投影失败连同快照回滚；元数据 / 操作直达各自单表仓储</text>
 </svg>

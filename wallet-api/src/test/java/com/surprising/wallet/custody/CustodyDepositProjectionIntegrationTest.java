@@ -4,7 +4,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
@@ -372,7 +372,7 @@ class CustodyDepositProjectionIntegrationTest {
                 values (?, ?, ?, 'Deposit administrator', 'test-only-hash',
                         'TENANT_ADMIN', 'ACTIVE')
                 """, administratorId, tenantId, "deposit-" + suffix.substring(0, 12) + "@example.test");
-        new CustodyTenantChainRepository(jdbc).setStatus(
+        new CustodyTenantChainTableRepository(jdbc).setStatus(
                 tenantId, "ETH", "ACTIVE", administratorId);
         Long chainAddressId = jdbc.queryForObject("""
                 insert into chain_address(

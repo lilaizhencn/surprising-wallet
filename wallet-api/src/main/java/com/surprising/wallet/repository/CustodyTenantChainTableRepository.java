@@ -48,6 +48,16 @@ public class CustodyTenantChainTableRepository {
                 """, String.class, tenantId);
     }
 
+    public List<TenantChain> listActiveByTenants(List<UUID> tenantIds) {
+        if (tenantIds.isEmpty()) return List.of();
+        return jdbc.query("""
+                select tenant_id, chain from custody_tenant_chain where tenant_id=any(?) and status='ACTIVE'
+                """, (rs, rowNum) -> new TenantChain(rs.getObject("tenant_id", UUID.class), rs.getString("chain")),
+                new org.springframework.jdbc.support.SqlArrayValue("uuid", tenantIds.toArray()));
+    }
+
+    public record TenantChain(UUID tenantId, String chain) { }
+
     /** 更新租户链启用状态。 */
     public void setStatus(UUID tenantId, String chain, String status, UUID actorId) {
         jdbc.update("""

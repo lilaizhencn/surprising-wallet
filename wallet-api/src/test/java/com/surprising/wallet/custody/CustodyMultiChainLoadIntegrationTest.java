@@ -10,7 +10,7 @@ import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyWebhookDispatchService;
 import com.surprising.wallet.service.CustodyWebhookService;
@@ -93,7 +93,7 @@ class CustodyMultiChainLoadIntegrationTest {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
+        CustodyTenantChainTableRepository tenantChains = new CustodyTenantChainTableRepository(jdbc);
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         ChainRepositoryFixture chains = com.surprising.wallet.testutil.DepositTestSupport.repository(
                 jdbc,
@@ -201,7 +201,7 @@ class CustodyMultiChainLoadIntegrationTest {
     /**
      * 验证 {@code createTenant} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static Tenant createTenant(JdbcTemplate jdbc, CustodyTenantChainRepository tenantChains) {
+    private static Tenant createTenant(JdbcTemplate jdbc, CustodyTenantChainTableRepository tenantChains) {
         UUID tenantId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
         int namespace = jdbc.queryForObject(

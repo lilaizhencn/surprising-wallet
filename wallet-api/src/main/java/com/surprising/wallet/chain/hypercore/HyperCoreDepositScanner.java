@@ -3,7 +3,10 @@ package com.surprising.wallet.chain.hypercore;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.repository.ChainAddressRepository;
-import com.surprising.wallet.repository.HyperCoreRepository;
+import com.surprising.wallet.repository.HyperCoreTokenMetadataRepository;
+import com.surprising.wallet.repository.HyperCoreSpotAssetRepository;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,24 +32,16 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class HyperCoreDepositScanner {
 
-    /** 链标识 */
     private static final String CHAIN = "HYPERCORE";
 
-    /** API 客户端 */
     private final HyperCoreApiClient apiClient;
 
-    /** HyperCore 数据仓库 */
-    private final HyperCoreRepository hyperCoreRepository;
+    private final HyperCoreDepositService deposits;
+    private final HyperCoreTokenMetadataRepository tokenMetadata;
+    private final HyperCoreSpotAssetRepository spotAssets;
     private final ChainAddressRepository chainAddressRepository;
 
-
-    /**
-     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
-     */
     private final ObjectMapper objectMapper = new ObjectMapper();
-    /**
-     * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
-     */
     public void scanAndCredit(AccountChainProfile profile) {
         syncSpotMetadata(profile.getNetwork());
         List<ChainAddressRecord> addresses = chainAddressRepository.listEnabled(CHAIN).stream()
@@ -62,7 +57,7 @@ public class HyperCoreDepositScanner {
             Map<String, BigDecimal> balances = balancesBySymbol(state);
             BigDecimal observed = balances.getOrDefault(
                     address.getAssetSymbol().toUpperCase(Locale.ROOT), BigDecimal.ZERO);
-            hyperCoreRepository.recordObservedBalance(
+            deposits.recordObservedBalance(
                     address,
                     address.getAssetSymbol(),
                     observed,
@@ -71,18 +66,14 @@ public class HyperCoreDepositScanner {
                             CHAIN, address.getAssetSymbol(), address.getAddress(), delta));
         }
     }
-    /**
-     * 执行 {@code spotState} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
     public JsonNode spotState(String address) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", "spotClearinghouseState");
         body.put("user", address);
         return apiClient.postInfo(body);
     }
-    /**
-     * 执行 {@code syncSpotMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
     public void syncSpotMetadata(String network) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", "spotMeta");
@@ -95,7 +86,7 @@ public class HyperCoreDepositScanner {
             } else if (evm.isTextual()) {
                 evmContract = evm.asText();
             }
-            hyperCoreRepository.upsertTokenMetadata(
+            tokenMetadata.upsert(
                     network,
                     token.path("name").asText(),
                     token.path("index").isMissingNode() ? null : token.path("index").asInt(),
@@ -104,24 +95,22 @@ public class HyperCoreDepositScanner {
                     token.path("weiDecimals").isMissingNode() ? null : token.path("weiDecimals").asInt(),
                     token.path("isCanonical").asBoolean(false),
                     evmContract,
-                    token.path("fullName").asText(null));
+                    token.path("fullName").asText(null), Timestamp.from(Instant.now()));
         }
         for (JsonNode spot : meta.path("universe")) {
             JsonNode tokens = spot.path("tokens");
             Integer base = tokens.isArray() && tokens.size() > 0 ? tokens.get(0).asInt() : null;
             Integer quote = tokens.isArray() && tokens.size() > 1 ? tokens.get(1).asInt() : null;
-            hyperCoreRepository.upsertSpotAsset(
+            spotAssets.upsert(
                     network,
                     spot.path("index").isMissingNode() ? null : spot.path("index").asInt(),
                     spot.path("name").asText(),
                     base,
                     quote,
-                    spot.path("isCanonical").asBoolean(false));
+                    spot.path("isCanonical").asBoolean(false), Timestamp.from(Instant.now()));
         }
     }
-    /**
-     * 执行 {@code balancesBySymbol} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
     private Map<String, BigDecimal> balancesBySymbol(JsonNode state) {
         Map<String, BigDecimal> balances = new LinkedHashMap<>();
         for (JsonNode balance : state.path("balances")) {
@@ -135,9 +124,7 @@ public class HyperCoreDepositScanner {
         }
         return balances;
     }
-    /**
-     * 转换或计算 {@code decimal} 对应的值，统一金额、格式和边界规则。
-     */
+
     private static BigDecimal decimal(String value) {
         if (value == null || value.isBlank()) {
             return BigDecimal.ZERO;

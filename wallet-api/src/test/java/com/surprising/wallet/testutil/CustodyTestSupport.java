@@ -9,6 +9,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public final class CustodyTestSupport {
     private CustodyTestSupport() { }
 
+    public static com.surprising.wallet.service.CustodyTenantChainService tenantChains(JdbcTemplate jdbc,
+            com.surprising.wallet.chain.BlockchainRuntimeService runtime) {
+        return new com.surprising.wallet.service.CustodyTenantChainService(new CustodyTenantChainTableRepository(jdbc),
+                new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
+                new Evm7702ConfigRepository(jdbc), new CustodyGasAccountRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new CustodyAuditRepository(jdbc), runtime);
+    }
+
     public static com.surprising.wallet.service.CustodyAddressService addresses(JdbcTemplate jdbc,
             com.surprising.wallet.chain.BlockchainRuntimeService runtime,
             com.surprising.wallet.service.CustodyTenantChainService tenantChains) {
