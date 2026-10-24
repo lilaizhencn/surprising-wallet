@@ -55,7 +55,7 @@
   <line x1="890" y1="194" x2="350" y2="148" class="arrow"/>
 
   <!-- ====== 第三层：支持链 ====== -->
-  <text x="30" y="328" class="sep"> 单表配置 → 唯一类型映射 / 批量统计 → RuntimeConfig → 运行时 / 管理 / 概览</text>
+  <text x="30" y="328" class="sep"> 单表配置 → 类型映射 / 批量组合 → Chain / RPC / Token 用例；共用运行时开关</text>
 
   <rect x="30" y="342" width="90" height="48" class="chain"/>
   <text x="75" y="364" text-anchor="middle" class="label">BTC</text>

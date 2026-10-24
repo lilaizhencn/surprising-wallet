@@ -7,8 +7,8 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.service.WalletConfigManagementService.RpcNodeView;
-import com.surprising.wallet.service.WalletConfigManagementService;
+import com.surprising.wallet.service.WalletRpcConfigService.RpcNodeView;
+import com.surprising.wallet.service.WalletRpcConfigService;
 
 /**
  * 验证 {@code WalletConfigManagementContractTest} 覆盖的业务流程、边界条件和异常行为。
@@ -19,7 +19,7 @@ class WalletConfigManagementContractTest {
      */
     @Test
     void rpcResponsesNeverExposeCredentialValues() {
-        var names = Arrays.stream(WalletConfigManagementService.RpcNodeView.class.getRecordComponents())
+        var names = Arrays.stream(WalletRpcConfigService.RpcNodeView.class.getRecordComponents())
                 .map(RecordComponent::getName)
                 .toList();
 

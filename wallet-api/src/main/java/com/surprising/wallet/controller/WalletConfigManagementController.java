@@ -17,33 +17,38 @@ import java.util.Map;
 import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.model.CustodyRequestSupport;
-import com.surprising.wallet.service.WalletConfigManagementService;
+import com.surprising.wallet.service.WalletChainConfigService;
+import com.surprising.wallet.service.WalletRpcConfigService;
+import com.surprising.wallet.service.WalletTokenConfigService;
+import com.surprising.wallet.service.WalletConfigOverviewService;
 
 /**
  * 平台钱包配置管理控制器。
  *
  * <p>端点路径：/custody/platform/v1/wallet-config。
- * 提供环境策略（environment_policy）和 RPC 策略（rpc_policy）的 CRUD 管理，
- * 以及链配置文件的增删查。需要平台管理员权限。
+ * 按链、RPC 节点和 Token 委托配置用例，并提供平台配置审计查询。
  */
 @RestController
 @RequestMapping("/custody/platform/v1/wallet-config")
 public class WalletConfigManagementController {
-    /** 平台钱包配置服务。 */
-    private final WalletConfigManagementService service;
+    private final WalletChainConfigService chains;
+    private final WalletRpcConfigService rpc;
+    private final WalletTokenConfigService tokens;
+    private final WalletConfigOverviewService overview;
 
-    /**
-     * 注入配置服务。
-     */
-    public WalletConfigManagementController(WalletConfigManagementService service) {
-        this.service = service;
+    public WalletConfigManagementController(WalletChainConfigService chains, WalletRpcConfigService rpc,
+                                            WalletTokenConfigService tokens, WalletConfigOverviewService overview) {
+        this.chains = chains;
+        this.rpc = rpc;
+        this.tokens = tokens;
+        this.overview = overview;
     }
 
     /**
      * 查询链配置，支持多条件过滤。
      */
     @GetMapping("/chains")
-    public List<WalletConfigManagementService.ChainView> chains(
+    public List<WalletChainConfigService.ChainView> chains(
             @RequestParam(defaultValue = "") String search,
             @RequestParam(required = false) Boolean enabled,
             @RequestParam(defaultValue = "") String network,
@@ -54,7 +59,7 @@ public class WalletConfigManagementController {
             @RequestParam(required = false) Boolean collectionEnabled,
             @RequestParam(required = false) Boolean transferEnabled,
             HttpServletRequest request) {
-        return service.listChains(principal(request), search, enabled, network, family, token,
+        return chains.listChains(principal(request), search, enabled, network, family, token,
                 scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled);
     }
 
@@ -62,72 +67,72 @@ public class WalletConfigManagementController {
      * 查询单条链配置。
      */
     @GetMapping("/chains/{id}")
-    public WalletConfigManagementService.ChainDetailView chain(
+    public WalletChainConfigService.ChainDetailView chain(
             @PathVariable long id, HttpServletRequest request) {
-        return service.getChain(principal(request), id);
+        return chains.getChain(principal(request), id);
     }
 
     /**
      * 创建链配置。
      */
     @PostMapping("/chains")
-    public WalletConfigManagementService.ChainDetailView createChain(
-            @RequestBody WalletConfigManagementService.ChainCommand body,
+    public WalletChainConfigService.ChainDetailView createChain(
+            @RequestBody WalletChainConfigService.ChainCommand body,
             HttpServletRequest request) {
-        return service.createChain(principal(request), body, ip(request));
+        return chains.createChain(principal(request), body, ip(request));
     }
 
     /**
      * 更新链基础配置。
      */
     @PatchMapping("/chains/{id}")
-    public WalletConfigManagementService.ChainDetailView updateChain(
+    public WalletChainConfigService.ChainDetailView updateChain(
             @PathVariable long id,
-            @RequestBody WalletConfigManagementService.ChainCommand body,
+            @RequestBody WalletChainConfigService.ChainCommand body,
             HttpServletRequest request) {
-        return service.updateChain(principal(request), id, body, ip(request));
+        return chains.updateChain(principal(request), id, body, ip(request));
     }
 
     /**
      * 更新链开关配置。
      */
     @PatchMapping("/chains/{id}/switches")
-    public WalletConfigManagementService.ChainDetailView updateChainSwitches(
+    public WalletChainConfigService.ChainDetailView updateChainSwitches(
             @PathVariable long id,
-            @RequestBody WalletConfigManagementService.ChainSwitchCommand body,
+            @RequestBody WalletChainConfigService.ChainSwitchCommand body,
             HttpServletRequest request) {
-        return service.updateChainSwitches(principal(request), id, body, ip(request));
+        return chains.updateChainSwitches(principal(request), id, body, ip(request));
     }
 
     /**
      * 查询链下 RPC 节点列表。
      */
     @GetMapping("/chains/{id}/rpc-nodes")
-    public List<WalletConfigManagementService.RpcNodeView> rpcNodes(
+    public List<WalletRpcConfigService.RpcNodeView> rpcNodes(
             @PathVariable long id, HttpServletRequest request) {
-        return service.listRpcNodes(principal(request), id);
+        return rpc.listRpcNodes(principal(request), id);
     }
 
     /**
      * 创建链 RPC 节点。
      */
     @PostMapping("/chains/{id}/rpc-nodes")
-    public WalletConfigManagementService.RpcNodeView createRpcNode(
+    public WalletRpcConfigService.RpcNodeView createRpcNode(
             @PathVariable long id,
-            @RequestBody WalletConfigManagementService.RpcNodeCommand body,
+            @RequestBody WalletRpcConfigService.RpcNodeCommand body,
             HttpServletRequest request) {
-        return service.createRpcNode(principal(request), id, body, ip(request));
+        return rpc.createRpcNode(principal(request), id, body, ip(request));
     }
 
     /**
      * 更新 RPC 节点。
      */
     @PatchMapping("/chains/{id}/rpc-nodes/{nodeId}")
-    public WalletConfigManagementService.RpcNodeView updateRpcNode(
+    public WalletRpcConfigService.RpcNodeView updateRpcNode(
             @PathVariable long id, @PathVariable long nodeId,
-            @RequestBody WalletConfigManagementService.RpcNodeCommand body,
+            @RequestBody WalletRpcConfigService.RpcNodeCommand body,
             HttpServletRequest request) {
-        return service.updateRpcNode(principal(request), id, nodeId, body, ip(request));
+        return rpc.updateRpcNode(principal(request), id, nodeId, body, ip(request));
     }
 
     /**
@@ -136,7 +141,7 @@ public class WalletConfigManagementController {
     @DeleteMapping("/chains/{id}/rpc-nodes/{nodeId}")
     public Map<String, Object> deleteRpcNode(
             @PathVariable long id, @PathVariable long nodeId, HttpServletRequest request) {
-        service.deleteRpcNode(principal(request), id, nodeId, ip(request));
+        rpc.deleteRpcNode(principal(request), id, nodeId, ip(request));
         return Map.of("deleted", true, "id", nodeId);
     }
 
@@ -144,16 +149,16 @@ public class WalletConfigManagementController {
      * 测试 RPC 节点连通性。
      */
     @PostMapping("/chains/{id}/rpc-nodes/{nodeId}/test")
-    public WalletConfigManagementService.RpcTestView testRpcNode(
+    public WalletRpcConfigService.RpcTestView testRpcNode(
             @PathVariable long id, @PathVariable long nodeId, HttpServletRequest request) {
-        return service.testRpcNode(principal(request), id, nodeId);
+        return rpc.testRpcNode(principal(request), id, nodeId);
     }
 
     /**
      * 查询 token 列表。
      */
     @GetMapping("/tokens")
-    public List<WalletConfigManagementService.TokenView> tokens(
+    public List<WalletTokenConfigService.TokenView> tokens(
             @RequestParam(defaultValue = "") String search,
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String network,
@@ -161,7 +166,7 @@ public class WalletConfigManagementController {
             @RequestParam(required = false) Boolean enabled,
             @RequestParam(required = false) Boolean effectiveEnabled,
             HttpServletRequest request) {
-        return service.listTokens(principal(request), search, chain, network, standard,
+        return tokens.listTokens(principal(request), search, chain, network, standard,
                 enabled, effectiveEnabled);
     }
 
@@ -169,41 +174,41 @@ public class WalletConfigManagementController {
      * 查询 token 矩阵（无分页）。
      */
     @GetMapping("/tokens/matrix")
-    public List<WalletConfigManagementService.TokenView> tokenMatrix(
+    public List<WalletTokenConfigService.TokenView> tokenMatrix(
             @RequestParam(defaultValue = "") String search, HttpServletRequest request) {
-        return service.listTokens(principal(request), search, "", "", "", null, null);
+        return tokens.listTokens(principal(request), search, "", "", "", null, null);
     }
 
     /**
      * 创建 token 配置。
      */
     @PostMapping("/tokens")
-    public WalletConfigManagementService.TokenView createToken(
-            @RequestBody WalletConfigManagementService.TokenCommand body,
+    public WalletTokenConfigService.TokenView createToken(
+            @RequestBody WalletTokenConfigService.TokenCommand body,
             HttpServletRequest request) {
-        return service.createToken(principal(request), body, ip(request));
+        return tokens.createToken(principal(request), body, ip(request));
     }
 
     /**
      * 更新 token 配置。
      */
     @PatchMapping("/tokens/{id}")
-    public WalletConfigManagementService.TokenView updateToken(
+    public WalletTokenConfigService.TokenView updateToken(
             @PathVariable long id,
-            @RequestBody WalletConfigManagementService.TokenCommand body,
+            @RequestBody WalletTokenConfigService.TokenCommand body,
             HttpServletRequest request) {
-        return service.updateToken(principal(request), id, body, ip(request));
+        return tokens.updateToken(principal(request), id, body, ip(request));
     }
 
     /**
      * 更新 token 状态。
      */
     @PatchMapping("/tokens/{id}/status")
-    public WalletConfigManagementService.TokenView updateTokenStatus(
+    public WalletTokenConfigService.TokenView updateTokenStatus(
             @PathVariable long id,
-            @RequestBody WalletConfigManagementService.TokenStatusCommand body,
+            @RequestBody WalletTokenConfigService.TokenStatusCommand body,
             HttpServletRequest request) {
-        return service.updateTokenStatus(principal(request), id, body, ip(request));
+        return tokens.updateTokenStatus(principal(request), id, body, ip(request));
     }
 
     /**
@@ -214,7 +219,7 @@ public class WalletConfigManagementController {
             @RequestParam(defaultValue = "200") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return service.auditLog(principal(request), limit, offset);
+        return overview.auditLog(principal(request), limit, offset);
     }
 
     /**

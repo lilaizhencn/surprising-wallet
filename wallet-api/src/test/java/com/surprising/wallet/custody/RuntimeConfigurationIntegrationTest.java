@@ -159,7 +159,7 @@ class RuntimeConfigurationIntegrationTest {
                     null, null, 6, true, BigDecimal.ZERO, BigDecimal.ZERO, false, BigDecimal.ZERO, "NATIVE", 1);
             assets.upsertNonNative("ETH", "POLICY_TEST", "ERC20", "0x" + "12".repeat(20), 6, true,
                     BigDecimal.ZERO, BigDecimal.ZERO);
-            var management = WalletConfigTestSupport.management(jdbc, runtime);
+            var management = WalletConfigTestSupport.tokens(jdbc, runtime);
             var keys = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
             org.mockito.Mockito.when(keys.isConfigured()).thenReturn(true);
             var overview = new WalletConfigOverviewService(settings, profiles, tokens, assets, rpc, audits,
@@ -202,7 +202,7 @@ class RuntimeConfigurationIntegrationTest {
     }
 
     private static void assertPolicyViews(WalletRuntimeConfigService runtime,
-            WalletConfigManagementService management, WalletConfigOverviewService overview,
+            WalletTokenConfigService management, WalletConfigOverviewService overview,
             String network, String task, boolean expectedTask, boolean expectedToken) {
         assertEquals(expectedTask, runtime.isTaskEnabled("ETH", task), task + " runtime");
         var effective = overview.summary(CustodyTestSupport.platformAdmin()).chains().stream()

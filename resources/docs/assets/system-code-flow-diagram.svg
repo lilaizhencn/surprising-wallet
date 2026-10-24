@@ -77,7 +77,7 @@
 
   <!-- ====== PHASE 2: 创建地址 ====== -->
   <rect x="20" y="236" width="1140" height="120" class="phase-bg"/>
-  <text x="40" y="258" class="phase-label">② 配置：类型化单表读取 / 批量组合 → 共用开关 / 配置管理 / 概览；地址使用实际链运行时</text>
+  <text x="40" y="258" class="phase-label">② 配置：Chain / RPC / Token 用例 → 身份约束 / 资产同步 / 审计同事务；详情复用快照</text>
 
   <rect x="40" y="274" width="200" height="52" class="addr"/>
   <text x="140" y="298" text-anchor="middle" class="bold">租户请求分配地址</text>

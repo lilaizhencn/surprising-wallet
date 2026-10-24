@@ -4,6 +4,7 @@ import com.surprising.wallet.chain.model.ChainAsset;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
@@ -58,7 +59,7 @@ public class ChainAssetRepository {
     /** 创建或更新非原生链资产。 */
     public int upsertNonNative(String chain, String symbol, String assetKind,
                                String contractAddress, int decimals, boolean active,
-                               Object minTransfer, Object minWithdraw) {
+                               BigDecimal minTransfer, BigDecimal minWithdraw) {
         return jdbc.update("""
                 insert into chain_asset(
                     chain, symbol, asset_kind, contract_address, decimals, native_asset,

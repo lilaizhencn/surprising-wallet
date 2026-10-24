@@ -561,8 +561,8 @@ CREATE TABLE public.chain_asset (
     decimals integer DEFAULT 18 NOT NULL,
     native_asset boolean DEFAULT false NOT NULL,
     active boolean DEFAULT true NOT NULL,
-    min_transfer numeric(78,0),
-    min_withdraw numeric(78,0),
+    min_transfer numeric(78,18),
+    min_withdraw numeric(78,18),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );

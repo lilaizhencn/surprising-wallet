@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
@@ -77,6 +78,17 @@ public class WalletConfigOverviewService {
         this.environment = normalizeEnvironment(environment);
         this.runtimeConfig = runtimeConfig;
     }
+
+    public PageView<Map<String, Object>> auditLog(CustodyPrincipal actor, int limit, int offset) {
+        WalletConfigSupport.requirePlatformAdmin(actor);
+        int pageSize = Math.min(Math.max(limit, 1), 200);
+        int pageOffset = Math.max(offset, 0);
+        return new PageView<>(
+                audits.listPlatform(pageSize, pageOffset),
+                audits.countPlatform(),
+                pageSize, pageOffset);
+    }
+
 
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
