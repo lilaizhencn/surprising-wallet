@@ -274,10 +274,13 @@ class WalletConfigOverviewServiceTest {
          * 验证 {@code FakeAuditRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeAuditRepository() {
-            super(null, org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodySecurityRepository.class),
+            super(null,
                     new com.surprising.wallet.repository.CustodyTenantTableRepository(null),
                     new com.surprising.wallet.repository.CustodyTenantUserRepository(null),
-                    com.surprising.wallet.testutil.CustodyTestSupport.events(null));
+                    com.surprising.wallet.testutil.CustodyTestSupport.events(null),
+                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyApiKeyRepository.class),
+                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodySessionRepository.class),
+                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyIpRuleRepository.class));
         }
 
         /**

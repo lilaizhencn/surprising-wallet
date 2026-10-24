@@ -123,7 +123,8 @@ Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一
 Console 认证由 `CustodyAuthService` 直接调用用户、租户、会话和审计单表仓储，登录事务由该服务持有。
 用户、租户和有效会话事实在认证服务内组合，生成包含当前状态的认证记录，不再引入独立查询中间层。
 登录、会话访问和平台管理员初始化不再经过 `CustodyRepository`、`CustodySecurityRepository`。
-托管业务记录位于 `model/custody`，调用方不依赖总仓储的嵌套类型。安全组合组件只保留正常注入构造器。
+托管业务记录位于 `model/custody`，调用方不依赖总仓储的嵌套类型。用户、租户、会话、API Key 和 IP 规则由对应单表仓储映射为有类型记录；认证服务不再解析数据库 Map、UUID 或 Timestamp。
+`CustodyApiKeyService` 直接编排密钥、租户、IP 规则、nonce 和审计仓储；`CustodySecurityService` 直接处理 IP 规则、租户开关和审计。用户列表和密钥列表采用不含秘密字段的专用投影。`CustodyTenantService` 在原事务内直接撤销租户会话、条件解锁管理员并写审计；安全维护服务直接清理 nonce、会话和幂等键。租户基础响应直接复用 `TenantRecord`，不再逐字段重建相同 DTO。`CustodySecurityRepository` 已删除，不保留安全域转发或无效的密钥版本/过期时间兼容重载。API Key 与 Webhook 表不再保存未使用的 `secret_version` 列，密文格式自身的版本标记是唯一解密版本来源。
 `CustodyRepository` 等托管控制面组合组件使用 `@Component`，自身不执行 SQL，只在 Java 中组合
 单表仓储并维护必要的事务边界；它们不属于 SQL Repository。Service 不持有 `JdbcTemplate`、不执行 SQL，负责业务规则
 和工作流调用。任何 SQL Repository 内禁止使用 JOIN、跨表子查询或同时读写多张业务表。

@@ -87,8 +87,8 @@ class CustodyOperationsIntegrationTest {
                             'TENANT_ADMIN', 'ACTIVE')
                     """, UUID.randomUUID(), firstTenantId, email);
 
-            var user = users.findByEmail(email.toUpperCase(java.util.Locale.ROOT), false).getFirst();
-            assertEquals(firstTenantId, user.get("tenant_id"));
+            var user = users.findByEmail(email.toUpperCase(java.util.Locale.ROOT), false).orElseThrow();
+            assertEquals(firstTenantId, user.tenantId());
             assertThrows(DuplicateKeyException.class, () -> jdbc.update("""
                     insert into custody_tenant_user(
                         id, tenant_id, email, display_name, password_hash, role, status)
@@ -761,21 +761,21 @@ class CustodyOperationsIntegrationTest {
             assertEquals(1L, statistics.get("activeSessionCount"));
             assertTrue(repository.listWebhookDeliveries(tenantId, null, null, 20, 0).isEmpty());
 
-            Map<String, Object> administrator =
-                    repository.listTenantUsers(tenantId).getFirst();
-            assertEquals(5, administrator.get("failedLoginCount"));
-            assertTrue(administrator.get("lockedUntil") instanceof Instant);
-            Map<String, Object> unlocked =
-                    repository.unlockTenantAdministrator(tenantId, administratorId);
-            assertEquals(0, unlocked.get("failedLoginCount"));
-            assertNull(unlocked.get("lockedUntil"));
+            var users = new com.surprising.wallet.repository.CustodyTenantUserRepository(jdbc);
+            var administrator = users.listByTenant(tenantId).getFirst();
+            assertEquals(5, administrator.failedLoginCount());
+            assertTrue(administrator.lockedUntil().isAfter(Instant.now()));
+            assertEquals(1, users.unlockAdministrator(tenantId, administratorId));
+            var unlocked = users.findView(tenantId, administratorId).orElseThrow();
+            assertEquals(0, unlocked.failedLoginCount());
+            assertNull(unlocked.lockedUntil());
 
             repository.updateTenantProfile(tenantId, "Updated operations tenant", "SGD");
             var updated = repository.requireTenant(tenantId);
             assertEquals("Updated operations tenant", updated.name());
             assertEquals("SGD", updated.displayCurrency());
 
-            assertEquals(1, repository.revokeTenantSessions(tenantId));
+            assertEquals(1, new com.surprising.wallet.repository.CustodySessionRepository(jdbc).revokeByTenant(tenantId));
             assertEquals(0L,
                     repository.tenantOperationsSummary(tenantId).get("activeSessionCount"));
             status.setRollbackOnly();

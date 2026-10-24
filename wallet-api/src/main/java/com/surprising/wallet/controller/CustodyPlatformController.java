@@ -1,11 +1,20 @@
 package com.surprising.wallet.controller;
 
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.model.CustodyRequestSupport;
+import com.surprising.wallet.model.CustodySessionCookie;
+import com.surprising.wallet.model.custody.TenantRecord;
+import com.surprising.wallet.model.custody.TenantUserView;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import com.surprising.wallet.service.CustodyAssetDashboardService;
+import com.surprising.wallet.service.CustodyAuthService;
 import com.surprising.wallet.service.CustodyTenantService.CreateTenantCommand;
 import com.surprising.wallet.service.CustodyTenantService.TenantDetail;
 import com.surprising.wallet.service.CustodyTenantService.TenantPage;
 import com.surprising.wallet.service.CustodyTenantService.UpdateTenantCommand;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import com.surprising.wallet.service.CustodyTenantService;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,13 +27,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.UUID;
-
-import com.surprising.wallet.service.CustodyAssetDashboardService;
-import com.surprising.wallet.service.CustodyAuthService;
-import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.model.CustodyRequestSupport;
-import com.surprising.wallet.model.CustodySessionCookie;
-import com.surprising.wallet.service.CustodyTenantService;
 
 /**
  * 平台管理控制器，提供租户管理（CRUD）、平台级仪表盘、登录/登出功能。
@@ -108,7 +110,7 @@ public class CustodyPlatformController {
      * 创建新租户。
      */
     @PostMapping("/tenants")
-    public CustodyTenantService.TenantView createTenant(@RequestBody CreateTenantCommand body,
+    public TenantRecord createTenant(@RequestBody CreateTenantCommand body,
                                                         HttpServletRequest request) {
         return tenants.create(CustodyRequestSupport.requirePrincipal(request), body,
                 CustodyRequestSupport.clientIp(request));
@@ -127,7 +129,7 @@ public class CustodyPlatformController {
      * 更新租户基本信息。
      */
     @PatchMapping("/tenants/{tenantId}")
-    public CustodyTenantService.TenantView updateTenant(
+    public TenantRecord updateTenant(
             @PathVariable UUID tenantId,
             @RequestBody UpdateTenantCommand body,
             HttpServletRequest request) {
@@ -142,7 +144,7 @@ public class CustodyPlatformController {
      * 更新租户状态（启用/禁用）。
      */
     @PatchMapping("/tenants/{tenantId}/status")
-    public CustodyTenantService.TenantView status(@PathVariable UUID tenantId,
+    public TenantRecord status(@PathVariable UUID tenantId,
                                                   @RequestBody TenantStatusRequest body,
                                                   HttpServletRequest request) {
         return tenants.updateStatus(CustodyRequestSupport.requirePrincipal(request), tenantId,
@@ -153,7 +155,7 @@ public class CustodyPlatformController {
      * 解锁租户管理员账号。
      */
     @PostMapping("/tenants/{tenantId}/administrators/{userId}/unlock")
-    public Map<String, Object> unlockAdministrator(
+    public TenantUserView unlockAdministrator(
             @PathVariable UUID tenantId,
             @PathVariable UUID userId,
             HttpServletRequest request) {

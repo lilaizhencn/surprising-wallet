@@ -1,6 +1,8 @@
 package com.surprising.wallet.controller;
 
 import com.surprising.wallet.model.PageView;
+import com.surprising.wallet.model.custody.ApiKeyView;
+import com.surprising.wallet.model.custody.IpRuleView;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,7 +51,7 @@ public class CustodyConsoleSecurityController {
      * 查询当前租户的所有 API Key。
      */
     @GetMapping("/api-keys")
-    public List<Map<String, Object>> apiKeys(HttpServletRequest request) {
+    public List<ApiKeyView> apiKeys(HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
         return apiKeys.list(principal.tenantId());
     }
@@ -100,7 +102,7 @@ public class CustodyConsoleSecurityController {
      * 新增 IP 白名单规则，并返回持久化后的记录。
      */
     @PostMapping("/ip-allowlist/rules")
-    public Map<String, Object> addIpRule(@RequestBody CreateIpRuleRequest body,
+    public IpRuleView addIpRule(@RequestBody CreateIpRuleRequest body,
                                         HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
         return security.addIpRule(principal, body.label(), body.cidr(),

@@ -7,6 +7,8 @@ import com.surprising.wallet.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.model.custody.AuthUser;
+import com.surprising.wallet.model.custody.TenantRecord;
+import com.surprising.wallet.model.custody.TenantUserRecord;
 import com.surprising.wallet.model.custody.SessionRecord;
 import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.CustodySessionRepository;
@@ -20,12 +22,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -183,69 +182,30 @@ public class CustodyAuthService {
     }
 
     private Optional<AuthUser> findTenantUser(String email) {
-        Map<String, Object> user = first(users.findByEmail(email, false));
-        if (user == null) {
-            return Optional.empty();
-        }
-        Map<String, Object> tenant = tenants.findById(uuid(user.get("tenant_id")));
-        if (tenant == null) {
-            return Optional.empty();
-        }
-        return Optional.of(toAuthUser(user, tenant));
+        var user = users.findByEmail(email, false).orElse(null);
+        if (user == null) return Optional.empty();
+        return tenants.findById(user.tenantId()).map(tenant -> toAuthUser(user, tenant));
     }
 
     private Optional<AuthUser> findPlatformUser(String email) {
-        Map<String, Object> user = first(users.findByEmail(email, true));
-        return user == null ? Optional.empty() : Optional.of(toAuthUser(user, null));
+        return users.findByEmail(email, true).map(user -> toAuthUser(user, null));
     }
 
     private Optional<SessionRecord> findActiveSession(String tokenHash) {
-        Map<String, Object> session = first(sessions.findActive(tokenHash));
-        if (session == null) {
-            return Optional.empty();
-        }
-        Map<String, Object> user = first(users.findById(uuid(session.get("tenant_user_id"))));
-        if (user == null) {
-            return Optional.empty();
-        }
-        Map<String, Object> tenant = tenants.findById(uuid(session.get("tenant_id")));
-        return Optional.of(new SessionRecord(
-                uuid(session.get("id")), uuid(session.get("tenant_user_id")),
-                uuid(session.get("tenant_id")), text(tenant, "slug"), text(user, "email"),
-                text(user, "display_name"), text(user, "role"), text(user, "status"),
-                tenant == null ? "ACTIVE" : text(tenant, "status"), instant(session.get("expires_at"))));
+        var session = sessions.findActive(tokenHash).orElse(null);
+        if (session == null) return Optional.empty();
+        var user = users.findById(session.userId()).orElse(null);
+        if (user == null) return Optional.empty();
+        var tenant = session.tenantId() == null ? null : tenants.findById(session.tenantId()).orElse(null);
+        return Optional.of(new SessionRecord(session.id(), session.userId(), session.tenantId(),
+                tenant == null ? null : tenant.slug(), user.email(), user.displayName(), user.role(),
+                user.status(), tenant == null ? "ACTIVE" : tenant.status(), session.expiresAt()));
     }
 
-    private static AuthUser toAuthUser(Map<String, Object> user, Map<String, Object> tenant) {
-        return new AuthUser(
-                uuid(user.get("id")), uuid(user.get("tenant_id")), text(tenant, "slug"),
-                tenant == null ? "ACTIVE" : text(tenant, "status"), text(user, "email"),
-                text(user, "display_name"), text(user, "password_hash"), text(user, "role"),
-                text(user, "status"), intValue(user.get("failed_login_count")), instant(user.get("locked_until")));
-    }
-
-    private static Map<String, Object> first(List<Map<String, Object>> rows) {
-        return rows.stream().findFirst().orElse(null);
-    }
-
-    private static String text(Map<String, Object> row, String key) {
-        Object value = row == null ? null : row.get(key);
-        return value == null ? null : value.toString();
-    }
-
-    private static UUID uuid(Object value) {
-        return value instanceof UUID result ? result : value == null ? null : UUID.fromString(value.toString());
-    }
-
-    private static int intValue(Object value) {
-        return value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString());
-    }
-
-    private static Instant instant(Object value) {
-        if (value instanceof Timestamp timestamp) {
-            return timestamp.toInstant();
-        }
-        return value instanceof Instant result ? result : null;
+    private static AuthUser toAuthUser(TenantUserRecord user, TenantRecord tenant) {
+        return new AuthUser(user.id(), user.tenantId(), tenant == null ? null : tenant.slug(),
+                tenant == null ? "ACTIVE" : tenant.status(), user.email(), user.displayName(),
+                user.passwordHash(), user.role(), user.status(), user.failedLoginCount(), user.lockedUntil());
     }
 
     public record LoginResult(

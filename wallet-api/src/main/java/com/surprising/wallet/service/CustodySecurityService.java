@@ -1,10 +1,13 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.model.custody.TenantRecord;
+import com.surprising.wallet.model.custody.IpRuleView;
+import lombok.RequiredArgsConstructor;
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.model.PageView;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantTableRepository;
+import com.surprising.wallet.repository.CustodyIpRuleRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,18 +22,11 @@ import java.util.UUID;
  * 数据写入和安全审计，避免 Web 层直接访问 Repository。</p>
  */
 @Service
+@RequiredArgsConstructor
 public class CustodySecurityService {
-    /** 托管数据仓储。 */
-    private final CustodyRepository repository;
-
-    /**
-     * 构造安全配置服务。
-     *
-     * @param repository 托管数据仓储
-     */
-    public CustodySecurityService(CustodyRepository repository) {
-        this.repository = repository;
-    }
+    private final CustodyTenantTableRepository tenants;
+    private final CustodyIpRuleRepository rules;
+    private final CustodyAuditRepository audits;
 
     /**
      * 查询租户 IP 白名单配置。
@@ -40,10 +36,11 @@ public class CustodySecurityService {
      */
     public Map<String, Object> ipAllowlist(CustodyPrincipal principal) {
         requireTenantAdmin(principal);
-        TenantRecord tenant = repository.requireTenant(principal.tenantId());
+        var tenant = tenants.findById(principal.tenantId())
+                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("enabled", tenant.ipAllowlistEnabled());
-        result.put("rules", repository.listIpRules(principal.tenantId()));
+        result.put("rules", rules.list(principal.tenantId()));
         return result;
     }
 
@@ -59,8 +56,13 @@ public class CustodySecurityService {
     public Map<String, Object> updateIpEnforcement(
             CustodyPrincipal principal, boolean enabled, String sourceIp) {
         requireTenantAdmin(principal);
-        repository.setIpAllowlistEnabled(principal.tenantId(), enabled);
-        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
+        if (enabled && rules.listActive(principal.tenantId()).isEmpty()) {
+            throw new IllegalStateException("add at least one enabled IP rule before enforcing the allowlist");
+        }
+        if (tenants.updateIpAllowlist(principal.tenantId(), enabled) != 1) {
+            throw new IllegalArgumentException("tenant not found");
+        }
+        audits.insert(UUID.randomUUID(), principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
                 "IP_ALLOWLIST.ENFORCEMENT_CHANGE", "TENANT", principal.tenantId().toString(),
                 sourceIp, "{\"enabled\":" + enabled + "}");
         return ipAllowlist(principal);
@@ -76,15 +78,15 @@ public class CustodySecurityService {
      * @return 新建规则
      */
     @Transactional(rollbackFor = Throwable.class)
-    public Map<String, Object> addIpRule(
+    public IpRuleView addIpRule(
             CustodyPrincipal principal, String label, String cidr, String sourceIp) {
         requireTenantAdmin(principal);
         String normalizedLabel = required(label, "IP rule label", 120);
         String normalizedCidr = required(cidr, "CIDR", 64);
         UUID ruleId = UUID.randomUUID();
-        Map<String, Object> created = repository.insertIpRule(
+        IpRuleView created = rules.insert(
                 principal.tenantId(), ruleId, normalizedLabel, normalizedCidr, principal.actorId());
-        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
+        audits.insert(UUID.randomUUID(), principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
                 "IP_ALLOWLIST.RULE_CREATE", "IP_RULE", ruleId.toString(), sourceIp,
                 "{\"cidr\":\"" + normalizedCidr + "\"}");
         return created;
@@ -102,8 +104,10 @@ public class CustodySecurityService {
     public Map<String, Object> deleteIpRule(
             CustodyPrincipal principal, UUID ruleId, String sourceIp) {
         requireTenantAdmin(principal);
-        repository.deleteIpRule(principal.tenantId(), ruleId);
-        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
+        if (rules.delete(principal.tenantId(), ruleId) != 1) {
+            throw new IllegalArgumentException("IP rule not found");
+        }
+        audits.insert(UUID.randomUUID(), principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
                 "IP_ALLOWLIST.RULE_DELETE", "IP_RULE", ruleId.toString(), sourceIp, "{}");
         return Map.of("ok", true);
     }
@@ -125,8 +129,8 @@ public class CustodySecurityService {
         int pageSize = Math.min(Math.max(limit, 1), 200);
         int pageOffset = Math.max(offset, 0);
         return new PageView<>(
-                repository.listAudit(principal.tenantId(), pageSize, pageOffset),
-                repository.countAudit(principal.tenantId()), pageSize, pageOffset);
+                audits.list(principal.tenantId(), pageSize, pageOffset),
+                audits.count(principal.tenantId()), pageSize, pageOffset);
     }
 
     /** 校验当前身份是租户管理员。 */

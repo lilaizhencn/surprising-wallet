@@ -203,9 +203,9 @@
 <text x="50" y="860" style="font:14px sans-serif;fill:#1e293b">Worker ⇄ HTTPS Custody API / HMAC Webhook ⇄ Alibaba Cloud wallet-api</text>
 <text x="50" y="888" style="font:14px sans-serif;fill:#1e293b">GitHub master / resources/tenant-demo/** → 验证测试 Worker → cf deploy</text>
   <rect x="30" y="932" width="1040" height="138" class="svc"/>
-  <text x="50" y="956" class="label">Console 认证 · model/custody 独立记录</text>
-  <text x="50" y="981" class="desc">CustodyAuthService → 用户 / 租户 / 会话单表仓储（直接读取，组合当前状态）</text>
-  <text x="50" y="1006" class="desc">CustodyAuthService → 用户状态 / 会话 / 审计单表仓储（登录事务）</text>
-  <text x="50" y="1031" class="desc">认证路径无总仓储 / 安全仓储门面转发，无独立查询中间层；仅保留正常注入构造器</text>
-  <text x="50" y="1056" class="desc">会话校验当前用户和租户状态、路由范围；业务记录不再嵌入仓储类</text>
+  <text x="50" y="956" class="label">Console / API 认证与安全维护 · model/custody 类型记录</text>
+  <text x="50" y="981" class="desc">AuthService → 用户 / 租户 / 会话；ApiKeyService → 密钥 / 租户 / IP / nonce 单表仓储</text>
+  <text x="50" y="1006" class="desc">服务直接写审计；租户停用撤销会话；管理员按租户 / 角色 / 状态条件解锁</text>
+  <text x="50" y="1031" class="desc">单表仓储映射类型记录；安全域无总门面 / 安全门面转发；维护直接清理 nonce / 会话 / 幂等键</text>
+  <text x="50" y="1056" class="desc">列表投影无密码 / 密钥；nonce 原子占用；密文自带版本，删除两张表的闲置版本列</text>
 </svg>

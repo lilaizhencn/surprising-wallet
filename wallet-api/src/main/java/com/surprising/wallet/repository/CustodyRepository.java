@@ -9,7 +9,6 @@ import com.surprising.wallet.model.custody.IdempotencyRecord;
 import com.surprising.wallet.model.custody.GasUsageRecord;
 import com.surprising.wallet.model.custody.GasPricingMetadata;
 import com.surprising.wallet.model.custody.GasAccountRecord;
-import com.surprising.wallet.model.custody.ApiKeyRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.service.CustodyEventService;
@@ -42,7 +41,9 @@ public class CustodyRepository {
     /** 租户用户单表仓储。 */
     private final CustodyTenantUserRepository tenantUsers;
     /** 安全单表仓储编排。 */
-    private final CustodySecurityRepository securityRepository;
+    private final CustodyApiKeyRepository apiKeys;
+    private final CustodySessionRepository sessions;
+    private final CustodyIpRuleRepository ipRules;
     /** 托管地址单表仓储。 */
     private final CustodyAddressRepository custodyAddresses;
     /** 链地址单表仓储。 */
@@ -106,14 +107,16 @@ public class CustodyRepository {
 
     private final CustodyEventService eventService;
 
-    public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository,
-                             CustodyTenantTableRepository tenantTable,
-                             CustodyTenantUserRepository tenantUsers,
-                             CustodyEventService eventService) {
+    public CustodyRepository(JdbcTemplate jdbc, CustodyTenantTableRepository tenantTable,
+                             CustodyTenantUserRepository tenantUsers, CustodyEventService eventService,
+                             CustodyApiKeyRepository apiKeys, CustodySessionRepository sessions,
+                             CustodyIpRuleRepository ipRules) {
         this.tenantTable = tenantTable;
         this.tenantUsers = tenantUsers;
         this.eventService = eventService;
-        this.securityRepository = securityRepository;
+        this.apiKeys = apiKeys;
+        this.sessions = sessions;
+        this.ipRules = ipRules;
         this.custodyAddresses = new CustodyAddressRepository(jdbc);
         this.chainAddresses = new ChainAddressRepository(jdbc);
         this.gasAccounts = new CustodyGasAccountRepository(jdbc);
@@ -157,30 +160,36 @@ public class CustodyRepository {
 
     /** 按 slug 查询租户。 */
     public Optional<TenantRecord> findTenantBySlug(String slug) {
-        return Optional.ofNullable(tenantTable.findBySlug(slug)).map(CustodyRepository::mapTenant);
+        return tenantTable.findBySlug(slug);
     }
 
     /** 查询并校验租户。 */
     public TenantRecord requireTenant(UUID tenantId) {
-        Map<String, Object> row = tenantTable.findFullById(tenantId);
-        if (row == null) throw new IllegalArgumentException("tenant not found");
-        return mapTenant(row);
+        return tenantTable.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant not found"));
     }
 
     /** 查询租户列表，统计字段在 Java 中组合。 */
     public List<Map<String, Object>> listTenants(String search, String status, int limit, int offset) {
         String value = search == null ? "" : search.trim().toLowerCase();
         return tenantTable.listAll().stream()
-                .filter(row -> value.isEmpty() || text(row.get("slug")).toLowerCase().contains(value)
-                        || text(row.get("name")).toLowerCase().contains(value))
-                .filter(row -> status == null || status.isBlank() || status.equals(row.get("status")))
+                .filter(row -> value.isEmpty() || row.slug().toLowerCase().contains(value)
+                        || row.name().toLowerCase().contains(value))
+                .filter(row -> status == null || status.isBlank() || status.equals(row.status()))
                 .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 500))
                 .map(row -> {
-                    Map<String, Object> result = new LinkedHashMap<>(row);
-                    UUID tenantId = uuid(row.get("id"));
-                    result.put("addressCount", custodyAddresses.listByTenant(tenantId).size());
-                    result.put("gasAccountCount", gasAccounts.listByTenant(tenantId).size());
-                    result.put("userCount", tenantUsers.listByTenant(tenantId).size());
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("id", row.id());
+                    result.put("slug", row.slug());
+                    result.put("name", row.name());
+                    result.put("status", row.status());
+                    result.put("derivation_namespace", row.derivationNamespace());
+                    result.put("ip_allowlist_enabled", row.ipAllowlistEnabled());
+                    result.put("display_currency", row.displayCurrency());
+                    result.put("created_at", row.createdAt());
+                    result.put("updated_at", row.updatedAt());
+                    result.put("addressCount", custodyAddresses.listByTenant(row.id()).size());
+                    result.put("gasAccountCount", gasAccounts.listByTenant(row.id()).size());
+                    result.put("userCount", tenantUsers.listByTenant(row.id()).size());
                     return result;
                 }).toList();
     }
@@ -189,9 +198,9 @@ public class CustodyRepository {
     public long countTenants(String search, String status) {
         return tenantTable.listAll().stream()
                 .filter(row -> search == null || search.isBlank()
-                        || text(row.get("slug")).toLowerCase().contains(search.toLowerCase())
-                        || text(row.get("name")).toLowerCase().contains(search.toLowerCase()))
-                .filter(row -> status == null || status.isBlank() || status.equals(row.get("status"))).count();
+                        || row.slug().toLowerCase().contains(search.toLowerCase())
+                        || row.name().toLowerCase().contains(search.toLowerCase()))
+                .filter(row -> status == null || status.isBlank() || status.equals(row.status())).count();
     }
 
     /** 查询租户运营摘要。 */
@@ -207,11 +216,11 @@ public class CustodyRepository {
         result.put("userCount", (long) tenantUsers.listByTenant(tenantId).size());
         result.put("withdrawalCount", custodyWithdrawals.countByTenant(tenantId, "", "", ""));
         result.put("depositCount", custodyDeposits.countCustomerDeposits(tenantId, gasAddressIds));
-        result.put("activeApiKeyCount", securityRepository.countActiveApiKeys(tenantId));
+        result.put("activeApiKeyCount", apiKeys.countActive(tenantId));
         result.put("activeWebhookCount", webhookEndpoints.countActive(tenantId));
         result.put("webhookEndpointCount", webhookEndpoints.list(tenantId).size());
         result.put("failedWebhookDeliveryCount", webhookDeliveries.countFailed(tenantId));
-        result.put("activeSessionCount", securityRepository.countActiveSessions(tenantId));
+        result.put("activeSessionCount", sessions.countActive(tenantId));
         return result;
     }
 
@@ -227,68 +236,21 @@ public class CustodyRepository {
         if (tenantTable.updateStatus(tenantId, status) != 1) throw new IllegalArgumentException("tenant not found");
     }
 
-    /** 撤销租户会话。 */
-    public int revokeTenantSessions(UUID tenantId) { return securityRepository.revokeTenantSessions(tenantId); }
 
-    /** 查询租户用户列表。 */
-    public List<Map<String, Object>> listTenantUsers(UUID tenantId) { return securityRepository.listTenantUsers(tenantId); }
 
-    /** 解锁租户管理员。 */
-    public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
-        return securityRepository.unlockTenantAdministrator(tenantId, userId);
-    }
 
-    /** 创建 API 密钥。 */
-    public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
-                                     String encryptedSecret, UUID createdBy) {
-        return securityRepository.insertApiKey(id, tenantId, keyId, name, encryptedSecret, createdBy);
-    }
 
-    /** 兼容包含密钥版本和过期时间的调用方。 */
-    public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
-                                     String encryptedSecret, int secretVersion, Instant expiresAt,
-                                     UUID createdBy) {
-        return securityRepository.insertApiKey(id, tenantId, keyId, name, encryptedSecret, createdBy);
-    }
 
-    /** 查询有效 API 密钥。 */
-    public Optional<ApiKeyRecord> findActiveApiKey(String keyId) { return securityRepository.findActiveApiKey(keyId); }
 
-    /** 查询并校验 API 密钥。 */
-    public ApiKeyRecord requireApiKey(String keyId) { return securityRepository.requireApiKey(keyId); }
 
-    /** 查询租户 API 密钥。 */
-    public List<Map<String, Object>> listApiKeys(UUID tenantId) { return securityRepository.listApiKeys(tenantId); }
 
-    /** 撤销 API 密钥。 */
-    public void revokeApiKey(UUID tenantId, UUID keyId) { securityRepository.revokeApiKey(tenantId, keyId); }
 
-    /** 更新 API 密钥访问信息。 */
-    public void touchApiKey(UUID keyId, String sourceIp) { securityRepository.touchApiKey(keyId, sourceIp); }
 
-    /** 占用 API nonce。 */
-    public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
-        return securityRepository.reserveNonce(keyId, nonce, expiresAt);
-    }
 
-    /** 查询启用的 IP 规则。 */
-    public List<String> activeIpRules(UUID tenantId) { return securityRepository.activeIpRules(tenantId); }
 
-    /** 查询租户 IP 规则。 */
-    public List<Map<String, Object>> listIpRules(UUID tenantId) { return securityRepository.listIpRules(tenantId); }
 
-    /** 创建 IP 规则。 */
-    public Map<String, Object> insertIpRule(UUID tenantId, UUID ruleId, String label, String cidr, UUID createdBy) {
-        return securityRepository.insertIpRule(tenantId, ruleId, label, cidr, createdBy);
-    }
 
-    /** 删除 IP 规则。 */
-    public void deleteIpRule(UUID tenantId, UUID ruleId) { securityRepository.deleteIpRule(tenantId, ruleId); }
 
-    /** 更新租户 IP 白名单开关。 */
-    public void setIpAllowlistEnabled(UUID tenantId, boolean enabled) {
-        securityRepository.setIpAllowlistEnabled(tenantId, enabled);
-    }
 
     /** 判断是否存在未解决的充值重组赤字。 */
     public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId, String chain,
@@ -603,10 +565,10 @@ public class CustodyRepository {
         TenantRecord tenant = requireTenant(tenantId);
         Map<String, Object> result = new LinkedHashMap<>();
         boolean openChain = !tenantChains.listActiveChains(tenantId).isEmpty();
-        boolean apiKey = securityRepository.countActiveApiKeys(tenantId) > 0;
+        boolean apiKey = apiKeys.countActive(tenantId) > 0;
         boolean webhook = webhookEndpoints.list(tenantId).stream()
                 .anyMatch(row -> "ACTIVE".equals(row.get("status")) && row.get("verified_at") != null);
-        boolean allowlist = tenant.ipAllowlistEnabled() && !securityRepository.activeIpRules(tenantId).isEmpty();
+        boolean allowlist = tenant.ipAllowlistEnabled() && !ipRules.listActive(tenantId).isEmpty();
         List<Map<String, Object>> addresses = custodyAddresses.listByTenant(tenantId);
         List<UUID> gasAddressIds = gasAccounts.listByTenant(tenantId).stream()
                 .map(row -> uuid(row.get("custody_address_id"))).toList();
@@ -831,10 +793,6 @@ public class CustodyRepository {
     /** 统计平台审计日志。 */
     public long countPlatformAudit() { return audits.countPlatform(); }
 
-    /** 清理过期安全数据。 */
-    public int cleanupExpiredSecurityRows() {
-        return securityRepository.cleanupExpiredRows() + idempotencies.deleteExpired();
-    }
 
     /** 校验 Gas 操作归属租户和链。 */
     private void requireGasOperation(UUID tenantId, String operationType, UUID operationId, String chain) {
@@ -851,12 +809,6 @@ public class CustodyRepository {
         if (!valid) throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
     }
 
-    /** 将数据库租户字段转换为模型。 */
-    private static TenantRecord mapTenant(Map<String, Object> row) {
-        return new TenantRecord(uuid(row.get("id")), text(row.get("slug")), text(row.get("name")), text(row.get("status")),
-                number(row.get("derivation_namespace")), Boolean.TRUE.equals(row.get("ip_allowlist_enabled")),
-                text(row.get("display_currency")), instant(row.get("created_at")), instant(row.get("updated_at")));
-    }
 
     /** 将数据库 Gas 字段和账本余额转换为模型。 */
     private GasAccountRecord mapGas(UUID tenantId, Map<String, Object> row) {

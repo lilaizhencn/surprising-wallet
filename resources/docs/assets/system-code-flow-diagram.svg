@@ -263,9 +263,9 @@
   <text x="772" y="1192" class="small">提现：冻结扣款/确认同事务；归集不改变用户余额 / Webhook</text>
   <text x="40" y="1230" class="small">最多 5 次；≤1000 sat/vB；费用 ≤100000 sat 且 ≤输入10%；终态不可重开</text>
   <rect x="20" y="1260" width="1140" height="150" class="phase-bg"/>
-  <text x="40" y="1285" class="phase-label">Console 登录与会话：业务记录使用独立 model/custody 类型</text>
-  <text x="40" y="1312" class="small">Controller → CustodyAuthService 直接读取单表仓储，组合用户 / 租户 / 有效会话 → 密码 / 锁定 / 当前状态校验</text>
-  <text x="40" y="1338" class="small">AuthService → 用户登录状态 + 会话哈希 + 审计同事务；审计失败整体回滚</text>
-  <text x="40" y="1364" class="small">密码错误保留失败次数；五次锁定十五分钟；会话过期 / 撤销 / 账户停用拒绝访问</text>
-  <text x="40" y="1390" class="small">平台 / 租户路由范围校验 → 会话访问时间更新；登出直接撤销会话，无两层仓储门面转发</text>
+  <text x="40" y="1285" class="phase-label">Console / API 身份、安全配置与维护：直接单表仓储 + 类型记录</text>
+  <text x="40" y="1312" class="small">Console → AuthService → 用户 / 租户 / 有效会话 → 密码 / 锁定 / 当前状态 / 路由范围校验</text>
+  <text x="40" y="1338" class="small">API → 有效 Key / 租户 → IP → HMAC → nonce 原子占用 → 访问时间；验签失败不占用 nonce</text>
+  <text x="40" y="1364" class="small">Key / IP / 管理员解锁 / 租户停用与审计同事务；重复 nonce 不破坏调用方事务</text>
+  <text x="40" y="1390" class="small">维护直接清理 nonce / 会话 / 幂等键；列表无秘密；密文版本为唯一来源，移除闲置版本列</text>
 </svg>

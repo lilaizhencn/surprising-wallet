@@ -1,57 +1,42 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.exception.CustodyUnauthorizedException;
+import com.surprising.wallet.model.CidrMatcher;
 import com.surprising.wallet.model.CustodyPrincipal.ActorType;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.model.custody.ApiKeyRecord;
+import com.surprising.wallet.model.custody.ApiKeyView;
+import com.surprising.wallet.repository.CustodyApiKeyRepository;
+import com.surprising.wallet.repository.CustodyApiNonceRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
+import com.surprising.wallet.repository.CustodyIpRuleRepository;
+import com.surprising.wallet.repository.CustodyTenantTableRepository;
+
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import com.surprising.wallet.model.CidrMatcher;
-import com.surprising.wallet.exception.CustodyForbiddenException;
-import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.model.CustodySecurityProperties;
-import com.surprising.wallet.exception.CustodyUnauthorizedException;
-
-/**
- * API Key 管理服务，负责 API Key 的创建、查询和撤销。
- *
- * <p>每个租户可创建多个 API Key，每个 Key 有独立的权限集合和可选的过期时间。
- * API Key Secret 仅创建时返回，存储时使用 AES-256-GCM 加密。
- */
+/** 租户 API Key 管理与 HMAC 验签；Secret 仅在创建时返回。 */
 @Service
+@RequiredArgsConstructor
 public class CustodyApiKeyService {
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final CustodyRepository repository;
-    /**
-     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
-     */
+    private final CustodyApiKeyRepository keys;
+    private final CustodyTenantTableRepository tenants;
+    private final CustodyIpRuleRepository ipRules;
+    private final CustodyApiNonceRepository nonces;
+    private final CustodyAuditRepository audits;
     private final CustodyCryptoService crypto;
-    /**
-     * 保存 {@code properties}，用于承载当前对象的运行配置或业务数据。
-     */
     private final CustodySecurityProperties properties;
-    /**
-     * 构造 {@code CustodyApiKeyService}，初始化该组件运行所需的状态和依赖。
-     */
-    public CustodyApiKeyService(CustodyRepository repository, CustodyCryptoService crypto,
-                                CustodySecurityProperties properties) {
-        this.repository = repository;
-        this.crypto = crypto;
-        this.properties = properties;
-    }
 
-    /**
-     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public CreatedApiKey create(UUID tenantId, UUID actorId, String name, String sourceIp) {
         String normalizedName = name == null ? "" : name.trim();
@@ -61,32 +46,26 @@ public class CustodyApiKeyService {
         UUID id = UUID.randomUUID();
         String keyId = "swk_" + crypto.randomSecret(18);
         String secret = "sws_" + crypto.randomSecret(32);
-        ApiKeyRecord saved = repository.insertApiKey(
+        ApiKeyRecord saved = keys.insert(
                 id, tenantId, keyId, normalizedName, crypto.encrypt(secret), actorId);
-        repository.audit(tenantId, ActorType.TENANT_USER.name(), actorId.toString(), "API_KEY.CREATE",
+        audits.insert(UUID.randomUUID(), tenantId, ActorType.TENANT_USER.name(), actorId.toString(), "API_KEY.CREATE",
                 "API_KEY", id.toString(), sourceIp, "{\"keyId\":\"" + keyId + "\"}");
         return new CreatedApiKey(saved.id(), keyId, secret, saved.name(), saved.createdAt());
     }
-    /**
-     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> list(UUID tenantId) {
-        return repository.listApiKeys(tenantId);
+
+    public List<ApiKeyView> list(UUID tenantId) {
+        return keys.listByTenant(tenantId);
     }
 
-    /**
-     * 删除或释放 {@code revoke} 对应的资源，并收敛相关业务状态。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public void revoke(UUID tenantId, UUID actorId, UUID keyId, String sourceIp) {
-        repository.revokeApiKey(tenantId, keyId);
-        repository.audit(tenantId, ActorType.TENANT_USER.name(), actorId.toString(), "API_KEY.REVOKE",
+        if (keys.revoke(tenantId, keyId) != 1) {
+            throw new IllegalArgumentException("active API key not found");
+        }
+        audits.insert(UUID.randomUUID(), tenantId, ActorType.TENANT_USER.name(), actorId.toString(), "API_KEY.REVOKE",
                 "API_KEY", keyId.toString(), sourceIp, "{}");
     }
 
-    /**
-     * 执行 {@code authenticate} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public CustodyPrincipal authenticate(String keyId, long timestampSeconds, String nonce,
                                          String signature, String method, String requestTarget,
                                          byte[] body, String sourceIp) {
@@ -95,19 +74,21 @@ public class CustodyApiKeyService {
         if (allowedSkew < 1 || allowedSkew > 3_600) {
             throw new IllegalStateException("custody API clock skew must be between 1 second and 1 hour");
         }
-        if (Math.abs(now - timestampSeconds) > allowedSkew) {
+        if (timestampSeconds < now - allowedSkew || timestampSeconds > now + allowedSkew) {
             throw new CustodyUnauthorizedException("request timestamp is outside the allowed clock skew");
         }
         if (nonce == null || !nonce.matches("^[A-Za-z0-9_-]{16,128}$")) {
             throw new CustodyUnauthorizedException("invalid request nonce");
         }
-        ApiKeyRecord credential = repository.findActiveApiKey(keyId)
+        ApiKeyRecord credential = keys.findActiveByKeyId(keyId)
                 .orElseThrow(() -> new CustodyUnauthorizedException("invalid API key"));
-        if (!"ACTIVE".equals(credential.tenantStatus())) {
+        var tenant = tenants.findById(credential.tenantId())
+                .orElseThrow(() -> new CustodyForbiddenException("tenant is not active"));
+        if (!"ACTIVE".equals(tenant.status())) {
             throw new CustodyForbiddenException("tenant is not active");
         }
-        if (credential.ipAllowlistEnabled()) {
-            List<String> rules = repository.activeIpRules(credential.tenantId());
+        if (tenant.ipAllowlistEnabled()) {
+            List<String> rules = ipRules.listActive(credential.tenantId());
             boolean allowed = rules.stream().anyMatch(cidr -> CidrMatcher.matches(cidr, sourceIp));
             if (!allowed) {
                 throw new CustodyForbiddenException("source IP is not allowed");
@@ -119,22 +100,19 @@ public class CustodyApiKeyService {
         if (!crypto.constantTimeEquals(expected, signature)) {
             throw new CustodyUnauthorizedException("invalid request signature");
         }
-        if (!repository.reserveNonce(keyId, nonce, Instant.now().plusSeconds(allowedSkew * 2))) {
+        if (!nonces.reserve(keyId, nonce, Instant.now().plusSeconds(allowedSkew * 2))) {
             throw new CustodyUnauthorizedException("request nonce has already been used");
         }
-        repository.touchApiKey(credential.id(), sourceIp);
+        keys.touch(credential.id(), sourceIp);
         return new CustodyPrincipal(
                 ActorType.API_KEY,
                 credential.id(),
                 credential.tenantId(),
-                credential.tenantSlug(),
+                tenant.slug(),
                 "API_KEY",
                 Set.of("*"));
     }
 
-    /**
-     * 判断 {@code canonicalRequest} 对应的条件是否成立，并返回明确的布尔结果。
-     */
     public String canonicalRequest(long timestampSeconds, String nonce, String method,
                                    String requestTarget, byte[] body) {
         return timestampSeconds + "\n"

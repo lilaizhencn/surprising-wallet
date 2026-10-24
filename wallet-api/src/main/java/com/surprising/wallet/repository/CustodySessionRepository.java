@@ -1,12 +1,12 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.SessionTokenRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /** custody_session 单表仓储。 */
@@ -41,12 +41,14 @@ public class CustodySessionRepository {
     }
 
     /** 按令牌查询当前会话单表字段。 */
-    public List<Map<String, Object>> findActive(String tokenHash) {
-        return jdbc.queryForList("""
+    public Optional<SessionTokenRecord> findActive(String tokenHash) {
+        return jdbc.query("""
                 select id, tenant_user_id, tenant_id, expires_at
                   from custody_session
                  where token_hash = ? and revoked_at is null and expires_at > now()
-                """, tokenHash);
+                """, (rs, rowNum) -> new SessionTokenRecord(rs.getObject("id", UUID.class),
+                rs.getObject("tenant_user_id", UUID.class), rs.getObject("tenant_id", UUID.class),
+                rs.getTimestamp("expires_at").toInstant()), tokenHash).stream().findFirst();
     }
 
     /** 统计租户当前有效会话。 */

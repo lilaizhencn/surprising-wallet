@@ -1,10 +1,10 @@
 package com.surprising.wallet.repository;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 
 /** custody_api_nonce 单表仓储。 */
 @Repository
@@ -18,15 +18,12 @@ public class CustodyApiNonceRepository {
     }
 
     /** 预留一次性 nonce。 */
-    public boolean reserve(String keyId, String nonce, Timestamp expiresAt) {
-        try {
-            return jdbc.update("""
+    public boolean reserve(String keyId, String nonce, Instant expiresAt) {
+        return jdbc.update("""
                     insert into custody_api_nonce(key_id, nonce, expires_at)
                     values (?, ?, ?)
-                    """, keyId, nonce, expiresAt) == 1;
-        } catch (DuplicateKeyException ignored) {
-            return false;
-        }
+                    on conflict (key_id, nonce) do nothing
+                    """, keyId, nonce, Timestamp.from(expiresAt)) == 1;
     }
 
     /** 删除已过期的 API nonce。 */

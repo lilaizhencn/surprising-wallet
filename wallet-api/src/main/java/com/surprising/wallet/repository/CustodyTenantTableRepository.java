@@ -1,15 +1,20 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.TenantRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.UUID;
 
 /** custody_tenant 单表仓储。 */
 @Repository
 public class CustodyTenantTableRepository {
+    private static final String COLUMNS = "id, slug, name, status, derivation_namespace, "
+            + "ip_allowlist_enabled, display_currency, created_at, updated_at";
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -18,32 +23,14 @@ public class CustodyTenantTableRepository {
         this.jdbc = jdbc;
     }
 
-    /** 查询租户单表字段。 */
-    public Map<String, Object> findById(UUID tenantId) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                select id, slug, status, ip_allowlist_enabled
-                  from custody_tenant
-                 where id = ?
-                """, tenantId);
-        return rows.stream().findFirst().orElse(null);
+    public Optional<TenantRecord> findById(UUID tenantId) {
+        return jdbc.query("select " + COLUMNS + " from custody_tenant where id = ?",
+                CustodyTenantTableRepository::mapTenant, tenantId).stream().findFirst();
     }
 
-    /** 按 slug 查询租户完整字段。 */
-    public Map<String, Object> findBySlug(String slug) {
-        return jdbc.queryForList("""
-                select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
-                       display_currency, created_at, updated_at
-                  from custody_tenant where slug = ?
-                """, slug).stream().findFirst().orElse(null);
-    }
-
-    /** 查询租户完整字段。 */
-    public Map<String, Object> findFullById(UUID tenantId) {
-        return jdbc.queryForList("""
-                select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
-                       display_currency, created_at, updated_at
-                  from custody_tenant where id = ?
-                """, tenantId).stream().findFirst().orElse(null);
+    public Optional<TenantRecord> findBySlug(String slug) {
+        return jdbc.query("select " + COLUMNS + " from custody_tenant where slug = ?",
+                CustodyTenantTableRepository::mapTenant, slug).stream().findFirst();
     }
 
     /** 创建租户记录。 */
@@ -75,12 +62,9 @@ public class CustodyTenantTableRepository {
                 """, UUID.class);
     }
 
-    /** 查询全部租户单表字段。 */
-    public List<Map<String, Object>> listAll() {
-        return jdbc.queryForList("""
-                select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
-                       display_currency, created_at, updated_at from custody_tenant order by created_at desc, id
-                """);
+    public List<TenantRecord> listAll() {
+        return jdbc.query("select " + COLUMNS + " from custody_tenant order by created_at desc, id",
+                CustodyTenantTableRepository::mapTenant);
     }
 
     /** 统计租户数量。 */
@@ -101,5 +85,11 @@ public class CustodyTenantTableRepository {
                    set ip_allowlist_enabled = ?, updated_at = now()
                  where id = ?
                 """, enabled, tenantId);
+    }
+    private static TenantRecord mapTenant(ResultSet rs, int rowNum) throws SQLException {
+        return new TenantRecord(rs.getObject("id", UUID.class), rs.getString("slug"),
+                rs.getString("name"), rs.getString("status"), rs.getInt("derivation_namespace"),
+                rs.getBoolean("ip_allowlist_enabled"), rs.getString("display_currency"),
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
     }
 }

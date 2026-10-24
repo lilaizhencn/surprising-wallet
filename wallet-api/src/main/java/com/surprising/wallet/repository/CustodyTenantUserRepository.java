@@ -1,11 +1,16 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.TenantUserRecord;
+import com.surprising.wallet.model.custody.TenantUserView;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.UUID;
 
 /** custody_tenant_user 单表仓储。 */
@@ -20,24 +25,25 @@ public class CustodyTenantUserRepository {
     }
 
     /** 按邮箱查询租户用户。 */
-    public List<Map<String, Object>> findByEmail(String email, boolean platformAdmin) {
+    public Optional<TenantUserRecord> findByEmail(String email, boolean platformAdmin) {
         String condition = platformAdmin
                 ? "tenant_id is null and role = 'PLATFORM_ADMIN'"
                 : "tenant_id is not null";
-        return jdbc.queryForList(
+        return jdbc.query(
                 "select id, tenant_id, email, display_name, password_hash, role, status, "
                         + "failed_login_count, locked_until from custody_tenant_user where "
-                        + condition + " and lower(email) = lower(?)", email);
+                        + condition + " and lower(email) = lower(?)", CustodyTenantUserRepository::mapUser, email)
+                .stream().findFirst();
     }
 
     /** 按用户主键查询单表字段。 */
-    public List<Map<String, Object>> findById(UUID userId) {
-        return jdbc.queryForList("""
+    public Optional<TenantUserRecord> findById(UUID userId) {
+        return jdbc.query("""
                 select id, tenant_id, email, display_name, password_hash, role, status,
                        failed_login_count, locked_until
                   from custody_tenant_user
                  where id = ?
-                """, userId);
+                """, CustodyTenantUserRepository::mapUser, userId).stream().findFirst();
     }
 
     /** 创建租户管理员用户。 */
@@ -90,15 +96,15 @@ public class CustodyTenantUserRepository {
     }
 
     /** 查询租户用户列表。 */
-    public List<Map<String, Object>> listByTenant(UUID tenantId) {
-        return jdbc.queryForList("""
+    public List<TenantUserView> listByTenant(UUID tenantId) {
+        return jdbc.query("""
                 select id, email, display_name, role, status, failed_login_count,
                        locked_until, last_login_at, created_at, updated_at
                   from custody_tenant_user
                  where tenant_id = ?
                  order by case role when 'TENANT_ADMIN' then 0 when 'OPERATOR' then 1 else 2 end,
                           created_at, id
-                """, tenantId);
+                """, CustodyTenantUserRepository::mapView, tenantId);
     }
 
     /** 解锁租户管理员。 */
@@ -111,8 +117,29 @@ public class CustodyTenantUserRepository {
                 """, tenantId, userId);
     }
 
-    /** 将用户字段映射为登录模型所需的键值。 */
-    public static Map<String, Object> first(List<Map<String, Object>> rows) {
-        return rows.stream().findFirst().orElse(null);
+    public Optional<TenantUserView> findView(UUID tenantId, UUID userId) {
+        return jdbc.query("""
+                select id, email, display_name, role, status, failed_login_count,
+                       locked_until, last_login_at, created_at, updated_at
+                  from custody_tenant_user where tenant_id = ? and id = ?
+                """, CustodyTenantUserRepository::mapView, tenantId, userId).stream().findFirst();
+    }
+
+    private static TenantUserRecord mapUser(ResultSet rs, int rowNum) throws SQLException {
+        Timestamp locked = rs.getTimestamp("locked_until");
+        return new TenantUserRecord(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
+                rs.getString("email"), rs.getString("display_name"), rs.getString("password_hash"),
+                rs.getString("role"), rs.getString("status"), rs.getInt("failed_login_count"),
+                locked == null ? null : locked.toInstant());
+    }
+
+    private static TenantUserView mapView(ResultSet rs, int rowNum) throws SQLException {
+        Timestamp locked = rs.getTimestamp("locked_until");
+        Timestamp lastLogin = rs.getTimestamp("last_login_at");
+        return new TenantUserView(rs.getObject("id", UUID.class), rs.getString("email"),
+                rs.getString("display_name"), rs.getString("role"), rs.getString("status"),
+                rs.getInt("failed_login_count"), locked == null ? null : locked.toInstant(),
+                lastLogin == null ? null : lastLogin.toInstant(), rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant());
     }
 }
