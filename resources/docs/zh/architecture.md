@@ -104,7 +104,7 @@ Servlet 请求包装器不得放入 `config/`，充值扫描使用的检查点�
 所有业务域的 PostgreSQL/JDBC Repository 统一位于 `com.surprising.wallet.repository`，业务包下不再保留
 `account/repository`、`custody/repository`、`deposit/repository` 或其他分散的 Repository 子包。
 Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optional<T>` 表达。
-`CustodyAddressService` 直接编排地址、主题派生、链地址、Gas 账户、账本和审计单表仓储。地址分配在原事务内解析一次主题并持有锁；同租户主题/版本幂等、链地址归属、EVM 委托投影和审计共同提交或回滚。EIP-7702 仓储为正常构造器依赖，不再通过测试构造器或 Optional 跳过投影。托管地址行由 `CustodyAddressRepository` 唯一映射为 `CustodyAddressRecord`，不经总仓储二次重建。
+`CustodyAddressService` 直接编排地址、主题派生、链地址、Gas 账户、账本和审计单表仓储。地址分配在原事务内解析一次主题并持有锁；同租户主题/版本幂等、链地址归属、EVM 委托投影和审计共同提交或回滚。EIP-7702 账户单表仓储为正常构造器依赖，不再通过测试构造器或 Optional 跳过投影。托管地址行由 `CustodyAddressRepository` 唯一映射为 `CustodyAddressRecord`，不经总仓储二次重建。
 地址列表、总数与搜索使用同一单表筛选条件，排除本租户所有 Gas 地址后再分页。平台租户详情复用地址服务的内部查询。可提现地址按租户/链/主题读取，再批量组合链地址和账本余额；不逐页扫描全租户或逐条查询余额。Gas 历史直接按租户和账户/地址筛选分页；账户身份查询不再加载账本余额。Gas 使用明细直接返回有类型的公开查询字段，不在总仓储中复制和重命名 Map。
 APTOS、ADA、NEAR、DOT、SOLANA、SUI、TON、XRP 的扫描器和交易服务必须通过构造器接收运行时开关服务，不再通过字段注入或空依赖跳过校验。Solana 扫描器的 ATA 地址服务和 TON 扫描器的索引器同样是必需依赖；TON 网络始终读取数据库 profile，不保留默认测试网络或测试专用构造器。单元测试提供明确替身，数据库链路测试使用实际开关服务。
 `CustodyEventService` 显式编排领域事件、启用端点和 Webhook 投递记录，加入调用方事务；独立调用时也原子提交或回滚。充值投影直接依赖该服务和审计单表仓储，不再经过 `CustodyRepository`。提现创建、状态同步和资产找回共用同一事件入口，保持 API 来源才生成 Webhook 的规则。事件按业务键去重，投递按端点与事件的已有唯一键去重，重复调用不重置投递状态。托管控制面的事件发布使用必需构造器依赖，不提供测试专用或兼容构造分支。
@@ -257,3 +257,9 @@ Gas 资金变更由 `CustodyGasAccountingService` 直接编排单表仓储，拥
 
 
 提现状态投影由现有 `CustodyWithdrawalReconciliationService` 直接编排；入口只传租户和提现 ID，短事务中锁投影并读取当前所属订单，以订单事实写扣款、Gas 与事件。固定大小的 UUID 游标分页与同租户订单批量状态比较防止旧的未变化记录挡住后续提现；每条投影独立失败隔离。旧状态快照模型及其总仓储传递路径删除。
+
+## EIP-7702 批次业务归属
+
+`Evm7702CollectionRepository` 和 `Evm7702WithdrawalRepository` 已删除，不保留多表业务仓储或内部手工创建的仓储。两个现有 Coordinator 直接编排单表仓储，负责领取、签名持久化、提交、广播未知、恢复错误、回执与未广播失败的事务；Nonce、Gas 和逐笔提现结算加入相同事务。批次与签名尝试的 UNKNOWN 更新必须一起提交或回滚。签名前的新配置与中继路径由 `Evm7702ConfigurationService` 显式校验；配置单表统一映射 `Configuration`，两个工作流复用该记录，历史确认只读取原配置版本，不要求中继仍启用。
+
+工作流直接持有批次、批次项、签名尝试和配置仓储，拥有运行目标、未知尝试与待确认查询；先筛选父批次再对尝试排序和限额。运行目标携带已读取的账户链配置，避免再次查询相同配置；待确认页按版本复用配置读取。归集项身份与重播尝试由单表仓储直接返回类型投影。地址创建直接写 EIP-7702 账户投影。测试通过正常 Spring 事务代理调用协调器与提现创建服务；数据库注入失败验证跨表回滚。本批复用现有表、字段、状态与约束，不修改数据库基线。

@@ -7,7 +7,7 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.model.custody.TenantRecord;
-import com.surprising.wallet.repository.Evm7702CollectionRepository;
+import com.surprising.wallet.repository.Evm7702AccountRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
@@ -54,11 +54,11 @@ public class CustodyAddressService {
     private final CustodyTenantChainService tenantChains;
     private final ObjectMapper objectMapper;
 
-    private final Evm7702CollectionRepository evm7702Repository;
+    private final Evm7702AccountRepository evmAccounts;
 
     public CustodyAddressService(CustodyTenantTableRepository tenants, ChainAddressRepository chainRepository,
                                  BlockchainRuntimeService runtime, CustodyTenantChainService tenantChains,
-                                 ObjectMapper objectMapper, Evm7702CollectionRepository evm7702Repository,
+                                 ObjectMapper objectMapper, Evm7702AccountRepository evmAccounts,
                                  CustodyAddressRepository addressRepository, CustodyGasAccountRepository gasAccounts,
                                  CustodyDerivationSubjectRepository subjects, CustodyAuditRepository audits,
                                  LedgerBalanceRepository balances) {
@@ -67,7 +67,7 @@ public class CustodyAddressService {
         this.runtime = runtime;
         this.tenantChains = tenantChains;
         this.objectMapper = objectMapper;
-        this.evm7702Repository = evm7702Repository;
+        this.evmAccounts = evmAccounts;
         this.addressRepository = addressRepository;
         this.gasAccounts = gasAccounts;
         this.subjects = subjects;
@@ -156,7 +156,7 @@ public class CustodyAddressService {
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
         if (inserted != 1) throw new IllegalStateException("failed to create custody address");
         if ("evm".equalsIgnoreCase(runtimeChain.family())) {
-            evm7702Repository.createAccountProjection(
+            evmAccounts.createProjection(
                     tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress());
         }
         AddressView result = toView(addressRepository.require(tenant.id(), addressId));

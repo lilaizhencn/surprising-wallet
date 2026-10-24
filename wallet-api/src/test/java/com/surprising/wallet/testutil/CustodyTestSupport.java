@@ -15,7 +15,7 @@ public final class CustodyTestSupport {
         return new com.surprising.wallet.service.CustodyAddressService(new CustodyTenantTableRepository(jdbc),
                 new ChainAddressRepository(jdbc), runtime, tenantChains,
                 new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper(),
-                new Evm7702CollectionRepository(jdbc), new CustodyAddressRepository(jdbc),
+                new Evm7702AccountRepository(jdbc), new CustodyAddressRepository(jdbc),
                 new CustodyGasAccountRepository(jdbc), new CustodyDerivationSubjectRepository(jdbc),
                 new CustodyAuditRepository(jdbc), new LedgerBalanceRepository(jdbc));
     }
@@ -132,4 +132,70 @@ public final class CustodyTestSupport {
                 new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
     }
 
+
+    public static com.surprising.wallet.coordinator.Evm7702CollectionCoordinator evmCollections(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.coordinator.Evm7702CollectionCoordinator(
+                new Evm7702AccountRepository(jdbc),
+                new ChainAddressRepository(jdbc),
+                new ChainProfileRepository(jdbc),
+                new EvmCollectionBatchRepository(jdbc),
+                new EvmCollectionBatchItemRepository(jdbc),
+                new EvmCollectionBatchAttemptRepository(jdbc),
+                new CollectionRecordRepository(jdbc),
+                new CustodyAddressRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc),
+                new ChainAssetRepository(jdbc),
+                new TokenConfigRepository(jdbc),
+                gasAccounting(jdbc),
+                new EvmNonceRepository(jdbc),
+                new com.surprising.wallet.service.Evm7702ConfigurationService(new Evm7702ConfigRepository(jdbc), new ChainAddressRepository(jdbc)),
+                new Evm7702ConfigRepository(jdbc));
+    }
+  public static com.surprising.wallet.service.Evm7702CollectionWorkflowService evmCollectionWorkflow(JdbcTemplate jdbc,
+          com.surprising.wallet.coordinator.Evm7702CollectionCoordinator coordinator,
+          com.surprising.wallet.chain.evm.Evm7702RpcClient rpc,
+          com.surprising.wallet.service.AccountSecp256k1KeyService keys,
+          com.surprising.wallet.service.CustodyCryptoService crypto,
+          com.surprising.wallet.service.WalletRuntimeConfigService runtime) {
+      return new com.surprising.wallet.service.Evm7702CollectionWorkflowService(
+              new EvmCollectionBatchRepository(jdbc), new EvmCollectionBatchItemRepository(jdbc),
+              new EvmCollectionBatchAttemptRepository(jdbc), new Evm7702ConfigRepository(jdbc),
+              coordinator, new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
+              rpc, keys, crypto, runtime);
+  }
+
+    public static com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator evmWithdrawals(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator(
+                new Evm7702ConfigRepository(jdbc),
+                new ChainProfileRepository(jdbc),
+                new WithdrawalOrderRepository(jdbc),
+                new CustodyWithdrawalRepository(jdbc),
+                new ChainAssetRepository(jdbc),
+                new TokenConfigRepository(jdbc),
+                new ChainAddressRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc),
+                new CustodyAddressRepository(jdbc),
+                new EvmWithdrawalBatchRepository(jdbc),
+                new EvmWithdrawalBatchItemRepository(jdbc),
+                new EvmWithdrawalBatchAttemptRepository(jdbc),
+                new Evm7702PayoutAccountRepository(jdbc),
+                gasAccounting(jdbc),
+                new CustodyGasUsageRepository(jdbc),
+                new LedgerBalanceRepository(jdbc),
+                new EvmNonceRepository(jdbc),
+                settlements(jdbc),
+                new com.surprising.wallet.service.Evm7702ConfigurationService(new Evm7702ConfigRepository(jdbc), new ChainAddressRepository(jdbc)));
+    }
+  public static com.surprising.wallet.service.Evm7702WithdrawalWorkflowService evmWithdrawalWorkflow(JdbcTemplate jdbc,
+          com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator coordinator,
+          com.surprising.wallet.chain.evm.Evm7702RpcClient rpc,
+          com.surprising.wallet.service.AccountSecp256k1KeyService keys,
+          com.surprising.wallet.service.CustodyCryptoService crypto,
+          com.surprising.wallet.service.WalletRuntimeConfigService runtime) {
+      return new com.surprising.wallet.service.Evm7702WithdrawalWorkflowService(
+              new EvmWithdrawalBatchRepository(jdbc), new EvmWithdrawalBatchItemRepository(jdbc),
+              new EvmWithdrawalBatchAttemptRepository(jdbc), new Evm7702ConfigRepository(jdbc),
+              coordinator, new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
+              rpc, keys, crypto, runtime);
+  }
 }

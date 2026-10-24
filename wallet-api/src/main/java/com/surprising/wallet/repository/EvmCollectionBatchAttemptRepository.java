@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigInteger;
 import java.util.List;
-import java.util.Map;
+import com.surprising.wallet.chain.model.EvmBroadcastAttempt;
 import java.util.UUID;
 
 /** evm_collection_batch_attempt 单表仓储。 */
@@ -68,16 +68,19 @@ public class EvmCollectionBatchAttemptRepository {
     }
 
     /** 查询需要重播的未知尝试。 */
-    public List<Map<String, Object>> listUnknown(List<UUID> batchIds, int limit) {
+    public List<EvmBroadcastAttempt> listUnknown(List<UUID> batchIds, int limit) {
         if (batchIds.isEmpty()) return List.of();
-        return jdbc.queryForList("""
+        return jdbc.query("""
                 select tenant_id, batch_id, tx_hash, signed_tx_ciphertext, rebroadcast_count,
                        last_rebroadcast_at, created_at
                   from evm_collection_batch_attempt
                  where batch_id = any (?) and status = 'UNKNOWN'
                    and (last_rebroadcast_at is null or last_rebroadcast_at < now() - interval '30 seconds')
                  order by coalesce(last_rebroadcast_at, created_at), batch_id, tx_hash limit ?
-                """, new SqlArrayValue("uuid", batchIds.toArray()), Math.min(Math.max(limit, 1), 100));
+                """, (rs, row) -> new EvmBroadcastAttempt(rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("batch_id", UUID.class), rs.getString("tx_hash"),
+                        rs.getString("signed_tx_ciphertext"), rs.getInt("rebroadcast_count")),
+                new SqlArrayValue("uuid", batchIds.toArray()), Math.min(Math.max(limit, 1), 100));
     }
 
     /** 记录未知尝试重播。 */

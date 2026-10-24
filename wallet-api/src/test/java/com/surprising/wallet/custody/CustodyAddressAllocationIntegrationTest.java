@@ -36,7 +36,7 @@ class CustodyAddressAllocationIntegrationTest {
     private UUID tenant;
     private CustodyPrincipal principal;
     private CustodyAddressService service;
-    private Evm7702CollectionRepository projections;
+    private Evm7702AccountRepository projections;
     private BlockchainRuntimeService runtime;
 
     @Configuration(proxyBeanMethods = false) @EnableTransactionManagement
@@ -63,7 +63,7 @@ class CustodyAddressAllocationIntegrationTest {
                     .ownerAddress(address).derivationPath("test-path").walletRole("DEPOSIT").enabled(true).build());
             return Address.builder().address(address).index(Math.toIntExact(child)).build();
         });
-        projections = mock(Evm7702CollectionRepository.class);
+        projections = mock(Evm7702AccountRepository.class);
         var chains = mock(CustodyTenantChainService.class);
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
@@ -102,12 +102,12 @@ class CustodyAddressAllocationIntegrationTest {
         assertEquals(1, rows("custody_derivation_subject"));
         assertEquals(1, rows("custody_audit_log"));
         verify(runtime, times(1)).generateDepositAddressAtIndex(eq("ETH"), anyLong(), anyInt(), eq(2L));
-        verify(projections, times(1)).createAccountProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
+        verify(projections, times(1)).createProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
     }
 
     @Test void projectionFailureRollsBackAllocationAndAllowsACleanRetry() {
         doThrow(new IllegalStateException("projection unavailable")).when(projections)
-                .createAccountProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
+                .createProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
         assertThrows(IllegalStateException.class, () -> service.create(principal, command(), "API", "127.0.0.1"));
         assertNoAllocation();
         reset(projections);

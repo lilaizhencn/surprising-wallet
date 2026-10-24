@@ -24,8 +24,6 @@ import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
-import com.surprising.wallet.repository.Evm7702CollectionRepository;
-import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WalletSystemConfigRepository;
@@ -129,7 +127,7 @@ class Evm7702ProductionFlowIntegrationTest {
     /**
      * 保存 {@code collectionRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
-    private Evm7702CollectionRepository collectionRepository;
+    private org.springframework.context.annotation.AnnotationConfigApplicationContext transactionContext;
     /**
      * 保存 {@code workflow}，用于承载当前测试夹具的配置或运行数据。
      */
@@ -150,7 +148,6 @@ class Evm7702ProductionFlowIntegrationTest {
      */
     private Evm7702WithdrawalWorkflowService withdrawalWorkflow;
     /** 保存 EIP-7702 提现仓储，用于验证批量提现运行目标发现。 */
-    private Evm7702WithdrawalRepository withdrawalRepository;
     /**
      * 保存 {@code reconciliationJob}，用于承载当前测试夹具的配置或运行数据。
      */
@@ -254,44 +251,30 @@ class Evm7702ProductionFlowIntegrationTest {
                 com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
                 new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
                 new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc), new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc));
-        collectionRepository = new Evm7702CollectionRepository(jdbc);
-        Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(collectionRepository,
-                com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc),
-                chainRepository.chainProfileRepository,
-                chainRepository.chainAssetRepository, new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
-        workflow = new Evm7702CollectionWorkflowService(
-                collectionRepository,
-                coordinator,
-                chainRepository.chainProfileRepository,
-                chainRepository.chainAssetRepository,
-                new com.surprising.wallet.chain.evm.Evm7702RpcClient(rpcNodes, httpServices),
-                keyService,
-                crypto,
-                runtimeConfig);
-        withdrawalRepository = new Evm7702WithdrawalRepository(jdbc, collectionRepository);
-        Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
-                withdrawalRepository,
-                com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc),
-                chainRepository.ledgerBalanceRepository,
-                chainRepository.chainProfileRepository,
-                chainRepository.chainAssetRepository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
-                new com.surprising.wallet.repository.EvmNonceRepository(jdbc), new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc));
-        withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
-                withdrawalRepository,
-                withdrawalCoordinator,
-                chainRepository.chainProfileRepository,
-                chainRepository.chainAssetRepository,
-                new com.surprising.wallet.chain.evm.Evm7702RpcClient(rpcNodes, httpServices),
-                keyService,
-                crypto,
-                runtimeConfig);
+        transactionContext = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
+        transactionContext.register(Transactions.class);
+        transactionContext.registerBean(org.springframework.transaction.PlatformTransactionManager.class,
+                () -> new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        transactionContext.registerBean(Evm7702CollectionCoordinator.class,
+                () -> com.surprising.wallet.testutil.CustodyTestSupport.evmCollections(jdbc));
+        transactionContext.registerBean(Evm7702WithdrawalCoordinator.class,
+                () -> com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawals(jdbc));
+        var withdrawalTarget = withdrawalService;
+        transactionContext.registerBean(CustodyWithdrawalService.class, () -> withdrawalTarget);
+        transactionContext.refresh();
+        withdrawalService = transactionContext.getBean(CustodyWithdrawalService.class);
+        var evmRpc = new com.surprising.wallet.chain.evm.Evm7702RpcClient(rpcNodes, httpServices);
+        workflow = com.surprising.wallet.testutil.CustodyTestSupport.evmCollectionWorkflow(jdbc,
+                transactionContext.getBean(Evm7702CollectionCoordinator.class), evmRpc, keyService, crypto, runtimeConfig);
+        withdrawalWorkflow = com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawalWorkflow(jdbc,
+                transactionContext.getBean(Evm7702WithdrawalCoordinator.class), evmRpc, keyService, crypto, runtimeConfig);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
                 com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc, objectMapper));
     }
 
     @AfterEach
     void tearDown() {
+        if (transactionContext != null) transactionContext.close();
         if (httpServices != null) {
             httpServices.close();
         }
@@ -348,10 +331,14 @@ class Evm7702ProductionFlowIntegrationTest {
                     """, UUID.randomUUID(), chain, chainId, delegate, delegateHash,
                     collector, collectorHash, payoutDelegate, payoutDelegateHash,
                     relayerChainAddressId, relayer.getAddress());
-            assertEquals(List.of(new Evm7702CollectionRepository.RuntimeTarget(chain, "local", true)),
-                    collectionRepository.listRuntimeTargets());
-            assertEquals(List.of(new Evm7702WithdrawalRepository.RuntimeTarget(chain, "local", true)),
-                    withdrawalRepository.listRuntimeTargets());
+            var collectionTargets = workflow.listRuntimeTargets();
+            var withdrawalTargets = withdrawalWorkflow.listRuntimeTargets();
+            assertEquals(List.of(chain), collectionTargets.stream().map(target -> target.profile().getChain()).toList());
+            assertEquals(List.of(chain), withdrawalTargets.stream().map(target -> target.profile().getChain()).toList());
+            assertEquals("local", collectionTargets.getFirst().profile().getNetwork());
+            assertEquals("local", withdrawalTargets.getFirst().profile().getNetwork());
+            assertTrue(collectionTargets.getFirst().active());
+            assertTrue(withdrawalTargets.getFirst().active());
             configureToken("USDT", usdt.address());
             configureToken("USDC", usdc.address());
 
@@ -483,7 +470,12 @@ class Evm7702ProductionFlowIntegrationTest {
             String tokenPayoutTx = withdrawalWorkflow.processOne(profile).orElseThrow();
             simulateLostPayoutBroadcastResponse(tenantA.tenantId());
             withdrawalWorkflow.recoverUnknown(profile);
-            withdrawalWorkflow.confirm(profile);
+            jdbc.update("update chain_address set enabled=false where id=?", relayerChainAddressId);
+            try {
+                withdrawalWorkflow.confirm(profile);
+            } finally {
+                jdbc.update("update chain_address set enabled=true where id=?", relayerChainAddressId);
+            }
             reconciliationJob.reconcile();
             assertSharedConfirmedPayout(tokenPayoutTx, tokenWithdrawalOne, tokenWithdrawalTwo);
             assertEquals(new BigInteger("1000000"), tokenBalance(web3j, recipientOne));
@@ -843,7 +835,7 @@ class Evm7702ProductionFlowIntegrationTest {
             long chainAddressId = insertChainAddress(record, tenantId);
             UUID custodyId = insertCustodyAddress(
                     tenantId, chainAddressId, credentials.getAddress(), slug + "-user-" + index, index);
-            collectionRepository.createAccountProjection(
+            new com.surprising.wallet.repository.Evm7702AccountRepository(jdbc).createProjection(
                     tenantId, custodyId, chain, "local", credentials.getAddress());
             BigInteger amount = BigInteger.valueOf((index + 1L) * 10_000_000L);
             authorities.add(new AuthorityFixture(
@@ -1254,4 +1246,7 @@ class Evm7702ProductionFlowIntegrationTest {
             UUID tenantId, UUID custodyWithdrawalId, long orderId, String orderNo,
             String assetSymbol, String recipient, BigDecimal amount) {
     }
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    @org.springframework.transaction.annotation.EnableTransactionManagement
+    static class Transactions { }
 }

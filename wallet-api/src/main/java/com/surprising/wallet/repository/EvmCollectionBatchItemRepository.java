@@ -64,11 +64,13 @@ public class EvmCollectionBatchItemRepository {
     }
 
     /** 查询批次项身份。 */
-    public List<Map<String, Object>> listIdentities(UUID tenantId, UUID batchId) {
-        return jdbc.queryForList("""
+    public List<Identity> listIdentities(UUID tenantId, UUID batchId) {
+        return jdbc.query("""
                 select item_index, authority_address, token_contract, recipient, requested_amount_atomic
                   from evm_collection_batch_item where tenant_id = ? and batch_id = ? order by item_index
-                """, tenantId, batchId);
+                """, (rs, row) -> new Identity(rs.getInt("item_index"), rs.getString("authority_address"),
+                        rs.getString("token_contract"), rs.getString("recipient"),
+                        rs.getBigDecimal("requested_amount_atomic").toBigIntegerExact()), tenantId, batchId);
     }
 
     /** 查询批次关联的归集记录主键。 */
@@ -140,4 +142,5 @@ public class EvmCollectionBatchItemRepository {
                  where tenant_id = ? and batch_id = ? and item_index = ? and status = 'CREATED'
                 """, status, errorCode, tenantId, batchId, itemIndex);
     }
+    public record Identity(int itemIndex, String authority, String token, String recipient, BigInteger amount) { }
 }
