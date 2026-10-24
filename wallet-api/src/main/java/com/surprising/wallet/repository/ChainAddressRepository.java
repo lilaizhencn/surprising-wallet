@@ -4,7 +4,6 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,24 +59,15 @@ public class ChainAddressRepository {
                 """, chain, symbol).isEmpty();
     }
 
-    /** 查询租户链地址。 */
-    public Optional<Map<String, Object>> findByTenantAndId(UUID tenantId, long id) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                select id, chain, asset_symbol, account_id, user_id, biz, address_index,
-                       address, owner_address, derivation_path, wallet_role, enabled, tenant_id
-                  from chain_address
-                 where tenant_id = ? and id = ?
-                """, tenantId, id);
-        return rows.stream().findFirst();
-    }
+
 
     /** 按主键查询链地址。 */
-    public Optional<Map<String, Object>> findById(long id) {
-        return jdbc.queryForList("""
+    public Optional<ChainAddressRecord> findById(long id) {
+        return jdbc.query("""
                 select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address where id = ?
-                """, id).stream().findFirst();
+                """, (rs, rowNum) -> map(rs), id).stream().findFirst();
     }
 
     /** 查询租户在指定链上启用的地址文本。 */
@@ -225,25 +215,9 @@ public class ChainAddressRepository {
                 .enabled(rs.getBoolean("enabled")).build();
     }
 
-    /** 将单表查询结果转换为链地址模型。 */
-    public static ChainAddressRecord mapRow(Map<String, Object> row) {
-        return ChainAddressRecord.builder()
-                .id(number(row.get("id"), Long.class)).tenantId((UUID) row.get("tenant_id"))
-                .chain((String) row.get("chain")).assetSymbol((String) row.get("asset_symbol"))
-                .accountId((String) row.get("account_id")).userId(number(row.get("user_id"), Long.class))
-                .biz(number(row.get("biz"), Integer.class)).addressIndex(number(row.get("address_index"), Long.class))
-                .address((String) row.get("address")).ownerAddress((String) row.get("owner_address"))
-                .derivationPath((String) row.get("derivation_path")).walletRole((String) row.get("wallet_role"))
-                .enabled((Boolean) row.get("enabled")).build();
-    }
 
-    /** 安全转换单表数字字段。 */
-    private static <T extends Number> T number(Object value, Class<T> type) {
-        if (value == null) return null;
-        Number number = (Number) value;
-        if (type == Long.class) return type.cast(number.longValue());
-        return type.cast(number.intValue());
-    }
+
+
 
     /** 查询租户的全部链地址字段，供服务层在 Java 中完成关联组合。 */
     public List<Map<String, Object>> listByTenant(UUID tenantId) {

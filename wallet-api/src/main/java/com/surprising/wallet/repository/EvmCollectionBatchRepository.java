@@ -4,15 +4,20 @@ import com.surprising.wallet.model.custody.GasOperationReference;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import java.sql.SQLException;
+import java.sql.ResultSet;
 
 /** evm_collection_batch 单表仓储。 */
 @Repository
 public class EvmCollectionBatchRepository {
+    private static final String COLUMNS = """
+            id, tenant_id, chain, network, asset_symbol, token_contract, token_decimals, hot_wallet,
+            delegate_version, batch_hash, canonical_tx_hash, status
+            """;
     public Optional<GasOperationReference> lockGasOperation(UUID tenantId, UUID id) {
         return jdbc.query("select chain, id::text as reference_no from evm_collection_batch where tenant_id=? and id=? for update",
                 (rs, rowNum) -> new GasOperationReference(
@@ -94,30 +99,26 @@ public class EvmCollectionBatchRepository {
     }
 
     /** 查询归集批次。 */
-    public List<Map<String, Object>> find(UUID tenantId, UUID batchId) {
-        return jdbc.queryForList("""
-                select tenant_id, id, chain, network, delegate_version, canonical_tx_hash, status,
-                       asset_symbol, token_contract, token_decimals, hot_wallet, batch_hash
-                  from evm_collection_batch where tenant_id = ? and id = ?
-                """, tenantId, batchId);
+    public Optional<BatchRow> find(UUID tenantId, UUID batchId) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_collection_batch where tenant_id = ? and id = ?
+                """, EvmCollectionBatchRepository::mapBatch, tenantId, batchId).stream().findFirst();
     }
 
     /** 查询待确认归集批次。 */
-    public List<Map<String, Object>> listPending(String chain, String network, int limit) {
-        return jdbc.queryForList("""
-                select tenant_id, id, canonical_tx_hash, status, chain, network, delegate_version
-                  from evm_collection_batch where chain = ? and network = ?
-                   and status in ('SUBMITTED', 'CONFIRMING') order by submitted_at, id limit ?
-                """, chain, network, Math.min(Math.max(limit, 1), 200));
+    public List<BatchRow> listPending(String chain, String network, int limit) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_collection_batch where chain = ? and network = ? and status in ('SUBMITTED', 'CONFIRMING')
+                 order by submitted_at, id limit ?
+                """, EvmCollectionBatchRepository::mapBatch, chain, network, Math.min(Math.max(limit, 1), 200));
     }
 
     /** 查询广播未知批次。 */
-    public List<Map<String, Object>> listBroadcastUnknown(String chain, String network) {
+    public List<UUID> listBroadcastUnknown(String chain, String network) {
         return jdbc.queryForList("""
-                select tenant_id, id, chain, network, status
-                  from evm_collection_batch
+                select id from evm_collection_batch
                  where chain = ? and network = ? and status = 'BROADCAST_UNKNOWN'
-                """, chain, network);
+                """, UUID.class, chain, network);
     }
 
     /** 更新归集批次完成结果。 */
@@ -143,4 +144,32 @@ public class EvmCollectionBatchRepository {
                  where tenant_id = ? and id = ? and status in ('LOCKED', 'SIGNING')
                 """, errorCode, errorMessage, tenantId, batchId);
     }
+public record BatchRow(UUID id,
+        UUID tenantId,
+        String chain,
+        String network,
+        String assetSymbol,
+        String tokenContract,
+        int tokenDecimals,
+        String hotWallet,
+        int delegateVersion,
+        String batchHash,
+        String canonicalTxHash,
+        String status) { }
+
+private static BatchRow mapBatch(ResultSet rs, int rowNum) throws SQLException {
+    return new BatchRow(rs.getObject("id", UUID.class),
+            rs.getObject("tenant_id", UUID.class),
+            rs.getString("chain"),
+            rs.getString("network"),
+            rs.getString("asset_symbol"),
+            rs.getString("token_contract"),
+            rs.getInt("token_decimals"),
+            rs.getString("hot_wallet"),
+            rs.getInt("delegate_version"),
+            rs.getString("batch_hash"),
+            rs.getString("canonical_tx_hash"),
+            rs.getString("status"));
+}
+
 }

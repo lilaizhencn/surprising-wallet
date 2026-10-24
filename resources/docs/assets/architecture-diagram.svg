@@ -235,7 +235,7 @@
   <rect x="30" y="1880" width="1040" height="155" rx="8" fill="#eff6ff" stroke="#2563eb"/>
   <text x="50" y="1908" style="font:13px sans-serif;fill:#1e293b">EIP-7702：工作流直接查询；现有协调器拥有批次状态与账务事务</text>
   <text x="50" y="1942" style="font:13px sans-serif;fill:#1e293b">Coordinator → 单表批次 / 项目 / 尝试 / 订单 / Nonce / Gas；删除两层业务仓储</text>
-  <text x="50" y="1976" style="font:13px sans-serif;fill:#1e293b">ConfigurationService 只校验新配置与中继路径；配置单表唯一类型映射</text>
+  <text x="50" y="1976" style="font:13px sans-serif;fill:#1e293b">配置 / 批次 / 订单 / 地址统一类型读取；Coordinator 保留跨表事务与身份校验</text>
   <text x="50" y="2010" style="font:13px sans-serif;fill:#1e293b">批次与尝试 UNKNOWN 共同回滚；历史回执按原版本确认，不依赖新签名开关</text>
   <rect x="30" y="2055" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
   <text x="50" y="2083" style="font:13px sans-serif;fill:#1e293b">租户链服务：类型化批量组合 / 一致快照 / 开关审计事务；移除三个业务仓储门面</text>

@@ -4,7 +4,6 @@ import com.surprising.wallet.model.custody.GasOperationReference;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,14 +59,9 @@ public class CustodyWithdrawalRepository {
     }
 
     /** 按订单查询托管提现单表字段。 */
-    public List<Map<String, Object>> listByOrder(UUID tenantId, long withdrawalOrderId) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, order_no, external_reference,
-                       chain, asset_symbol, to_address, amount, fee, status,
-                       withdrawal_order_id
-                  from custody_withdrawal
-                 where tenant_id = ? and withdrawal_order_id = ?
-                """, tenantId, withdrawalOrderId);
+    public List<StatusRow> listByOrder(UUID tenantId, long withdrawalOrderId) {
+        return jdbc.query("select " + STATUS_COLUMNS + " from custody_withdrawal where tenant_id = ? and withdrawal_order_id = ?",
+                CustodyWithdrawalRepository::mapStatusRow, tenantId, withdrawalOrderId);
     }
 
     /** 按租户和主键查询托管提现记录。 */

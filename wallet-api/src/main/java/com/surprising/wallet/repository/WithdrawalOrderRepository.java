@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,6 +16,10 @@ import org.springframework.stereotype.Repository;
 /** withdrawal_order 单表仓储。 */
 @Repository
 public class WithdrawalOrderRepository {
+    private static final String COLUMNS = """
+            id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+            amount, fee, tx_hash, status, error_message, created_at, updated_at
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -302,23 +305,17 @@ public class WithdrawalOrderRepository {
     }
 
     /** 查询待 EVM 批量提现的订单，仅锁定提现订单单表行。 */
-    public List<Map<String, Object>> listClaimable(String chain, int limit) {
-        return jdbc.queryForList("""
-                select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address,
-                       to_address, amount, fee, debit_account_id, status, created_at
-                  from withdrawal_order
-                 where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
+    public List<WithdrawalOrderRecord> listClaimable(String chain, int limit) {
+        return jdbc.query("select " + COLUMNS + """
+                 from withdrawal_order where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
                  order by id limit ? for update skip locked
-                """, chain, Math.min(Math.max(limit, 1), 500));
+                """, (rs, rowNum) -> map(rs), chain, Math.min(Math.max(limit, 1), 500));
     }
 
     /** 按租户和主键查询提现订单单表字段。 */
-    public Optional<Map<String, Object>> findById(UUID tenantId, long id) {
-        return jdbc.queryForList("""
-                select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address,
-                       to_address, amount, fee, debit_account_id, status, tx_hash, error_message
-                  from withdrawal_order where tenant_id = ? and id = ?
-                """, tenantId, id).stream().findFirst();
+    public Optional<WithdrawalOrderRecord> findById(UUID tenantId, long id) {
+        return jdbc.query("select " + COLUMNS + " from withdrawal_order where tenant_id = ? and id = ?",
+                (rs, rowNum) -> map(rs), tenantId, id).stream().findFirst();
     }
 
     /** 按主键领取提现订单。 */

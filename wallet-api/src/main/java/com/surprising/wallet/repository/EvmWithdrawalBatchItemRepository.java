@@ -3,15 +3,17 @@ package com.surprising.wallet.repository;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-
 import java.math.BigInteger;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /** evm_withdrawal_batch_item 单表仓储。 */
 @Repository
 public class EvmWithdrawalBatchItemRepository {
+    private static final String COLUMNS = """
+            tenant_id, batch_id, item_index, withdrawal_order_id, custody_withdrawal_id,
+            withdrawal_id_hash, token_contract, recipient, requested_amount_atomic, status
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -21,11 +23,11 @@ public class EvmWithdrawalBatchItemRepository {
     }
 
     /** 查询订单关联的已提交提现批次项。 */
-    public List<Map<String, Object>> listSubmittedByWithdrawal(UUID tenantId, long withdrawalOrderId) {
+    public List<UUID> listSubmittedByWithdrawal(UUID tenantId, long withdrawalOrderId) {
         return jdbc.queryForList("""
-                select batch_id, status from evm_withdrawal_batch_item
+                select batch_id from evm_withdrawal_batch_item
                  where tenant_id = ? and withdrawal_order_id = ? and status = 'SUBMITTED'
-                """, tenantId, withdrawalOrderId);
+                """, UUID.class, tenantId, withdrawalOrderId);
     }
 
     /** 创建提现批次项。 */
@@ -58,13 +60,11 @@ public class EvmWithdrawalBatchItemRepository {
     }
 
     /** 查询批次项单表字段。 */
-    public List<Map<String, Object>> listByBatch(UUID tenantId, UUID batchId) {
-        return jdbc.queryForList("""
-                select tenant_id, item_index, withdrawal_order_id, custody_withdrawal_id,
-                       withdrawal_id_hash, token_contract, recipient, requested_amount_atomic, status
-                  from evm_withdrawal_batch_item
+    public List<Item> listByBatch(UUID tenantId, UUID batchId) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_withdrawal_batch_item
                  where tenant_id = ? and batch_id = ? order by item_index
-                """, tenantId, batchId);
+                """, EvmWithdrawalBatchItemRepository::mapItem, tenantId, batchId);
     }
 
     /** 判断批次是否仍有需要收敛的预广播失败项。 */
@@ -107,13 +107,11 @@ public class EvmWithdrawalBatchItemRepository {
     }
 
     /** 查询未广播批次项。 */
-    public List<Map<String, Object>> listCreated(UUID tenantId, UUID batchId) {
-        return jdbc.queryForList("""
-                select item_index, withdrawal_order_id, status
-                  from evm_withdrawal_batch_item
-                 where tenant_id = ? and batch_id = ? and status = 'CREATED'
-                 order by item_index
-                """, tenantId, batchId);
+    public List<Item> listCreated(UUID tenantId, UUID batchId) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_withdrawal_batch_item
+                 where tenant_id = ? and batch_id = ? and status = 'CREATED' order by item_index
+                """, EvmWithdrawalBatchItemRepository::mapItem, tenantId, batchId);
     }
 
     /** 将未广播批次项标记为可重试。 */
@@ -133,4 +131,15 @@ public class EvmWithdrawalBatchItemRepository {
                    and status in ('CREATED', 'SIGNED', 'RETRYABLE')
                 """, code, tenantId, batchId, itemIndex);
     }
+public record Item(UUID tenantId, UUID batchId, int itemIndex, long withdrawalOrderId,
+                   UUID custodyWithdrawalId, String withdrawalIdHash, String tokenContract,
+                   String recipient, BigInteger requestedAmountAtomic, String status) { }
+
+private static Item mapItem(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+    return new Item(rs.getObject("tenant_id", UUID.class), rs.getObject("batch_id", UUID.class),
+            rs.getInt("item_index"), rs.getLong("withdrawal_order_id"), rs.getObject("custody_withdrawal_id", UUID.class),
+            rs.getString("withdrawal_id_hash"), rs.getString("token_contract"), rs.getString("recipient"),
+            rs.getBigDecimal("requested_amount_atomic").toBigIntegerExact(), rs.getString("status"));
+}
+
 }

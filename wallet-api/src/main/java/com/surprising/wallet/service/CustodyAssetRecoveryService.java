@@ -16,7 +16,6 @@ import com.surprising.wallet.repository.CustodyAssetRecoveryRepository.RecoveryR
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -320,13 +319,13 @@ public class CustodyAssetRecoveryService {
         for (Map<String, Object> custodyRow : custodyAddressRepository.listByTenantAndAddress(
                 tenantId, destinationAddress, preferredChain)) {
             long chainAddressId = ((Number) custodyRow.get("chain_address_id")).longValue();
-            chainAddressRepository.findByTenantAndId(tenantId, chainAddressId).ifPresent(address ->
+            chainAddressRepository.findOwned(tenantId, chainAddressId).ifPresent(address ->
                     owners.add(new Ownership(
-                            (UUID) custodyRow.get("id"), string(address.get("account_id")),
-                            longValue(address.get("user_id")), intValue(address.get("biz")),
-                            longValue(address.get("address_index")), string(address.get("address")),
-                            nullable(address.get("owner_address")), string(address.get("derivation_path")),
-                            string(address.get("wallet_role")))));
+                            (UUID) custodyRow.get("id"), string(address.getAccountId()),
+                            address.getUserId().longValue(), address.getBiz(),
+                            address.getAddressIndex().longValue(), string(address.getAddress()),
+                            nullable(address.getOwnerAddress()), string(address.getDerivationPath()),
+                            string(address.getWalletRole()))));
         }
         if (owners.isEmpty()) {
             throw new IllegalArgumentException(

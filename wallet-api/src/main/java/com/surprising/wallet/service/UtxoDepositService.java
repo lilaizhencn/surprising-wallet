@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
-
 import java.util.Objects;
 import java.util.UUID;
 
@@ -93,7 +92,7 @@ public class UtxoDepositService {
 
     private boolean isCollectionAddress(UUID tenant, String chain, String address) {
         return gasAccounts.listActiveByTenantAndChain(tenant, chain).stream()
-                .map(row -> (UUID) row.get("custody_address_id"))
+                .map(row -> row.custodyAddressId())
                 .map(id -> custodyAddresses.findFullByTenantAndId(tenant, id))
                 .flatMap(java.util.Optional::stream)
                 .anyMatch(row -> row.status().equals("ACTIVE") && row.address().equalsIgnoreCase(address));

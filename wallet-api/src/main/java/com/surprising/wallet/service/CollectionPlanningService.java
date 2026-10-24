@@ -112,11 +112,11 @@ public class CollectionPlanningService {
             return Optional.empty();
         }
         return gasAccounts.listActiveByTenantAndChain(tenantId, chain).stream()
-                .map(row -> (UUID) row.get("custody_address_id"))
-                .map(id -> custodyAddresses.findByTenantAndId(tenantId, id))
+                .map(row -> row.custodyAddressId())
+                .map(id -> custodyAddresses.findFullByTenantAndId(tenantId, id))
                 .flatMap(Optional::stream)
-                .filter(row -> "ACTIVE".equalsIgnoreCase(String.valueOf(row.get("status"))))
-                .map(row -> String.valueOf(row.get("address")))
+                .filter(row -> "ACTIVE".equalsIgnoreCase(String.valueOf(row.status())))
+                .map(row -> String.valueOf(row.address()))
                 .findFirst();
     }
 }

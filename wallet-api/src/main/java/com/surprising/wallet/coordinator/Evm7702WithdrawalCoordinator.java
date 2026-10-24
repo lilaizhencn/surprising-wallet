@@ -15,7 +15,6 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +27,7 @@ import com.surprising.wallet.service.Evm7702ConfigurationService;
 import com.surprising.wallet.repository.Evm7702ConfigRepository.Configuration;
 import com.surprising.wallet.chain.model.EvmBroadcastAttempt;
 import lombok.RequiredArgsConstructor;
+import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 
 /**
  * EIP-7702 提现批次事务：领取、签名事实、状态转换与资金结算共同提交或回滚。
@@ -173,20 +173,20 @@ public class Evm7702WithdrawalCoordinator {
             throw new IllegalStateException("payout batch completion transition failed");
         }
         batchAttemptRepository.markConfirmed(batch.tenantId(), batch.batchId(), txHash);
-        Map<String, Object> row = batchRepository.find(batch.tenantId(), batch.batchId()).stream().findFirst().orElseThrow();
+        var row = batchRepository.find(batch.tenantId(), batch.batchId()).orElseThrow();
         payoutAccountRepository.markCompleted(
                 batch.tenantId(),
-                (String) row.get("chain"),
-                Boolean.TRUE.equals(row.get("authorization_included")),
-                numberOrNull(row.get("authorization_nonce")),
-                numberOrNull(row.get("operation_nonce")).add(BigInteger.ONE),
+                row.chain(),
+                Boolean.TRUE.equals(row.authorizationIncluded()),
+                row.authorizationNonce(),
+                row.operationNonce().add(BigInteger.ONE),
                 txHash,
                 runtimeConfigRepository.find(
-                        (String) row.get("chain"),
-                        (String) row.get("network"),
+                        row.chain(),
+                        row.network(),
                         null,
-                        ((Number) row.get("delegate_version")).intValue()).getFirst().payoutDelegateAddress(),
-                ((Number) row.get("delegate_version")).intValue());
+                        row.delegateVersion()).getFirst().payoutDelegateAddress(),
+                row.delegateVersion());
         gasAccounting.settle(batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(), actualFee, "EVM_RECEIPT", txHash);
     }
 
@@ -250,21 +250,21 @@ public class Evm7702WithdrawalCoordinator {
             throw new IllegalStateException("reverted payout batch completion transition failed");
         }
         batchAttemptRepository.markFailed(batch.tenantId(), batch.batchId(), txHash, "OUTER_REVERTED", errorHash);
-        Map<String, Object> row = batchRepository.find(batch.tenantId(), batch.batchId()).stream().findFirst().orElseThrow();
+        var row = batchRepository.find(batch.tenantId(), batch.batchId()).orElseThrow();
         String delegateAddress = runtimeConfigRepository.find(
-                (String) row.get("chain"),
-                (String) row.get("network"),
+                row.chain(),
+                row.network(),
                 null,
-                ((Number) row.get("delegate_version")).intValue()).getFirst().payoutDelegateAddress();
+                row.delegateVersion()).getFirst().payoutDelegateAddress();
         payoutAccountRepository.markReverted(
                 batch.tenantId(),
-                (String) row.get("chain"),
-                Boolean.TRUE.equals(row.get("authorization_included")),
-                numberOrNull(row.get("authorization_nonce")),
-                numberOrNull(row.get("operation_nonce")),
+                row.chain(),
+                Boolean.TRUE.equals(row.authorizationIncluded()),
+                row.authorizationNonce(),
+                row.operationNonce(),
                 txHash,
                 delegateAddress,
-                ((Number) row.get("delegate_version")).intValue());
+                row.delegateVersion());
         gasAccounting.settle(batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(), actualFee, "EVM_REVERTED_RECEIPT", txHash);
     }
 
@@ -332,21 +332,21 @@ public class Evm7702WithdrawalCoordinator {
         }
         List<ChainAsset> assets = chainAssetRepository.listActiveByChain(chain);
         List<TokenConfiguration> tokens = tokenConfigRepository.listEnabled(chain, network);
-        List<Map<String, Object>> candidates = withdrawalOrderRepository.listClaimable(chain, 500);
+        var candidates = withdrawalOrderRepository.listClaimable(chain, 500);
         CandidateGroup group = null;
-        for (Map<String, Object> order : candidates) {
+        for (var order : candidates) {
             CandidateGroup candidate = mapCandidate(order, chain, assets, tokens);
             if (candidate == null) {
                 continue;
             }
-            Instant createdAt = ((Timestamp) order.get("created_at")).toInstant();
+            Instant createdAt = order.getCreatedAt();
             boolean oldEnough = !createdAt.isAfter(Instant.now().minusMillis(config.withdrawalMaxWaitMs()));
-            boolean sibling = candidates.stream().anyMatch(other -> !order.get("id").equals(other.get("id")) &&
+            boolean sibling = candidates.stream().anyMatch(other -> !order.getId().equals(other.getId()) &&
                     java.util.Objects.equals(
-                    order.get("tenant_id"),
-                    other.get("tenant_id")) &&
-                    String.valueOf(order.get("asset_symbol")).equalsIgnoreCase(String.valueOf(other.get("asset_symbol"))) &&
-                    String.valueOf(order.get("from_address")).equalsIgnoreCase(String.valueOf(other.get("from_address"))));
+                    order.getTenantId(),
+                    other.getTenantId()) &&
+                    String.valueOf(order.getAssetSymbol()).equalsIgnoreCase(String.valueOf(other.getAssetSymbol())) &&
+                    String.valueOf(order.getFromAddress()).equalsIgnoreCase(String.valueOf(other.getFromAddress())));
             if (oldEnough || sibling) {
                 group = candidate;
                 break;
@@ -356,20 +356,20 @@ public class Evm7702WithdrawalCoordinator {
             return Optional.empty();
         }
         List<ClaimedItem> items = new ArrayList<>();
-        for (Map<String, Object> order : candidates) {
-            if (!group.tenantId().equals(order.get("tenant_id")) ||
-                    !group.assetSymbol().equalsIgnoreCase(String.valueOf(order.get("asset_symbol"))) ||
-                    !group.hotWallet().equalsIgnoreCase(String.valueOf(order.get("from_address")))) {
+        for (var order : candidates) {
+            if (!group.tenantId().equals(order.getTenantId()) ||
+                    !group.assetSymbol().equalsIgnoreCase(String.valueOf(order.getAssetSymbol())) ||
+                    !group.hotWallet().equalsIgnoreCase(String.valueOf(order.getFromAddress()))) {
                 continue;
             }
-            List<Map<String, Object>> custodyRows = custodyWithdrawalRepository.listByOrder(
+            var custodyRows = custodyWithdrawalRepository.listByOrder(
                     group.tenantId(),
-                    ((Number) order.get("id")).longValue());
+                    order.getId());
             if (custodyRows.isEmpty()) {
                 continue;
             }
-            Map<String, Object> custody = custodyRows.get(0);
-            BigDecimal amount = (BigDecimal) order.get("amount");
+            var custody = custodyRows.get(0);
+            BigDecimal amount = order.getAmount();
             BigInteger atomic;
             try {
                 atomic = amount.movePointRight(group.decimals()).toBigIntegerExact();
@@ -379,17 +379,17 @@ public class Evm7702WithdrawalCoordinator {
             if (atomic.signum() <= 0) {
                 throw new IllegalStateException("withdrawal amount must be positive");
             }
-            UUID custodyWithdrawalId = (UUID) custody.get("id");
+            UUID custodyWithdrawalId = custody.id();
             items.add(new ClaimedItem(
-                    ((Number) order.get("id")).longValue(),
+                    order.getId(),
                     custodyWithdrawalId,
-                    (UUID) custody.get("custody_address_id"),
-                    (String) order.get("order_no"),
-                    (String) order.get("to_address"),
+                    custody.custodyAddressId(),
+                    order.getOrderNo(),
+                    order.getToAddress(),
                     amount,
-                    (BigDecimal) order.get("fee"),
+                    order.getFee(),
                     atomic,
-                    (String) order.get("debit_account_id"),
+                    order.getDebitAccountId(),
                     Numeric.hexStringToByteArray(withdrawalHash(group.tenantId(), custodyWithdrawalId))));
             if (items.size() >= config.withdrawalMaxBatchItems()) {
                 break;
@@ -498,8 +498,8 @@ public class Evm7702WithdrawalCoordinator {
         }
         batchAttemptRepository.markSubmitted(tenantId, batchId, txHash);
         batchItemRepository.markSubmitted(tenantId, batchId);
-        for (Map<String, Object> item : batchItemRepository.listByBatch(tenantId, batchId)) {
-            withdrawalOrderRepository.markSent(tenantId, ((Number) item.get("withdrawal_order_id")).longValue(), txHash);
+        for (var item : batchItemRepository.listByBatch(tenantId, batchId)) {
+            withdrawalOrderRepository.markSent(tenantId, item.withdrawalOrderId(), txHash);
         }
     }
 
@@ -524,14 +524,14 @@ public class Evm7702WithdrawalCoordinator {
             throw new IllegalStateException("signed payout batch cannot be released");
         }
         String text = truncate(message, 1000);
-        for (Map<String, Object> item : batchItemRepository.listCreated(batch.tenantId(), batch.id())) {
+        for (var item : batchItemRepository.listCreated(batch.tenantId(), batch.id())) {
             if (withdrawalOrderRepository.markRetrying(
                     batch.tenantId(),
-                    ((Number) item.get("withdrawal_order_id")).longValue(),
+                    item.withdrawalOrderId(),
                     text) != 1) {
                 throw new IllegalStateException("unbroadcast payout withdrawal retry transition failed");
             }
-            batchItemRepository.markRetryable(batch.tenantId(), batch.id(), ((Number) item.get("item_index")).intValue(), code);
+            batchItemRepository.markRetryable(batch.tenantId(), batch.id(), item.itemIndex(), code);
         }
         if (batchRepository.markFailedIfLocked(batch.tenantId(), batch.id(), code, text) != 1) {
             throw new IllegalStateException("unbroadcast payout batch failure transition failed");
@@ -546,12 +546,12 @@ public class Evm7702WithdrawalCoordinator {
     }
 
     private CandidateGroup mapCandidate(
-            Map<String, Object> order,
+            WithdrawalOrderRecord order,
             String chain,
             List<ChainAsset> assets,
             List<TokenConfiguration> tokens) {
-        UUID tenantId = (UUID) order.get("tenant_id");
-        String assetSymbol = String.valueOf(order.get("asset_symbol"));
+        UUID tenantId = order.getTenantId();
+        String assetSymbol = String.valueOf(order.getAssetSymbol());
         ChainAsset asset = assets.stream().filter(row -> assetSymbol.equalsIgnoreCase(row.getSymbol())).findFirst().orElse(null);
         if (asset == null) {
             return null;
@@ -564,14 +564,14 @@ public class Evm7702WithdrawalCoordinator {
         ChainAddressRecord hot = chainAddressRepository.findEnabledByTenantAndAddress(
                 tenantId,
                 chain,
-                String.valueOf(order.get("from_address"))).orElse(null);
-        if (hot == null || !hasActiveGasAddress(tenantId, chain, String.valueOf(order.get("from_address")))) {
+                String.valueOf(order.getFromAddress())).orElse(null);
+        if (hot == null || !hasActiveGasAddress(tenantId, chain, String.valueOf(order.getFromAddress()))) {
             return null;
         }
         return new CandidateGroup(
                 tenantId,
                 assetSymbol,
-                String.valueOf(order.get("from_address")),
+                String.valueOf(order.getFromAddress()),
                 nativeAsset ? "0x0000000000000000000000000000000000000000" : token.contractAddress(),
                 asset.getDecimals(),
                 hot);
@@ -581,13 +581,13 @@ public class Evm7702WithdrawalCoordinator {
      * 判断租户链上提现来源是否为启用的 Gas 托管地址。
      */
     private boolean hasActiveGasAddress(UUID tenantId, String chain, String address) {
-        for (Map<String, Object> gas : gasAccountRepository.listActiveByTenantAndChain(tenantId, chain)) {
-            Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(
+        for (var gas : gasAccountRepository.listActiveByTenantAndChain(tenantId, chain)) {
+            var custody = custodyAddressRepository.findFullByTenantAndId(
                     tenantId,
-                    (UUID) gas.get("custody_address_id")).orElse(null);
+                    gas.custodyAddressId()).orElse(null);
             if (custody != null &&
-                    "ACTIVE".equals(custody.get("status")) &&
-                    address.equalsIgnoreCase(String.valueOf(custody.get("address")))) {
+                    "ACTIVE".equals(custody.status()) &&
+                    address.equalsIgnoreCase(String.valueOf(custody.address()))) {
                 return true;
             }
         }
@@ -598,33 +598,26 @@ public class Evm7702WithdrawalCoordinator {
         return Numeric.toHexString(Hash.sha3((tenantId + ":WITHDRAWAL:" + custodyWithdrawalId).getBytes(StandardCharsets.UTF_8)));
     }
 
-    /**
-     * 将数据库数值安全转换为大整数。
-     */
-    private static BigInteger numberOrNull(Object value) {
-        return value == null ? null : ((BigDecimal) value).toBigIntegerExact();
-    }
-
     private List<BatchItemIdentity> listBatchItems(UUID tenantId, UUID batchId) {
         return batchItemRepository.listByBatch(tenantId, batchId).stream().map(item -> {
-            long orderId = ((Number) item.get("withdrawal_order_id")).longValue();
-            Map<String, Object> order = withdrawalOrderRepository.findById(tenantId, orderId).orElseThrow();
+            long orderId = item.withdrawalOrderId();
+            var order = withdrawalOrderRepository.findById(tenantId, orderId).orElseThrow();
             return new BatchItemIdentity(
                     tenantId,
                     batchId,
-                    ((Number) item.get("item_index")).intValue(),
+                    item.itemIndex(),
                     orderId,
-                    (UUID) item.get("custody_withdrawal_id"),
-                    (String) order.get("order_no"),
-                    Numeric.hexStringToByteArray((String) item.get("withdrawal_id_hash")),
-                    (String) item.get("token_contract"),
-                    (String) item.get("recipient"),
-                    ((BigDecimal) item.get("requested_amount_atomic")).toBigIntegerExact(),
-                    (String) order.get("asset_symbol"),
-                    (BigDecimal) order.get("amount"),
-                    (BigDecimal) order.get("fee"),
-                    (String) order.get("debit_account_id"),
-                    (String) item.get("status"));
+                    item.custodyWithdrawalId(),
+                    order.getOrderNo(),
+                    Numeric.hexStringToByteArray(item.withdrawalIdHash()),
+                    item.tokenContract(),
+                    item.recipient(),
+                    item.requestedAmountAtomic(),
+                    order.getAssetSymbol(),
+                    order.getAmount(),
+                    order.getFee(),
+                    order.getDebitAccountId(),
+                    item.status());
         }).toList();
     }
 
@@ -636,7 +629,7 @@ public class Evm7702WithdrawalCoordinator {
                 item.tenantId(),
                 item.withdrawalOrderId()).map(row -> Set.of(
                 "FAILED",
-                "CONFIRMED").contains(String.valueOf(row.get("status")))).orElse(false);
+                "CONFIRMED").contains(String.valueOf(row.getStatus()))).orElse(false);
     }
 
     private record CandidateGroup(

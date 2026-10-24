@@ -3,7 +3,6 @@ package com.surprising.wallet.repository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -83,12 +82,9 @@ public class CustodyGasAccountRepository {
     }
 
     /** 查询租户指定链上的启用 Gas 账户。 */
-    public List<Map<String, Object>> listActiveByTenantAndChain(UUID tenantId, String chain) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, network, status
-                  from custody_gas_account
-                 where tenant_id = ? and chain = ? and status = 'ACTIVE'
-                """, tenantId, chain);
+    public List<Definition> listActiveByTenantAndChain(UUID tenantId, String chain) {
+        return jdbc.query("select " + COLUMNS + " from custody_gas_account where tenant_id = ? and chain = ? and status = 'ACTIVE'",
+                CustodyGasAccountRepository::mapDefinition, tenantId, chain);
     }
 
     /** 查询租户全部 Gas 账户单表字段。 */

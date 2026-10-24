@@ -18,13 +18,11 @@ public class EvmBatchOwnershipService {
 
     public boolean withdrawalPending(UUID tenant, long orderId) {
         return withdrawalItems.listSubmittedByWithdrawal(tenant, orderId).stream()
-                .map(row -> (UUID) row.get("batch_id"))
                 .anyMatch(id -> withdrawals.findStatuses(tenant, id).stream().anyMatch(PENDING::contains));
     }
 
     public boolean collectionPending(UUID tenant, long collectionId) {
         return collectionItems.listSubmittedByCollection(tenant, collectionId).stream()
-                .map(row -> (UUID) row.get("batch_id"))
                 .anyMatch(id -> collections.findStatuses(tenant, id).stream().anyMatch(PENDING::contains));
     }
 }

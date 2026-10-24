@@ -3,18 +3,23 @@ package com.surprising.wallet.repository;
 import com.surprising.wallet.model.custody.GasOperationReference;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.sql.SQLException;
+import java.sql.ResultSet;
 
 /** evm_withdrawal_batch 单表仓储。 */
 @Repository
 public class EvmWithdrawalBatchRepository {
+    private static final String COLUMNS = """
+            id, tenant_id, chain, network, asset_symbol, token_contract, token_decimals, hot_wallet,
+            delegate_version, batch_hash, canonical_tx_hash, status, relayer_address, authorization_included,
+            authorization_nonce, operation_nonce, error_code, error_message
+            """;
     public Optional<GasOperationReference> lockGasOperation(UUID tenantId, UUID id) {
         return jdbc.query("select chain, id::text as reference_no from evm_withdrawal_batch where tenant_id=? and id=? for update",
                 (rs, rowNum) -> new GasOperationReference(
@@ -89,44 +94,35 @@ public class EvmWithdrawalBatchRepository {
     }
 
     /** 查询提现批次单表字段。 */
-    public List<Map<String, Object>> find(UUID tenantId, UUID batchId) {
-        return jdbc.queryForList("""
-                select tenant_id, id, chain, network, asset_symbol, token_contract, token_decimals,
-                       hot_wallet, delegate_version, canonical_tx_hash, status, operation_nonce,
-                       authorization_included, authorization_nonce, relayer_address, batch_hash
-                  from evm_withdrawal_batch where tenant_id = ? and id = ?
-                """, tenantId, batchId);
+    public Optional<BatchRow> find(UUID tenantId, UUID batchId) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_withdrawal_batch where tenant_id = ? and id = ?
+                """, EvmWithdrawalBatchRepository::mapBatch, tenantId, batchId).stream().findFirst();
     }
 
     /** 查询待确认提现批次。 */
-    public List<Map<String, Object>> listPending(String chain, String network, int limit) {
-        return jdbc.queryForList("""
-                select tenant_id, id, chain, network, canonical_tx_hash, status, hot_wallet,
-                       delegate_version
-                  from evm_withdrawal_batch
-                 where chain = ? and network = ? and status in ('SUBMITTED', 'CONFIRMING')
+    public List<BatchRow> listPending(String chain, String network, int limit) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_withdrawal_batch where chain = ? and network = ? and status in ('SUBMITTED', 'CONFIRMING')
                  order by submitted_at, id limit ?
-                """, chain, network, Math.min(Math.max(limit, 1), 200));
+                """, EvmWithdrawalBatchRepository::mapBatch, chain, network, Math.min(Math.max(limit, 1), 200));
     }
 
     /** 查询广播未知提现批次。 */
-    public List<Map<String, Object>> listBroadcastUnknown(String chain, String network) {
+    public List<UUID> listBroadcastUnknown(String chain, String network) {
         return jdbc.queryForList("""
-                select tenant_id, id, chain, network, status
-                  from evm_withdrawal_batch
+                select id from evm_withdrawal_batch
                  where chain = ? and network = ? and status = 'BROADCAST_UNKNOWN'
-                """, chain, network);
+                """, UUID.class, chain, network);
     }
 
     /** 查询没有签名尝试和链上交易的预广播失败批次。 */
-    public List<Map<String, Object>> listFailedUnbroadcast(String chain, String network, int limit) {
-        return jdbc.queryForList("""
-                select tenant_id, id, chain, network, error_code, error_message
-                  from evm_withdrawal_batch
-                 where chain = ? and network = ? and status = 'FAILED'
+    public List<BatchRow> listFailedUnbroadcast(String chain, String network, int limit) {
+        return jdbc.query("select " + COLUMNS + """
+                 from evm_withdrawal_batch where chain = ? and network = ? and status = 'FAILED'
                    and canonical_tx_hash is null and error_code = 'PREPARATION_FAILED'
                  order by updated_at, id limit ?
-                """, chain, network, Math.min(Math.max(limit, 1), 200));
+                """, EvmWithdrawalBatchRepository::mapBatch, chain, network, Math.min(Math.max(limit, 1), 200));
     }
 
     /** 完成提现批次。 */
@@ -161,4 +157,48 @@ public class EvmWithdrawalBatchRepository {
                    and status in ('LOCKED', 'FAILED')
                 """, code, message, tenantId, batchId);
     }
+public record BatchRow(UUID id,
+        UUID tenantId,
+        String chain,
+        String network,
+        String assetSymbol,
+        String tokenContract,
+        int tokenDecimals,
+        String hotWallet,
+        int delegateVersion,
+        String batchHash,
+        String canonicalTxHash,
+        String status,
+        String relayerAddress,
+        boolean authorizationIncluded,
+        BigInteger authorizationNonce,
+        BigInteger operationNonce,
+        String errorCode,
+        String errorMessage) { }
+
+private static BatchRow mapBatch(ResultSet rs, int rowNum) throws SQLException {
+    return new BatchRow(rs.getObject("id", UUID.class),
+            rs.getObject("tenant_id", UUID.class),
+            rs.getString("chain"),
+            rs.getString("network"),
+            rs.getString("asset_symbol"),
+            rs.getString("token_contract"),
+            rs.getInt("token_decimals"),
+            rs.getString("hot_wallet"),
+            rs.getInt("delegate_version"),
+            rs.getString("batch_hash"),
+            rs.getString("canonical_tx_hash"),
+            rs.getString("status"),
+            rs.getString("relayer_address"),
+            rs.getBoolean("authorization_included"),
+            numberOrNull(rs.getBigDecimal("authorization_nonce")),
+            numberOrNull(rs.getBigDecimal("operation_nonce")),
+            rs.getString("error_code"),
+            rs.getString("error_message"));
+}
+
+private static BigInteger numberOrNull(BigDecimal value) {
+    return value == null ? null : value.toBigIntegerExact();
+}
+
 }

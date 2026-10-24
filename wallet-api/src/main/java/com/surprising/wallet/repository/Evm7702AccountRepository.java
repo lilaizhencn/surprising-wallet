@@ -2,9 +2,6 @@ package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /** evm_7702_account 单表仓储。 */
@@ -28,21 +25,14 @@ public class Evm7702AccountRepository {
                 """, UUID.randomUUID(), tenantId, custodyAddressId, chain, network, authorityAddress);
     }
 
-    /** 查询租户地址在指定 EVM 网络上的账户投影。 */
-    public List<Map<String, Object>> listByCustodyAddress(UUID tenantId, UUID custodyAddressId,
-                                                           String chain, String network) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, network, authority_address,
-                       delegation_status, activation_tx_hash, delegate_address, delegate_version,
-                       observed_operation_nonce, updated_at
-                  from evm_7702_account
-                 where tenant_id = ? and custody_address_id = ? and chain = ? and network = ?
-                """, tenantId, custodyAddressId, chain, network);
-    }
+
 
     /** 判断指定托管地址是否已有 EIP-7702 账户投影。 */
     public boolean exists(UUID tenantId, UUID custodyAddressId, String chain, String network) {
-        return !listByCustodyAddress(tenantId, custodyAddressId, chain, network).isEmpty();
+        return !jdbc.queryForList("""
+                select 1 from evm_7702_account
+                 where tenant_id = ? and custody_address_id = ? and chain = ? and network = ? limit 1
+                """, Integer.class, tenantId, custodyAddressId, chain, network).isEmpty();
     }
 
     /** 更新归集完成后的账户投影。 */

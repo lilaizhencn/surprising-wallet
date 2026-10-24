@@ -491,22 +491,22 @@ public class Evm7702CollectionWorkflowService {
     }
 
     public List<EvmBroadcastAttempt> listUnknownAttempts(String chain, String network, int limit) {
-        List<UUID> ids = batches.listBroadcastUnknown(chain, network).stream().map(row -> (UUID) row.get("id")).toList();
+        List<UUID> ids = batches.listBroadcastUnknown(chain, network);
         return attempts.listUnknown(ids, limit);
     }
 
     public List<Evm7702CollectionCoordinator.PendingBatch> listPendingBatches(String chain, String network, int limit) {
         Map<Integer, Evm7702ConfigRepository.Configuration> versions = new HashMap<>();
         return batches.listPending(chain, network, limit).stream().map(row -> {
-            int version = ((Number) row.get("delegate_version")).intValue();
+            int version = row.delegateVersion();
             var config = versions.computeIfAbsent(
                     version,
                     key -> configurations.find(chain, network, null, key).stream().findFirst().orElseThrow());
             return new Evm7702CollectionCoordinator.PendingBatch(
-                    (UUID) row.get("tenant_id"),
-                    (UUID) row.get("id"),
-                    (String) row.get("canonical_tx_hash"),
-                    (String) row.get("status"),
+                    row.tenantId(),
+                    row.id(),
+                    row.canonicalTxHash(),
+                    row.status(),
                     config.requiredConfirmations(),
                     config.collectorAddress());
         }).toList();

@@ -293,10 +293,10 @@ public class Evm7702WithdrawalWorkflowService {
                         batch.hotWallet(),
                         batchId(batch.tenantId(), batch.batchId()),
                         identities.stream().map(item -> new Evm7702PayoutReceiptParser.ExpectedPayout(
-                                Numeric.hexStringToByteArray((String) item.get("withdrawal_id_hash")),
-                                (String) item.get("token_contract"),
-                                (String) item.get("recipient"),
-                                ((BigDecimal) item.get("requested_amount_atomic")).toBigIntegerExact())).toList());
+                                Numeric.hexStringToByteArray(item.withdrawalIdHash()),
+                                item.tokenContract(),
+                                item.recipient(),
+                                item.requestedAmountAtomic())).toList());
                 coordinator.complete(
                         batch,
                         batch.txHash(),
@@ -583,24 +583,24 @@ public class Evm7702WithdrawalWorkflowService {
     }
 
     public List<EvmBroadcastAttempt> listUnknownAttempts(String chain, String network, int limit) {
-        List<UUID> ids = batches.listBroadcastUnknown(chain, network).stream().map(row -> (UUID) row.get("id")).toList();
+        List<UUID> ids = batches.listBroadcastUnknown(chain, network);
         return attempts.listUnknown(ids, limit);
     }
 
     public List<Evm7702WithdrawalCoordinator.PendingBatch> listPendingBatches(String chain, String network, int limit) {
         Map<Integer, Evm7702ConfigRepository.Configuration> versions = new HashMap<>();
         return batches.listPending(chain, network, limit).stream().map(row -> {
-            int version = ((Number) row.get("delegate_version")).intValue();
+            int version = row.delegateVersion();
             var config = versions.computeIfAbsent(
                     version,
                     key -> configurations.find(chain, network, null, key).stream().findFirst().orElseThrow());
             return new Evm7702WithdrawalCoordinator.PendingBatch(
-                    (UUID) row.get("tenant_id"),
-                    (UUID) row.get("id"),
+                    row.tenantId(),
+                    row.id(),
                     chain,
-                    (String) row.get("canonical_tx_hash"),
-                    (String) row.get("status"),
-                    (String) row.get("hot_wallet"),
+                    row.canonicalTxHash(),
+                    row.status(),
+                    row.hotWallet(),
                     config.requiredConfirmations());
         }).toList();
     }
@@ -610,15 +610,15 @@ public class Evm7702WithdrawalWorkflowService {
 
     public List<Evm7702WithdrawalCoordinator.UnbroadcastBatch> listFailedUnbroadcastBatches(String chain, String network, int limit) {
         return batches.listFailedUnbroadcast(chain, network, limit).stream().filter(row -> {
-            UUID tenantId = (UUID) row.get("tenant_id");
-            UUID batchId = (UUID) row.get("id");
+            UUID tenantId = row.tenantId();
+            UUID batchId = row.id();
             return attempts.countByBatch(tenantId, batchId) == 0 && items.hasPreBroadcastRecoverableItems(tenantId, batchId);
         }).map(row -> new Evm7702WithdrawalCoordinator.UnbroadcastBatch(
-                (UUID) row.get("tenant_id"),
-                (UUID) row.get("id"),
-                String.valueOf(row.get("chain")),
-                String.valueOf(row.get("network")),
-                String.valueOf(row.get("error_code")),
-                (String) row.get("error_message"))).toList();
+                row.tenantId(),
+                row.id(),
+                String.valueOf(row.chain()),
+                String.valueOf(row.network()),
+                String.valueOf(row.errorCode()),
+                row.errorMessage())).toList();
     }
 }

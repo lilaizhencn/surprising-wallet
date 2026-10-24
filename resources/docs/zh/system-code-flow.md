@@ -325,3 +325,5 @@ HyperCoreDepositScanner → HyperCoreDepositService 正常事务代理 → 确�
 配置写入按职责直接调用 `WalletChainConfigService`、`WalletRpcConfigService` 和 `WalletTokenConfigService`，Controller 不再经过综合配置服务转发。链服务负责网络启用和链详情组合；RPC 服务负责凭据、探测和必需用途；Token 服务负责合约校验及资产配置同步。链详情把已读取的 profile 交给 RPC / Token 服务组合响应，沿用同一快照事务及 5 次查询上限。Token 写入直接读取类型配置行，不先构建展示模型。
 
 链与 Token 共用 `WalletConfigIdentityGuard` 判断五类地址、余额及交易记录是否已经锁定身份字段；这项业务约束不进入仓储。每个配置写用例仍将配置变更、资产同步及审计放在自己的事务内。平台配置审计查询归入已有概览服务。各入口保持平台管理员权限，RPC 响应继续仅暴露凭据是否配置。复用现有表、状态和配置键。`chain_asset.min_transfer` / `min_withdraw` 与账本一致按资产主单位保存，数据库基线改为 `numeric(78,18)`，避免小数门槛被舍入成整数；单表仓储参数同时收敛为 `BigDecimal`。不新增迁移或兼容分支。
+
+EIP-7702 的批次、批次项、订单、归集记录与地址读取直接返回单表类型结果，业务层不再取字符串字段并强制转换数值。订单、归集记录、链地址和托管地址复用各自现有模型与 ResultSet 映射；批次查询共享本表行映射。批次归属查询和广播未知父批次查询只返回 UUID，账户投影存在性只查询单表标量。协调器继续组合配置、地址与批次项，并保留租户、状态、签名 nonce、精确原子金额、行锁和跨表事务边界；单表仓储不承担领取、重试或结算策略。只读取既有字段，数据库基线无变化。

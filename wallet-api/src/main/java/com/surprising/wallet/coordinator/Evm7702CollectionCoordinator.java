@@ -14,7 +14,6 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
@@ -26,6 +25,7 @@ import com.surprising.wallet.service.Evm7702ConfigurationService;
 import com.surprising.wallet.repository.Evm7702ConfigRepository.Configuration;
 import com.surprising.wallet.chain.model.EvmBroadcastAttempt;
 import lombok.RequiredArgsConstructor;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 
 /**
  * EIP-7702 归集批次事务：领取、签名事实、状态转换与资金结算共同提交或回滚。
@@ -86,12 +86,12 @@ public class Evm7702CollectionCoordinator {
             String blockHash,
             List<Evm7702ReceiptParser.ItemResult> results) {
         BigDecimal actualFee = actualFee(chain, l2Fee, l1Fee, operatorFee);
-        var batchRow = batchRepository.find(batch.tenantId(), batch.batchId()).getFirst();
+        var batchRow = batchRepository.find(batch.tenantId(), batch.batchId()).orElseThrow();
         var config = configRepository.find(
-                (String) batchRow.get("chain"),
-                (String) batchRow.get("network"),
+                batchRow.chain(),
+                batchRow.network(),
                 null,
-                intValue(batchRow.get("delegate_version"))).getFirst();
+                batchRow.delegateVersion()).getFirst();
         int version = config.version();
         var expected = batchItemRepository.listIdentities(batch.tenantId(), batch.batchId());
         if (expected.size() != results.size()) {
@@ -123,11 +123,11 @@ public class Evm7702CollectionCoordinator {
                 throw new IllegalStateException("batch item completion transition failed");
             }
             String collectionStatus = result.success() ? "CONFIRMED" : "RETRYING";
-            Map<String, Object> itemRow = batchItemRepository.findForCompletion(
+            var itemRow = batchItemRepository.findForCompletion(
                     batch.tenantId(),
                     batch.batchId(),
-                    index).stream().findFirst().orElseThrow();
-            long collectionId = ((Number) itemRow.get("collection_record_id")).longValue();
+                    index).orElseThrow();
+            long collectionId = itemRow.collectionRecordId();
             collectionRecordRepository.updateExecution(
                     batch.tenantId(),
                     collectionId,
@@ -136,12 +136,12 @@ public class Evm7702CollectionCoordinator {
                     result.success() ? null : "EIP-7702 item execution failed: " + result.errorHash());
             if (accountRepository.markCollectionCompleted(
                     batch.tenantId(),
-                    (UUID) itemRow.get("custody_address_id"),
-                    Boolean.TRUE.equals(itemRow.get("authorization_included")),
+                    itemRow.custodyAddressId(),
+                    Boolean.TRUE.equals(itemRow.authorizationIncluded()),
                     txHash,
                     config.delegateAddress(),
                     version,
-                    longValue(itemRow.get("operation_nonce"))) != 1) {
+                    itemRow.operationNonce().longValue()) != 1) {
                 throw new IllegalStateException("EIP-7702 account projection completion failed");
             }
         }
@@ -188,22 +188,22 @@ public class Evm7702CollectionCoordinator {
         List<ChainAsset> assets = chainAssetRepository.listActiveByChain(chain);
         List<TokenConfiguration> tokenConfigs = tokenConfigRepository.listCollectEnabled(chain, network);
         CandidateGroup group = null;
-        for (Map<String, Object> record : collectionRecordRepository.listClaimable(chain, 500)) {
-            UUID tenantId = (UUID) record.get("tenant_id");
-            UUID custodyId = (UUID) record.get("custody_address_id");
-            String assetSymbol = String.valueOf(record.get("asset_symbol"));
+        for (var record : collectionRecordRepository.listClaimable(chain, 500)) {
+            UUID tenantId = record.getTenantId();
+            UUID custodyId = record.getCustodyAddressId();
+            String assetSymbol = String.valueOf(record.getAssetSymbol());
             ChainAsset asset = assets.stream().filter(row -> assetSymbol.equalsIgnoreCase(row.getSymbol())).findFirst().orElse(null);
             if (asset == null) {
                 continue;
             }
-            Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(tenantId, custodyId).orElse(null);
-            if (custody == null || !"ACTIVE".equals(custody.get("status"))) {
+            var custody = custodyAddressRepository.findFullByTenantAndId(tenantId, custodyId).orElse(null);
+            if (custody == null || !"ACTIVE".equals(custody.status())) {
                 continue;
             }
             if (!accountRepository.exists(tenantId, custodyId, chain, network)) {
                 continue;
             }
-            Map<String, Object> hot = findHotAddress(tenantId, chain, String.valueOf(record.get("to_address")));
+            var hot = findHotAddress(tenantId, chain, String.valueOf(record.getToAddress()));
             if (hot == null) {
                 continue;
             }
@@ -215,7 +215,7 @@ public class Evm7702CollectionCoordinator {
             group = new CandidateGroup(
                     tenantId,
                     assetSymbol,
-                    String.valueOf(record.get("to_address")),
+                    String.valueOf(record.getToAddress()),
                     nativeAsset ? "0x0000000000000000000000000000000000000000" : token.contractAddress(),
                     asset.getDecimals());
             break;
@@ -224,27 +224,27 @@ public class Evm7702CollectionCoordinator {
             return Optional.empty();
         }
         List<ClaimedItem> items = new ArrayList<>();
-        for (Map<String, Object> record : collectionRecordRepository.listClaimable(chain, config.maxBatchItems())) {
-            if (!group.tenantId().equals(record.get("tenant_id")) ||
-                    !group.assetSymbol().equalsIgnoreCase(String.valueOf(record.get("asset_symbol"))) ||
-                    !group.hotWallet().equalsIgnoreCase(String.valueOf(record.get("to_address")))) {
+        for (var record : collectionRecordRepository.listClaimable(chain, config.maxBatchItems())) {
+            if (!group.tenantId().equals(record.getTenantId()) ||
+                    !group.assetSymbol().equalsIgnoreCase(String.valueOf(record.getAssetSymbol())) ||
+                    !group.hotWallet().equalsIgnoreCase(String.valueOf(record.getToAddress()))) {
                 continue;
             }
-            UUID custodyId = (UUID) record.get("custody_address_id");
+            UUID custodyId = record.getCustodyAddressId();
             if (!accountRepository.exists(group.tenantId(), custodyId, chain, network)) {
                 continue;
             }
-            Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(group.tenantId(), custodyId).orElse(null);
-            if (custody == null || !"ACTIVE".equals(custody.get("status"))) {
+            var custody = custodyAddressRepository.findFullByTenantAndId(group.tenantId(), custodyId).orElse(null);
+            if (custody == null || !"ACTIVE".equals(custody.status())) {
                 continue;
             }
-            Map<String, Object> address = chainAddressRepository.findByTenantAndId(
+            var address = chainAddressRepository.findOwned(
                     group.tenantId(),
-                    ((Number) custody.get("chain_address_id")).longValue()).orElse(null);
+                    custody.chainAddressId()).orElse(null);
             if (address == null) {
                 continue;
             }
-            BigDecimal amount = (BigDecimal) record.get("amount");
+            BigDecimal amount = record.getAmount();
             BigInteger atomic;
             try {
                 atomic = amount.movePointRight(group.decimals()).toBigIntegerExact();
@@ -255,15 +255,15 @@ public class Evm7702CollectionCoordinator {
                 throw new IllegalStateException("collection amount must be positive");
             }
             items.add(new ClaimedItem(
-                    ((Number) record.get("id")).longValue(),
-                    (String) record.get("collection_no"),
+                    record.getId(),
+                    record.getCollectionNo(),
                     group.tenantId(),
                     custodyId,
-                    (String) record.get("from_address"),
-                    (String) record.get("to_address"),
+                    record.getFromAddress(),
+                    record.getToAddress(),
                     amount,
                     atomic,
-                    ChainAddressRepository.mapRow(address)));
+                    address));
             if (items.size() >= config.maxBatchItems()) {
                 break;
             }
@@ -412,13 +412,13 @@ public class Evm7702CollectionCoordinator {
         if (batchRepository.markFailedIfUnbroadcast(batch.tenantId(), batch.id(), errorCode, message) != 1) {
             throw new IllegalStateException("unbroadcast batch failure transition failed");
         }
-        for (Map<String, Object> item : batchItemRepository.listForRelease(batch.tenantId(), batch.id())) {
-            long collectionId = ((Number) item.get("collection_record_id")).longValue();
+        for (var item : batchItemRepository.listForRelease(batch.tenantId(), batch.id())) {
+            long collectionId = item.collectionRecordId();
             String status = batchItemRepository.countAttemptHistory(batch.tenantId(), collectionId) >= 3 ? "FAILED" : "RETRYABLE";
             if (batchItemRepository.markReleased(
                     batch.tenantId(),
                     batch.id(),
-                    ((Number) item.get("item_index")).intValue(),
+                    item.itemIndex(),
                     status,
                     errorCode) != 1) {
                 throw new IllegalStateException("unbroadcast batch item transition failed");
@@ -442,29 +442,15 @@ public class Evm7702CollectionCoordinator {
     /**
      * 查询指定租户链上的启用 Gas 热地址。
      */
-    private Map<String, Object> findHotAddress(UUID tenantId, String chain, String address) {
-        for (Map<String, Object> gas : gasAccountRepository.listActiveByTenantAndChain(tenantId, chain)) {
-            UUID custodyId = (UUID) gas.get("custody_address_id");
-            Map<String, Object> hot = custodyAddressRepository.findByTenantAndId(tenantId, custodyId).orElse(null);
-            if (hot != null && "ACTIVE".equals(hot.get("status")) && address.equalsIgnoreCase(String.valueOf(hot.get("address")))) {
+    private CustodyAddressRecord findHotAddress(UUID tenantId, String chain, String address) {
+        for (var gas : gasAccountRepository.listActiveByTenantAndChain(tenantId, chain)) {
+            UUID custodyId = gas.custodyAddressId();
+            var hot = custodyAddressRepository.findFullByTenantAndId(tenantId, custodyId).orElse(null);
+            if (hot != null && "ACTIVE".equals(hot.status()) && address.equalsIgnoreCase(String.valueOf(hot.address()))) {
                 return hot;
             }
         }
         return null;
-    }
-
-    /**
-     * 转换配置整数。
-     */
-    private static int intValue(Object value) {
-        return value == null ? 0 : ((Number) value).intValue();
-    }
-
-    /**
-     * 转换配置长整数。
-     */
-    private static long longValue(Object value) {
-        return value == null ? 0L : ((Number) value).longValue();
     }
 
     private record CandidateGroup(UUID tenantId, String assetSymbol, String hotWallet, String tokenContract, int decimals) {

@@ -295,7 +295,7 @@
   <rect x="30" y="2250" width="1040" height="155" rx="8" fill="#eff6ff" stroke="#2563eb"/>
   <text x="50" y="2278" style="font:13px sans-serif;fill:#1e293b">EIP-7702：目标 / 未知尝试 / 待确认查询 → 工作流 RPC → 协调器原子推进</text>
   <text x="50" y="2312" style="font:13px sans-serif;fill:#1e293b">领取 → Nonce / 已签名尝试 / Gas 同事务 → 外部广播 → 提交或 UNKNOWN 同事务</text>
-  <text x="50" y="2346" style="font:13px sans-serif;fill:#1e293b">回执 / 区块 / 日志 → 原配置版本 → 项目身份 / 订单结算 / Gas 共同提交</text>
+  <text x="50" y="2346" style="font:13px sans-serif;fill:#1e293b">类型化单表结果 / 原配置版本 → 回执身份 / 订单结算 / Gas 共同提交</text>
   <text x="50" y="2380" style="font:13px sans-serif;fill:#1e293b">正常 Spring 事务代理验证；拒绝尝试更新时父批次回滚；历史确认不检查中继启用</text>
   <rect x="30" y="2425" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
   <text x="50" y="2453" style="font:13px sans-serif;fill:#1e293b">租户链 API → 单表批量类型记录 → 按链 / 网络公开视图；开关与审计同事务</text>

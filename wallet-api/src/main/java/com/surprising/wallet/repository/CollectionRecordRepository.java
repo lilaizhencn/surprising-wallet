@@ -16,6 +16,10 @@ import org.springframework.stereotype.Repository;
 /** collection_record 单表仓储。 */
 @Repository
 public class CollectionRecordRepository {
+    private static final String COLUMNS = """
+            id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
+            amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -174,26 +178,17 @@ public class CollectionRecordRepository {
     }
 
     /** 查询可参与 EVM 归集批次的记录，仅锁定归集记录单表行。 */
-    public List<Map<String, Object>> listClaimable(String chain, int limit) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol,
-                       from_address, to_address, amount, fee, status, tx_hash
-                  from collection_record
-                 where chain = ? and tenant_id is not null and custody_address_id is not null
-                   and status in ('CREATED', 'RETRYING')
-                 order by id
-                 limit ?
-                 for update skip locked
-                """, chain, Math.min(Math.max(limit, 1), 500));
+    public List<ChainCollectionRecord> listClaimable(String chain, int limit) {
+        return jdbc.query("select " + COLUMNS + """
+                 from collection_record where chain = ? and tenant_id is not null and custody_address_id is not null and status in ('CREATED', 'RETRYING')
+                 order by id limit ? for update skip locked
+                """, (rs, rowNum) -> map(rs), chain, Math.min(Math.max(limit, 1), 500));
     }
 
     /** 按主键查询归集记录单表字段。 */
-    public Optional<Map<String, Object>> findById(UUID tenantId, long id) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol,
-                       from_address, to_address, amount, fee, status, tx_hash
-                  from collection_record where tenant_id = ? and id = ?
-                """, tenantId, id).stream().findFirst();
+    public Optional<ChainCollectionRecord> findById(UUID tenantId, long id) {
+        return jdbc.query("select " + COLUMNS + " from collection_record where tenant_id = ? and id = ?",
+                (rs, rowNum) -> map(rs), tenantId, id).stream().findFirst();
     }
 
     /** 按主键领取归集记录。 */

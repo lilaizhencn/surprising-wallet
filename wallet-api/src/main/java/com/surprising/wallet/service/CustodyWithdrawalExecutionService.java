@@ -132,23 +132,23 @@ public class CustodyWithdrawalExecutionService {
     private SpendAccount requireTenantSpendAccount(UUID tenantId, UUID custodyAddressId,
                                                    String chain, String symbol,
                                                    BigDecimal requiredAmount) {
-        Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(
+        var custody = custodyAddressRepository.findFullByTenantAndId(
                         tenantId, custodyAddressId)
                 .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
-        if (!chain.equalsIgnoreCase(String.valueOf(custody.get("chain")))
-                || !"ACTIVE".equalsIgnoreCase(String.valueOf(custody.get("status")))) {
+        if (!chain.equalsIgnoreCase(String.valueOf(custody.chain()))
+                || !"ACTIVE".equalsIgnoreCase(String.valueOf(custody.status()))) {
             throw new IllegalArgumentException("insufficient available balance");
         }
-        long chainAddressId = ((Number) custody.get("chain_address_id")).longValue();
-        Map<String, Object> address = chainAddressRepository.findByTenantAndId(tenantId, chainAddressId)
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
+        long chainAddressId = custody.chainAddressId();
+        var address = chainAddressRepository.findOwned(tenantId, chainAddressId)
+                .filter(row -> Boolean.TRUE.equals(row.getEnabled()))
                 .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
-        String accountId = String.valueOf(address.get("account_id"));
+        String accountId = String.valueOf(address.getAccountId());
         Map<String, Object> balance = ledgerBalanceRepository.listAvailable(
                         tenantId, chain, symbol, accountId, requiredAmount).stream()
                 .findFirst().orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
         return new SpendAccount(String.valueOf(balance.get("account_id")),
-                String.valueOf(address.get("address")));
+                String.valueOf(address.getAddress()));
     }
     private String withdrawalSourceAddress(UUID tenantId, AssetMeta asset, SpendAccount spend) {
         if (ChainType.valueOf(asset.chain()).isUtxo()) {

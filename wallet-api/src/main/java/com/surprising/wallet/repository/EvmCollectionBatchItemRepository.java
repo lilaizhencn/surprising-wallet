@@ -2,9 +2,7 @@ package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-
 import java.util.List;
-import java.util.Map;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -21,11 +19,11 @@ public class EvmCollectionBatchItemRepository {
     }
 
     /** 查询指定归集记录关联的已提交批次项。 */
-    public List<Map<String, Object>> listSubmittedByCollection(UUID tenantId, long collectionRecordId) {
+    public List<UUID> listSubmittedByCollection(UUID tenantId, long collectionRecordId) {
         return jdbc.queryForList("""
-                select batch_id, status from evm_collection_batch_item
+                select batch_id from evm_collection_batch_item
                  where tenant_id = ? and collection_record_id = ? and status = 'SUBMITTED'
-                """, tenantId, collectionRecordId);
+                """, UUID.class, tenantId, collectionRecordId);
     }
 
     /** 创建归集批次项。 */
@@ -92,12 +90,14 @@ public class EvmCollectionBatchItemRepository {
     }
 
     /** 查询归集批次项完成所需的单表字段。 */
-    public List<Map<String, Object>> findForCompletion(UUID tenantId, UUID batchId, int itemIndex) {
-        return jdbc.queryForList("""
+    public java.util.Optional<Completion> findForCompletion(UUID tenantId, UUID batchId, int itemIndex) {
+        return jdbc.query("""
                 select collection_record_id, custody_address_id, authorization_included, operation_nonce
                   from evm_collection_batch_item
                  where tenant_id = ? and batch_id = ? and item_index = ?
-                """, tenantId, batchId, itemIndex);
+                """, (rs, rowNum) -> new Completion(rs.getLong("collection_record_id"),
+                    rs.getObject("custody_address_id", UUID.class), rs.getBoolean("authorization_included"),
+                    rs.getBigDecimal("operation_nonce").toBigIntegerExact()), tenantId, batchId, itemIndex).stream().findFirst();
     }
 
     /** 查询批次项数量。 */
@@ -126,13 +126,12 @@ public class EvmCollectionBatchItemRepository {
     }
 
     /** 查询未广播批次项的归集记录主键。 */
-    public List<Map<String, Object>> listForRelease(UUID tenantId, UUID batchId) {
-        return jdbc.queryForList("""
-                select item_index, collection_record_id, status
-                  from evm_collection_batch_item
+    public List<ReleaseItem> listForRelease(UUID tenantId, UUID batchId) {
+        return jdbc.query("""
+                select item_index, collection_record_id from evm_collection_batch_item
                  where tenant_id = ? and batch_id = ? and status = 'CREATED'
                  order by item_index
-                """, tenantId, batchId);
+                """, (rs, rowNum) -> new ReleaseItem(rs.getInt("item_index"), rs.getLong("collection_record_id")), tenantId, batchId);
     }
 
     /** 按位置标记未广播批次项状态。 */
@@ -143,4 +142,8 @@ public class EvmCollectionBatchItemRepository {
                 """, status, errorCode, tenantId, batchId, itemIndex);
     }
     public record Identity(int itemIndex, String authority, String token, String recipient, BigInteger amount) { }
+public record Completion(long collectionRecordId, UUID custodyAddressId, boolean authorizationIncluded,
+                         BigInteger operationNonce) { }
+public record ReleaseItem(int itemIndex, long collectionRecordId) { }
+
 }
