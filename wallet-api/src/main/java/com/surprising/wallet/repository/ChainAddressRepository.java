@@ -5,7 +5,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -58,8 +57,6 @@ public class ChainAddressRepository {
                  limit 1
                 """, chain, symbol).isEmpty();
     }
-
-
 
     /** 按主键查询链地址。 */
     public Optional<ChainAddressRecord> findById(long id) {
@@ -215,20 +212,6 @@ public class ChainAddressRepository {
                 .enabled(rs.getBoolean("enabled")).build();
     }
 
-
-
-
-
-    /** 查询租户的全部链地址字段，供服务层在 Java 中完成关联组合。 */
-    public List<Map<String, Object>> listByTenant(UUID tenantId) {
-        return jdbc.queryForList("""
-                select id, chain, account_id, user_id, biz, address_index,
-                       address, wallet_role, enabled, tenant_id
-                  from chain_address
-                 where tenant_id = ?
-                """, tenantId);
-    }
-
     /** 判断租户是否拥有指定链上的启用地址。 */
     public boolean existsEnabledAddress(UUID tenantId, String chain, String address) {
         return !jdbc.queryForList("""
@@ -247,32 +230,14 @@ public class ChainAddressRepository {
                 """, UUID.class, chain, accountId, address);
     }
 
-    /** 查询租户指定链上的地址记录。 */
-    public List<Map<String, Object>> listByTenantAndChain(UUID tenantId, String chain) {
-        return jdbc.queryForList("""
-                select id, chain, asset_symbol, account_id, address, owner_address, user_id, biz,
-                       address_index, wallet_role, enabled, tenant_id
-                  from chain_address where tenant_id = ? and chain = ?
-                """, tenantId, chain);
-    }
-
-    /** 查询指定链的启用地址字段。 */
-    public List<Map<String, Object>> listEnabledByChain(String chain) {
-        return jdbc.queryForList("""
+    public List<ChainAddressRecord> listCollectionCandidatesByChain(String chain) {
+        return jdbc.query("""
                 select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
-                       address, owner_address, wallet_role, enabled
-                  from chain_address where chain = ? and enabled = true
-                """, chain);
-    }
-
-    public List<Map<String, Object>> listCollectionCandidatesByChain(String chain) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
-                       address, owner_address, wallet_role, enabled
+                       address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address
                  where chain = ? and enabled = true and tenant_id is not null
                    and wallet_role = 'DEPOSIT' and user_id <> 0
-                """, chain);
+                """, (rs, rowNum) -> map(rs), chain);
     }
 
     /** 将链地址归属到租户。 */
@@ -280,7 +245,6 @@ public class ChainAddressRepository {
         return jdbc.update("update chain_address set tenant_id = ?, updated_at = now() where id = ?",
                 tenantId, chainAddressId);
     }
-
 
     /** Enabled account aliases that can identify a deposit within one tenant. */
     public List<ChainAddressRecord> findDepositMatches(UUID tenantId, String chain, String accountId, String address) {

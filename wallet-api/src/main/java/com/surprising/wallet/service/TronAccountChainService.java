@@ -79,14 +79,14 @@ class TronAccountChainService {
             long amountSun = amount.multiply(TRX_SUN).longValueExact();
             TronTransactionService.SignedTronTransaction signed =
                     tronTransactionService.signTrxTransfer(client, keyPair, recipient, amountSun);
-            tronTransactionService.broadcast(client, signed);
+            client.broadcast(signed.transaction());
             recordSent(chain, signed.txId(), from.getAddress(), recipient, "TRX", null, amount);
             return signed.txId();
         }
         TokenDefinition token = assets.requireToken(chain, symbol);
         TronTransactionService.SignedTronTransaction signed = tronTrc20Service.signTransfer(
                 client, keyPair, token.getContractAddress(), recipient, amount, token.getDecimals(), feeLimitSun(profile));
-        tronTrc20Service.broadcast(client, signed);
+        client.broadcast(signed.transaction());
         recordSent(chain, signed.txId(), from.getAddress(), recipient, token.getSymbol(), token.getContractAddress(), amount);
         return signed.txId();
     }

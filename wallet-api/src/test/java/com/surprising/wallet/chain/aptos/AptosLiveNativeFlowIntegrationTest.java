@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.AddressRuntimeTestSupport;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
@@ -77,7 +78,8 @@ class AptosLiveNativeFlowIntegrationTest {
                         "faucet",
                         node("APTOS", env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com")))));
         AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(masterSeed));
-        AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
+        var addresses = new AddressRuntimeTestSupport(repository, WalletKeyTestFixture.provider(masterSeed));
+        var profile = addresses.runtime.requireProfile("APTOS");
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
         AptosTransactionService transactions = new AptosTransactionService(
                 rpc,
@@ -103,9 +105,10 @@ class AptosLiveNativeFlowIntegrationTest {
                 repository.chainAssetRepository,
                 RuntimeTestSupport.database(jdbc));
 
-        ChainAddressRecord owner = addresses.createNativeAddress(6001, 0, OWNER_INDEX, "DEPOSIT");
+        ChainAddressRecord owner = addresses.runtime.generateDepositAddressAtIndex(profile, 6001, 0, OWNER_INDEX);
         ChainAddressRecord external = external(keys);
-        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
+        ChainAddressRecord hot = addresses.derivation.deriveAddress(profile, 0, 0, HOT_INDEX, "DEPOSIT");
+        repository.chainAddressRepository.upsert(hot);
         AptosTenantIntegrationFixture.TenantAddress tenantAddress =
                 AptosTenantIntegrationFixture.attachDepositAddress(jdbc, owner);
         AptosTenantIntegrationFixture.attachPlatformAddress(jdbc, hot);

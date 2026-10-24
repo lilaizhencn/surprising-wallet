@@ -101,9 +101,8 @@ public class Evm7702WithdrawalWorkflowService {
             for (RuntimeTarget target : listRuntimeTargets()) {
                 try {
                     AccountChainProfile profile = target.profile();
-                    if (!"evm".equalsIgnoreCase(profile.getFamily()) ||
-                            !profile.getNetwork().equalsIgnoreCase(target.profile().getNetwork())) {
-                        throw new IllegalStateException("EIP-7702 payout target/profile network mismatch");
+                    if (!"evm".equalsIgnoreCase(profile.getFamily())) {
+                        throw new IllegalStateException("EIP-7702 payout target must have EVM family");
                     }
                     recoverFailedUnbroadcast(profile);
                     recoverUnknown(profile);

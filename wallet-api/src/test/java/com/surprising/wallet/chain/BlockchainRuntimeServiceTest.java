@@ -3,7 +3,7 @@ package com.surprising.wallet.chain;
 import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -42,12 +42,13 @@ class BlockchainRuntimeServiceTest {
     @EnumSource(ChainType.class)
     void fixedIndexGenerationReachesTheRealEngineForEveryChain(ChainType type) {
         when(profiles.findAccountByChain(type.name())).thenReturn(Optional.of(profile(type)));
-        Address expected = Address.builder().index(7).build();
+        var selected = service.requireProfile(type.name());
+        ChainAddressRecord expected = ChainAddressRecord.builder().id(7L).addressIndex(7L).build();
         boolean utxo = type == ChainType.BTC || type == ChainType.BCH || type == ChainType.LTC || type == ChainType.DOGE;
-        if (utxo) when(bitcoinLike.generateDepositAddressAtIndex(type, 41L, 9, 7L)).thenReturn(expected);
-        else when(addresses.generateDepositAddressAtIndex(type, 41L, 9, 7L)).thenReturn(expected);
+        if (utxo) when(bitcoinLike.generateDepositAddressAtIndex(selected, 41L, 9, 7L)).thenReturn(expected);
+        else when(addresses.generateDepositAddressAtIndex(selected, 41L, 9, 7L)).thenReturn(expected);
 
-        assertSame(expected, service.generateDepositAddressAtIndex(type.name(), 41L, 9, 7L));
+        assertSame(expected, service.generateDepositAddressAtIndex(selected, 41L, 9, 7L));
         if (utxo) verifyNoInteractions(addresses);
         else verifyNoInteractions(bitcoinLike);
     }

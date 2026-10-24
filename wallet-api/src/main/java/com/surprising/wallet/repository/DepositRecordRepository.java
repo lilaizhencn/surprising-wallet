@@ -138,14 +138,17 @@ public class DepositRecordRepository {
     }
 
     /** 查询指定链已入账充值字段，供服务层按租户和地址组合统计。 */
-    public List<java.util.Map<String, Object>> listCreditedForCollectionBalance(String chain) {
-        return jdbc.queryForList("""
+    public List<CollectionBalance> listCreditedForCollectionBalance(String chain) {
+        return jdbc.query("""
                 select tenant_id, asset_symbol, lower(to_address) as to_address, sum(amount) as amount
                   from deposit_record
                  where chain = ? and tenant_id is not null and credited = true
                  group by tenant_id, asset_symbol, lower(to_address)
-                """, chain);
+                """, (rs, rowNum) -> new CollectionBalance(rs.getObject("tenant_id", UUID.class),
+                        rs.getString("asset_symbol"), rs.getString("to_address"), rs.getBigDecimal("amount")), chain);
     }
+
+    public record CollectionBalance(UUID tenantId, String assetSymbol, String address, BigDecimal amount) { }
 
     /** 将充值标记为重组。 */
     public int markReorged(long id, String reason) {

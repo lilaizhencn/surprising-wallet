@@ -92,8 +92,10 @@ public final class WalletKeyMaterialProvider {
         }
     }
 
-    public boolean isConfigured() {
-        return true;
+    public boolean hasApiKeyMaterial() {
+        return material.sig2Root != null && material.sig2Root.getEcKey().hasPrivKey()
+                && material.ed25519 != null && material.sig1PublicRoot != null
+                && material.recoveryPublicRoot != null;
     }
 
     public Bip32Node sig1Root() {

@@ -132,12 +132,13 @@ public class WalletRuntimeConfigService {
      * @return 是否启用
      */
     public boolean isGlobalTaskEnabled(String task) {
-        return enabledSetting(GLOBAL_WALLET_ENABLED, true)
-                && enabledSetting(globalTaskKey(task), true);
+        Map<String, Boolean> global = settings.globalSwitchValues();
+        return global.getOrDefault(GLOBAL_WALLET_ENABLED, true)
+                && global.getOrDefault(globalTaskKey(task), true);
     }
     /** @return 全局总开关是否启用 */
     public boolean isGlobalEnabled() {
-        return enabledSetting(GLOBAL_WALLET_ENABLED, true);
+        return globalSwitches().walletEnabled();
     }
 
     /**

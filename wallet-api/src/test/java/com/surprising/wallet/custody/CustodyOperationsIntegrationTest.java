@@ -1317,8 +1317,17 @@ class CustodyOperationsIntegrationTest {
          * 验证 {@code generateDepositAddressAtIndex} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         @Override
-        public Address generateDepositAddressAtIndex(
-                String chain, long userId, int biz, long childIndex) {
+        public com.surprising.wallet.common.chain.AccountChainProfile requireProfile(String chain) {
+            RuntimeChain runtime = requireRuntime(chain);
+            return com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(chain)
+                    .network(runtime.network()).family(runtime.family()).nativeSymbol(runtime.nativeSymbol())
+                    .enabled(true).build();
+        }
+
+        @Override
+        public com.surprising.wallet.common.chain.ChainAddressRecord generateDepositAddressAtIndex(
+                com.surprising.wallet.common.chain.AccountChainProfile profile, long userId, int biz, long childIndex) {
+            String chain = profile.getChain();
             RuntimeChain runtime = requireRuntime(chain);
             String address = "0x" + String.format("%032x%08x", userId, childIndex);
             String path = "m/44/60/" + biz + "/" + userId + "/" + childIndex;
@@ -1329,16 +1338,8 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DEPOSIT', true)
                     """, chain, runtime.nativeSymbol(), address, userId, biz, childIndex,
                     address, address, path);
-            return Address.builder()
-                    .address(address)
-                    .network(runtime.network())
-                    .scriptType(runtime.family())
-                    .derivationPath(path)
-                    .biz(biz)
-                    .currency(runtime.nativeSymbol().toLowerCase())
-                    .userId(userId)
-                    .index(Math.toIntExact(childIndex))
-                    .build();
+            return new com.surprising.wallet.repository.ChainAddressRepository(jdbc)
+                    .find(chain, runtime.nativeSymbol(), userId, biz, childIndex, "DEPOSIT").orElseThrow();
         }
     }
 }

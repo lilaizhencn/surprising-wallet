@@ -418,7 +418,7 @@ class TronLiveFullFlowIntegrationTest {
     private static TxResult sendTrx(TronTridentClient client, TronTransactionService service,
                                     Actor from, String to, BigDecimal amount) throws Exception {
         var signed = service.signTrxTransfer(client, from.keyPair(), to, toSun(amount));
-        service.broadcast(client, signed);
+        client.broadcast(signed.transaction());
         Response.TransactionInfo info = waitTransaction(client, signed.txId());
         return new TxResult(signed.txId(), info.getBlockNumber(), feeTrx(info));
     }
@@ -429,7 +429,7 @@ class TronLiveFullFlowIntegrationTest {
     private static TxResult sendTrc20(TronTridentClient client, TronTrc20Service service, Actor from,
                                       String contract, String to, BigDecimal amount, int decimals) throws Exception {
         var signed = service.signTransfer(client, from.keyPair(), contract, to, amount, decimals, FEE_LIMIT_SUN);
-        service.broadcast(client, signed);
+        client.broadcast(signed.transaction());
         Response.TransactionInfo info = waitTransaction(client, signed.txId());
         assertTrue(info.getLogCount() > 0, "TRC20 transfer must emit at least one log");
         return new TxResult(signed.txId(), info.getBlockNumber(), feeTrx(info));
@@ -465,7 +465,7 @@ class TronLiveFullFlowIntegrationTest {
                 List.of(new Address(owner)),
                 List.of(new TypeReference<Uint256>() {
                 }));
-        Response.TransactionExtention response = client.api().constantCall(owner, contract, balanceOf);
+        Response.TransactionExtention response = client.constantCall(owner, contract, balanceOf);
         if (response.getConstantResultCount() == 0) {
             return BigDecimal.ZERO;
         }
@@ -484,7 +484,7 @@ class TronLiveFullFlowIntegrationTest {
                 List.of(new Address(to), new Uint256(Trc20AbiCodec.toRawAmount(amount, token.decimals()))),
                 List.of(new TypeReference<org.tron.trident.abi.datatypes.Bool>() {
                 }));
-        Response.EstimateEnergyMessage estimate = client.api().estimateEnergy(owner.address(), token.contract(),
+        Response.EstimateEnergyMessage estimate = client.estimateEnergy(owner.address(), token.contract(),
                 transfer, NodeType.FULL_NODE);
         return estimate.getEnergyRequired();
     }

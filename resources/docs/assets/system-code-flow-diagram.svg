@@ -306,6 +306,6 @@
   <text x="50" y="2640" style="font:13px sans-serif;fill:#1e293b">账户扫描：Job → DepositWorkflow → 运行时 profile → 各链到期 / 开关 → 具体扫描器</text>
   <text x="50" y="2676" style="font:13px sans-serif;fill:#1e293b">全局关闭清空节流；链关闭移除本链节流；XMR 保持独立串行任务</text>
   <text x="50" y="2712" style="font:13px sans-serif;fill:#1e293b">TRON 归集：领取 → 客户端 → 共用发送 / 交易记录 → SENT → 关闭；异常保留已知哈希</text>
-  <text x="50" y="2748" style="font:13px sans-serif;fill:#1e293b">七链密钥：必需材料提供者 → 角色校验 → 原链 / 租户派生 → 地址或签名；无测试来源分支</text>
-  <text x="50" y="2784" style="font:13px sans-serif;fill:#1e293b">测试 fixture 保存旧向量；真实材料验证七链；不改变资金状态或数据库结构</text>
+  <text x="50" y="2748" style="font:13px sans-serif;fill:#1e293b">托管地址：一次 profile → 正式引擎 / 持久化记录 → 租户绑定 / 投影；归集使用类型结果</text>
+  <text x="50" y="2784" style="font:13px sans-serif;fill:#1e293b">TRON：参考块按节点限流 → 本地构建 / 签名 → 统一广播；密钥状态按实际材料判断</text>
 </svg>

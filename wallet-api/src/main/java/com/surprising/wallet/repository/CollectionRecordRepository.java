@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -165,8 +164,8 @@ public class CollectionRecordRepository {
     }
 
     /** 查询指定链的归集记录字段，供服务层按租户和地址组合统计。 */
-    public List<java.util.Map<String, Object>> listForCollectionBalance(String chain) {
-        return jdbc.queryForList("""
+    public List<CollectionBalance> listForCollectionBalance(String chain) {
+        return jdbc.query("""
                 select tenant_id, asset_symbol, lower(from_address) as from_address,
                        coalesce(sum(amount) filter (where status <> 'FAILED'), 0) as amount,
                        coalesce(bool_or(status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT',
@@ -174,8 +173,12 @@ public class CollectionRecordRepository {
                   from collection_record
                  where chain = ? and tenant_id is not null
                  group by tenant_id, asset_symbol, lower(from_address)
-                """, chain);
+                """, (rs, rowNum) -> new CollectionBalance(rs.getObject("tenant_id", UUID.class),
+                        rs.getString("asset_symbol"), rs.getString("from_address"), rs.getBigDecimal("amount"),
+                        rs.getBoolean("pending")), chain);
     }
+
+    public record CollectionBalance(UUID tenantId, String assetSymbol, String address, BigDecimal amount, boolean pending) { }
 
     /** 查询可参与 EVM 归集批次的记录，仅锁定归集记录单表行。 */
     public List<ChainCollectionRecord> listClaimable(String chain, int limit) {

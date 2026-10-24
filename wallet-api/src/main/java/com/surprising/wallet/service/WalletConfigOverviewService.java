@@ -93,7 +93,7 @@ public class WalletConfigOverviewService {
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         GlobalSwitches switches = runtimeConfig.globalSwitches();
-        boolean keysetConfigured = this.keyMaterial.isConfigured();
+        boolean keysetConfigured = this.keyMaterial.hasApiKeyMaterial();
         List<AccountChainProfile> profiles = chainProfileRepository.listAll();
         List<TokenConfiguration> tokens = tokenConfigRepository.listAll();
         List<ChainAsset> assets = chainAssetRepository.listNonNativeOverview();

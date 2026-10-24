@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
@@ -67,26 +66,16 @@ public class LedgerBalanceRepository {
     }
 
     /** 查询租户指定账户中满足金额要求的账本余额。 */
-    public List<Map<String, Object>> listAvailable(UUID tenantId, String chain, String symbol,
+    public java.util.Optional<String> findAvailableAccount(UUID tenantId, String chain, String symbol,
                                                     String accountId, BigDecimal requiredAmount) {
         return jdbc.queryForList("""
-                select id, account_id, available_balance
+                select account_id
                   from ledger_balance
                  where tenant_id = ? and lower(chain) = lower(?)
                    and lower(asset_symbol) = lower(?) and lower(account_id) = lower(?)
                    and available_balance >= ?
-                 order by available_balance desc, id
-                """, tenantId, chain, symbol, accountId, requiredAmount);
-    }
-
-    /** 查询租户全部账本余额，供服务层完成账户和资产组合。 */
-    public List<Map<String, Object>> listByTenant(UUID tenantId) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain, asset_symbol, account_id,
-                       available_balance, locked_balance, total_balance
-                  from ledger_balance
-                 where tenant_id = ?
-                """, tenantId);
+                 order by available_balance desc, id limit 1
+                """, String.class, tenantId, chain, symbol, accountId, requiredAmount).stream().findFirst();
     }
 
     /** 写入或更新账本余额。 */

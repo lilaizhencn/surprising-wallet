@@ -5,6 +5,7 @@ import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -25,7 +26,7 @@ public class BlockchainRuntimeService {
     private final BitcoinLikeChainRuntime bitcoinLikeRuntime;
 
     public RuntimeChain requireRuntime(String chain) {
-        AccountChainProfile profile = profile(chain);
+        AccountChainProfile profile = requireProfile(chain);
         return new RuntimeChain(ChainType.valueOf(profile.getChain()), profile.getChain(),
                 profile.getNetwork(), profile.getFamily(), profile.getNativeSymbol(),
                 profile.getRuntimeCurrencyId());
@@ -38,11 +39,12 @@ public class BlockchainRuntimeService {
                 : addressRuntime.generateDepositAddress(type, userId, biz);
     }
 
-    public Address generateDepositAddressAtIndex(String chain, long userId, int biz, long childIndex) {
-        ChainType type = requireRuntime(chain).chainType();
+    public ChainAddressRecord generateDepositAddressAtIndex(AccountChainProfile profile, long userId, int biz, long childIndex) {
+        if (!Boolean.TRUE.equals(profile.getEnabled())) throw new IllegalStateException("chain profile is disabled");
+        ChainType type = ChainType.valueOf(profile.getChain());
         return isBitcoinLike(type)
-                ? bitcoinLikeRuntime.generateDepositAddressAtIndex(type, userId, biz, childIndex)
-                : addressRuntime.generateDepositAddressAtIndex(type, userId, biz, childIndex);
+                ? bitcoinLikeRuntime.generateDepositAddressAtIndex(profile, userId, biz, childIndex)
+                : addressRuntime.generateDepositAddressAtIndex(profile, userId, biz, childIndex);
     }
 
     public boolean checkAddress(String chain, String address) {
@@ -55,7 +57,7 @@ public class BlockchainRuntimeService {
     }
 
     public long depositConfirmationThreshold(AssetRuntimeMetadata asset) {
-        return profile(chainName(asset)).getDepositConfirmations();
+        return requireProfile(chainName(asset)).getDepositConfirmations();
     }
 
     public long dustThresholdAtomic(AssetRuntimeMetadata asset) {
@@ -76,7 +78,7 @@ public class BlockchainRuntimeService {
     }
 
     public AssetRuntimeMetadata assetMetadata(String chain) {
-        return assetMetadata(profile(chain));
+        return assetMetadata(requireProfile(chain));
     }
 
     public AssetRuntimeMetadata assetMetadata(int runtimeCurrencyId) {
@@ -110,7 +112,7 @@ public class BlockchainRuntimeService {
         return requireRuntime(chain).nativeSymbol();
     }
 
-    private AccountChainProfile profile(String chain) {
+    public AccountChainProfile requireProfile(String chain) {
         if (chain == null || chain.isBlank()) throw new IllegalArgumentException("chain is required");
         String normalized = chain.trim().toUpperCase(Locale.ROOT);
         return profiles.findAccountByChain(normalized)

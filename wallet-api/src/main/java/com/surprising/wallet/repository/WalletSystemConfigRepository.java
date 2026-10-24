@@ -26,10 +26,7 @@ public class WalletSystemConfigRepository {
         return jdbc.query("""
                 select config_key, config_value, enabled
                   from wallet_system_config
-                 where config_key in (
-                    'global.all.enabled', 'global.scan.enabled',
-                    'global.withdraw.enabled', 'global.collection.enabled',
-                    'global.transfer.enabled')
+                 where config_key like 'global.%.enabled'
                 """, rs -> {
             Map<String, Boolean> values = new java.util.HashMap<>();
             while (rs.next()) values.put(rs.getString("config_key"), setting(rs).booleanValue());

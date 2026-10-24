@@ -33,9 +33,6 @@ public class SolanaKeyService {
     public SolanaKeyService(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
-    public boolean isConfigured() {
-        return keyMaterial.isConfigured();
-    }
     /**
      * 派生单个索引的 Ed25519 密钥（用于热钱包等单索引场景）。
      *

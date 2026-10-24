@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.testutil.AddressRuntimeTestSupport;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -75,7 +76,8 @@ class SuiLiveNativeFlowIntegrationTest {
                 profiles("SUI"),
                 nodes("SUI", env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443")));
         SuiKeyService keys = new SuiKeyService(WalletKeyTestFixture.provider(masterSeed));
-        SuiAddressService addresses = new SuiAddressService(keys, repository.chainAddressRepository);
+        var addresses = new AddressRuntimeTestSupport(repository, WalletKeyTestFixture.provider(masterSeed));
+        var profile = addresses.runtime.requireProfile("SUI");
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
         SuiTransactionService transactions = new SuiTransactionService(
                 rpc,
@@ -102,12 +104,15 @@ class SuiLiveNativeFlowIntegrationTest {
                 repository.chainAssetRepository,
                 RuntimeTestSupport.database(jdbc));
 
-        ChainAddressRecord owner = addresses.createNativeAddress(
-                tenantId, 7001, 0, OWNER_INDEX, "DEPOSIT");
-        ChainAddressRecord external = addresses.createNativeAddress(
-                tenantId, 7002, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createNativeAddress(
-                tenantId, 0, 0, HOT_INDEX, "DEPOSIT");
+        ChainAddressRecord owner = addresses.runtime.generateDepositAddressAtIndex(profile, 7001, 0, OWNER_INDEX);
+        owner.setTenantId(tenantId);
+        repository.chainAddressRepository.assignTenant(tenantId, owner.getId());
+        ChainAddressRecord external = addresses.derivation.deriveAddress(profile, 7002, 0, EXTERNAL_INDEX, "EXTERNAL");
+        external.setTenantId(tenantId);
+        repository.chainAddressRepository.upsert(external);
+        ChainAddressRecord hot = addresses.derivation.deriveAddress(profile, 0, 0, HOT_INDEX, "DEPOSIT");
+        hot.setTenantId(tenantId);
+        repository.chainAddressRepository.upsert(hot);
         UUID custodyAddressId = SuiTenantIntegrationFixture.attachDepositAddress(jdbc, owner);
 
         String faucetDigest = "existing-balance";

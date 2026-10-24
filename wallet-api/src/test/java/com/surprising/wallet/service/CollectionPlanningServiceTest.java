@@ -54,7 +54,32 @@ class CollectionPlanningServiceTest {
 
     private static final class CollectionJdbcTemplate extends JdbcTemplate {
         @Override
-        public List<Map<String, Object>> queryForList(String sql, Object... args) {
+        public <T> List<T> query(String sql, org.springframework.jdbc.core.RowMapper<T> mapper, Object... args) {
+            var result = new java.util.ArrayList<T>();
+            for (var row : rows(sql, args)) {
+                var rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+                try {
+                    org.mockito.Mockito.when(rs.getObject(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(UUID.class)))
+                            .thenAnswer(call -> row.get(call.getArgument(0)));
+                    org.mockito.Mockito.when(rs.getString(org.mockito.ArgumentMatchers.anyString()))
+                            .thenAnswer(call -> (String) row.get(call.getArgument(0)));
+                    org.mockito.Mockito.when(rs.getBigDecimal(org.mockito.ArgumentMatchers.anyString()))
+                            .thenAnswer(call -> (BigDecimal) row.get(call.getArgument(0)));
+                    org.mockito.Mockito.when(rs.getLong(org.mockito.ArgumentMatchers.anyString()))
+                            .thenAnswer(call -> row.get(call.getArgument(0)) instanceof Number n ? n.longValue() : 0L);
+                    org.mockito.Mockito.when(rs.getInt(org.mockito.ArgumentMatchers.anyString()))
+                            .thenAnswer(call -> row.get(call.getArgument(0)) instanceof Number n ? n.intValue() : 0);
+                    org.mockito.Mockito.when(rs.getBoolean(org.mockito.ArgumentMatchers.anyString()))
+                            .thenAnswer(call -> Boolean.TRUE.equals(row.get(call.getArgument(0))));
+                    result.add(mapper.mapRow(rs, result.size()));
+                } catch (java.sql.SQLException error) {
+                    throw new AssertionError(error);
+                }
+            }
+            return result;
+        }
+
+        private List<Map<String, Object>> rows(String sql, Object... args) {
             String query = sql.replaceAll("\\s+", " ").toLowerCase();
             if (query.contains(" from deposit_record ")) {
                 assertTrue(query.contains("sum(amount)"),

@@ -38,6 +38,7 @@ class CustodyAddressAllocationIntegrationTest {
     private CustodyAddressService service;
     private Evm7702AccountRepository projections;
     private BlockchainRuntimeService runtime;
+    private com.surprising.wallet.common.chain.AccountChainProfile profile;
 
     @Configuration(proxyBeanMethods = false) @EnableTransactionManagement
     static class Transactions { }
@@ -52,16 +53,17 @@ class CustodyAddressAllocationIntegrationTest {
                 "allocation-test", "API_KEY", Set.of("addresses:read", "addresses:write"));
         var chainAddresses = new ChainAddressRepository(jdbc);
         runtime = mock(BlockchainRuntimeService.class);
-        when(runtime.requireRuntime("ETH")).thenReturn(new BlockchainRuntimeService.RuntimeChain(
-                ChainType.ETH, "ETH", "devtest", "evm", "ETH", 1));
-        when(runtime.generateDepositAddressAtIndex(eq("ETH"), anyLong(), anyInt(), anyLong())).thenAnswer(call -> {
+        profile = com.surprising.wallet.common.chain.AccountChainProfile.builder()
+                .chain("ETH").network("devtest").family("evm").nativeSymbol("ETH").enabled(true).build();
+        when(runtime.requireProfile("ETH")).thenReturn(profile);
+        when(runtime.generateDepositAddressAtIndex(same(profile), anyLong(), anyInt(), anyLong())).thenAnswer(call -> {
             long user = call.getArgument(1), child = call.getArgument(3);
             int biz = call.getArgument(2);
             String address = String.format("0x%040x", user * 100_000L + child);
             chainAddresses.upsert(ChainAddressRecord.builder().chain("ETH").assetSymbol("ETH")
                     .accountId(address).userId(user).biz(biz).addressIndex(child).address(address)
                     .ownerAddress(address).derivationPath("test-path").walletRole("DEPOSIT").enabled(true).build());
-            return Address.builder().address(address).index(Math.toIntExact(child)).build();
+            return chainAddresses.find("ETH", "ETH", user, biz, child, "DEPOSIT").orElseThrow();
         });
         projections = mock(Evm7702AccountRepository.class);
         var chains = mock(CustodyTenantChainService.class);
@@ -101,7 +103,7 @@ class CustodyAddressAllocationIntegrationTest {
         assertEquals(1, rows("chain_address"));
         assertEquals(1, rows("custody_derivation_subject"));
         assertEquals(1, rows("custody_audit_log"));
-        verify(runtime, times(1)).generateDepositAddressAtIndex(eq("ETH"), anyLong(), anyInt(), eq(2L));
+        verify(runtime, times(1)).generateDepositAddressAtIndex(same(profile), anyLong(), anyInt(), eq(2L));
         verify(projections, times(1)).createProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
     }
 

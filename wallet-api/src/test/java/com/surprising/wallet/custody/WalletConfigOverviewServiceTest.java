@@ -118,7 +118,7 @@ class WalletConfigOverviewServiceTest {
             when(tokenRows.listAll()).thenAnswer(ignored -> List.copyOf(tokens));
             when(assetRows.listNonNativeOverview()).thenAnswer(ignored -> List.copyOf(assets));
             when(rpcRows.listOverview()).thenAnswer(ignored -> List.copyOf(nodes));
-            when(keys.isConfigured()).thenReturn(true);
+            when(keys.hasApiKeyMaterial()).thenReturn(true);
             return new WalletConfigOverviewService(settings, profileRows, tokenRows, assetRows, rpcRows, audits,
                     keys, environment, new WalletRuntimeConfigService(profileRows, settings));
         }

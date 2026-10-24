@@ -94,54 +94,24 @@ public class CustodyAddressRepository {
     }
 
     /** 查询租户指定托管地址的单表字段。 */
-    public List<Map<String, Object>> listByTenantAndAddress(UUID tenantId, String address,
+    public List<CustodyAddressRecord> listByTenantAndAddress(UUID tenantId, String address,
                                                              String preferredChain) {
-        return jdbc.queryForList("""
-                select id, chain_address_id, chain, created_at
+        return jdbc.query("select " + COLUMNS + """
                   from custody_address
                  where tenant_id = ? and lower(address) = lower(?)
                  order by case when chain = ? then 0 else 1 end, created_at, id
-                """, tenantId, address, preferredChain);
-    }
-
-    /** 查询租户托管地址及其链地址主键。 */
-    public Optional<Map<String, Object>> findByTenantAndId(UUID tenantId, UUID custodyAddressId) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address, status,
-                       derivation_subject, source
-                  from custody_address
-                where tenant_id = ? and id = ?
-                """, tenantId, custodyAddressId).stream().findFirst();
-    }
-
-    /** 查询租户全部托管地址字段，供服务层组合链地址和账本数据。 */
-    public List<Map<String, Object>> listByTenant(UUID tenantId) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address,
-                       memo, subject, label, status, source
-                  from custody_address
-                 where tenant_id = ?
-                """, tenantId);
+                """, (rs, rowNum) -> mapAddress(rs), tenantId, address, preferredChain);
     }
 
     /** 查询启用的托管地址及其链地址主键。 */
-    public List<Map<String, Object>> listActiveByChain(String chain) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address, status
+    public List<AddressLink> listActiveByChain(String chain) {
+        return jdbc.query("""
+                select id, chain_address_id
                   from custody_address where chain = ? and status = 'ACTIVE'
-                """, chain);
+                """, (rs, rowNum) -> new AddressLink(rs.getObject("id", UUID.class), rs.getLong("chain_address_id")), chain);
     }
 
-    /** 查询租户指定链和地址的启用托管地址。 */
-    public Optional<Map<String, Object>> findActiveByTenantAndAddress(UUID tenantId, String chain,
-                                                                       String address) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address, status
-                  from custody_address
-                 where tenant_id = ? and chain = ? and lower(address) = lower(?) and status = 'ACTIVE'
-                 order by id limit 1
-                """, tenantId, chain, address).stream().findFirst();
-    }
+    public record AddressLink(UUID id, long chainAddressId) { }
 
     /** 创建托管地址。 */
     public int insert(UUID id, UUID tenantId, long chainAddressId, String chain, String network,

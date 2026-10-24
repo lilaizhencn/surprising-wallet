@@ -26,14 +26,8 @@ public class TronTrc20Service {
                 new Uint256(Trc20AbiCodec.toRawAmount(amount, decimals))
         );
         Function transfer = new Function("transfer", inputs, List.of());
-        Chain.Transaction unsigned = client.api()
-                .triggerCall(ownerAddress, contractAddress, transfer)
-                .setFeeLimit(feeLimitSun)
-                .build();
-        Chain.Transaction signed = client.api().signTransaction(unsigned, keyPair);
+        Chain.Transaction unsigned = client.createContractCall(ownerAddress, contractAddress, transfer, feeLimitSun);
+        Chain.Transaction signed = client.signTransaction(unsigned, keyPair);
         return new TronTransactionService.SignedTronTransaction(TronTransactionService.txId(signed), signed);
-    }
-    public String broadcast(TronTridentClient client, TronTransactionService.SignedTronTransaction transaction) {
-        return client.broadcast(transaction.transaction());
     }
 }

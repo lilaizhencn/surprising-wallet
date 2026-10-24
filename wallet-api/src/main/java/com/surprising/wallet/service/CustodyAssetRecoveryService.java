@@ -316,12 +316,12 @@ public class CustodyAssetRecoveryService {
     private Ownership requireOwnership(UUID tenantId, String destinationAddress,
                                        String preferredChain) {
         List<Ownership> owners = new ArrayList<>();
-        for (Map<String, Object> custodyRow : custodyAddressRepository.listByTenantAndAddress(
+        for (var custodyRow : custodyAddressRepository.listByTenantAndAddress(
                 tenantId, destinationAddress, preferredChain)) {
-            long chainAddressId = ((Number) custodyRow.get("chain_address_id")).longValue();
+            long chainAddressId = custodyRow.chainAddressId();
             chainAddressRepository.findOwned(tenantId, chainAddressId).ifPresent(address ->
                     owners.add(new Ownership(
-                            (UUID) custodyRow.get("id"), string(address.getAccountId()),
+                            custodyRow.id(), string(address.getAccountId()),
                             address.getUserId().longValue(), address.getBiz(),
                             address.getAddressIndex().longValue(), string(address.getAddress()),
                             nullable(address.getOwnerAddress()), string(address.getDerivationPath()),

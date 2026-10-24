@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.AddressRuntimeTestSupport;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
@@ -78,7 +79,8 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                         "faucet",
                         node("APTOS", ""))));
         AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider());
-        AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
+        var addresses = new AddressRuntimeTestSupport(repository, WalletKeyTestFixture.provider());
+        var profile = addresses.runtime.requireProfile("APTOS");
         AptosTransactionService transactions = new AptosTransactionService(
                 rpc,
                 new AptosTransactionSigner(keys),
@@ -110,9 +112,8 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         ChainAddressRecord external = external(keys, EXTERNAL_INDEX);
         String ownerAddress = address(keys, 6111L, OWNER_INDEX);
         requireFunding(rpc, external.getAddress(), ownerAddress, metadataAddress, depositAtomic);
-        ChainAddressRecord owner = addresses.createTokenAddress(symbol, 6111, 0, OWNER_INDEX, "DEPOSIT");
-        ChainAddressRecord hot = addresses.createTokenAddress(
-                symbol, HOT_USER_ID, 0, HOT_INDEX, "DEPOSIT");
+        ChainAddressRecord owner = addresses.runtime.generateDepositAddressAtIndex(profile, 6111, 0, OWNER_INDEX);
+        ChainAddressRecord hot = addresses.runtime.generateDepositAddressAtIndex(profile, HOT_USER_ID, 0, HOT_INDEX);
         AptosTenantIntegrationFixture.TenantAddress tenantAddress =
                 AptosTenantIntegrationFixture.attachDepositAddress(jdbc, owner);
         AptosTenantIntegrationFixture.attachPlatformAddress(jdbc, hot);

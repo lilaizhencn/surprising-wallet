@@ -3,16 +3,21 @@ package com.surprising.wallet.chain.tron;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import org.tron.trident.abi.datatypes.Type;
+import org.tron.trident.abi.datatypes.Function;
 import org.tron.trident.core.ApiWrapper;
 import org.tron.trident.core.NodeType;
+import org.tron.trident.core.exceptions.IllegalException;
 import org.tron.trident.core.key.KeyPair;
+import org.tron.trident.core.utils.Utils;
 import org.tron.trident.proto.Response.Account;
 import org.tron.trident.proto.Chain;
 import org.tron.trident.proto.Response;
 
 import java.util.List;
 
-/** TRON 节点客户端；此处封装的 RPC 调用经过配置节点的统一限流。 */
+import static org.tron.trident.core.Constant.TRANSACTION_DEFAULT_EXPIRATION_TIME;
+
+/** TRON 节点访问与本地交易构建；节点请求经过配置节点的统一限流。 */
 public class TronTridentClient implements AutoCloseable {
     private final ApiWrapper apiWrapper;
     private final ChainRpcNode fullNode;
@@ -33,8 +38,30 @@ public class TronTridentClient implements AutoCloseable {
         this.apiWrapper = new ApiWrapper(fullNode.getRpcUrl(), solidityNode.getRpcUrl(),
                 "", this.apiKey == null ? "" : this.apiKey);
     }
-    public ApiWrapper api() {
-        return apiWrapper;
+    public synchronized Chain.Transaction createTrxTransfer(String from, String to, long amountSun) throws IllegalException {
+        prepareLocalTransaction(apiWrapper);
+        try {
+            return apiWrapper.transfer(from, to, amountSun).getTransaction();
+        } finally {
+            apiWrapper.disableLocalCreate();
+        }
+    }
+
+    public Chain.Transaction createContractCall(String owner, String contract, Function function, long feeLimitSun) {
+        return callUnchecked(fullNode, () -> apiWrapper.triggerCall(owner, contract, function)
+                .setFeeLimit(feeLimitSun).build());
+    }
+
+    public Chain.Transaction signTransaction(Chain.Transaction transaction, KeyPair keyPair) {
+        return apiWrapper.signTransaction(transaction, keyPair);
+    }
+
+    public Response.TransactionExtention constantCall(String owner, String contract, Function function) {
+        return callUnchecked(fullNode, () -> apiWrapper.triggerConstantContract(owner, contract, function));
+    }
+
+    public Response.EstimateEnergyMessage estimateEnergy(String owner, String contract, Function function, NodeType nodeType) {
+        return callUnchecked(node(nodeType), () -> apiWrapper.estimateEnergy(owner, contract, function, nodeType));
     }
     public Chain.Block getNowBlock() throws Exception {
         return call(fullNode, apiWrapper::getNowBlock);
@@ -79,16 +106,27 @@ public class TronTridentClient implements AutoCloseable {
                                                         long consumeUserResourcePercent,
                                                         long originEnergyLimit,
                                                         long callValueSun) {
-        return callUnchecked(fullNode, () -> {
-            ApiWrapper deployWrapper = new ApiWrapper(fullNode.getRpcUrl(), solidityNode.getRpcUrl(),
-                    keyPair.toPrivateKey(), apiKey == null ? "" : apiKey);
-            try {
-                return deployWrapper.deployContract(contractName, abiJson, bytecodeHex, constructorArgs,
-                        feeLimitSun, consumeUserResourcePercent, originEnergyLimit, callValueSun, "", 0L);
-            } finally {
-                deployWrapper.close();
-            }
-        });
+        ApiWrapper deployWrapper = new ApiWrapper(fullNode.getRpcUrl(), solidityNode.getRpcUrl(),
+                keyPair.toPrivateKey(), apiKey == null ? "" : apiKey);
+        try {
+            prepareLocalTransaction(deployWrapper);
+            return deployWrapper.deployContract(contractName, abiJson, bytecodeHex, constructorArgs,
+                    feeLimitSun, consumeUserResourcePercent, originEnergyLimit, callValueSun, "", 0L);
+        } catch (RuntimeException error) {
+            throw error;
+        } catch (Exception error) {
+            throw new IllegalStateException("TRON RPC request failed", error);
+        } finally {
+            deployWrapper.close();
+        }
+    }
+
+    /** SDK 的默认交易构建隐含两次 RPC；分别限流后沿用同一参考块与有效期规则在本地构建。 */
+    private void prepareLocalTransaction(ApiWrapper target) {
+        var solid = callUnchecked(solidityNode, () -> apiWrapper.getBlock(false, NodeType.SOLIDITY_NODE));
+        var head = callUnchecked(fullNode, () -> apiWrapper.getBlock(false, NodeType.FULL_NODE));
+        target.enableLocalCreate(Utils.getBlockId(solid),
+                head.getBlockHeader().getRawData().getTimestamp() + TRANSACTION_DEFAULT_EXPIRATION_TIME);
     }
 
     /**

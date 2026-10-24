@@ -94,15 +94,15 @@ public class ChainAddressRuntime {
     /**
      * 在指定索引位置生成充值地址。
      *
-     * @param chainType  链类型
+     * @param profile    本次操作已读取的启用链配置
      * @param userId     用户 ID
      * @param biz        业务类型
      * @param childIndex 地址索引（0 到 Integer.MAX_VALUE）
      * @return 生成的充值地址
      */
     @Transactional(rollbackFor = Throwable.class)
-    public synchronized Address generateDepositAddressAtIndex(
-            ChainType chainType, long userId, int biz, long childIndex) {
+    public synchronized ChainAddressRecord generateDepositAddressAtIndex(
+            AccountChainProfile profile, long userId, int biz, long childIndex) {
         if (HotWalletRules.isDefaultHotUser(userId, biz)) {
             throw new IllegalArgumentException(
                     "userId=0,biz=0 is reserved for the unique default hot wallet address");
@@ -110,19 +110,17 @@ public class ChainAddressRuntime {
         if (childIndex < 0 || childIndex > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("childIndex must be between 0 and 2147483647");
         }
-        AccountChainProfile profile = profile(chainType);
         ChainAddressRecord record = hotWalletAddressService.deriveAddress(
                 profile, userId, biz, childIndex, WALLET_ROLE_DEPOSIT);
         chainAddressRepository.upsert(record);
-        ChainAddressRecord saved = chainAddressRepository.find(
+        return chainAddressRepository.find(
                 profile.getChain(),
                 profile.getNativeSymbol(),
                 userId,
                 biz,
                 childIndex,
                 WALLET_ROLE_DEPOSIT)
-                .orElse(record);
-        return toAddress(profile, saved);
+                .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
     }
     public boolean checkAddress(ChainType chainType, String address) {
         if (!StringUtils.hasText(address)) {

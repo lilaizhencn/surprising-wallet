@@ -39,9 +39,6 @@ public class AptosKeyService {
      *
      * @return true 如果已配置可用
      */
-    public boolean isConfigured() {
-        return keyMaterial.isConfigured();
-    }
 
     /**
      * 派生 Ed25519 密钥（简化模式，userId=0, biz=0）。

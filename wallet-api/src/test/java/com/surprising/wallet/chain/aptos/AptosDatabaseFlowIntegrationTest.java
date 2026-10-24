@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.AddressRuntimeTestSupport;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -12,7 +13,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,25 +37,26 @@ class AptosDatabaseFlowIntegrationTest {
     void addressRestartDepositReplayLedgerLocksAndSequenceReservationAreSafe() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.db.enabled"),
                 "set -Daptos.db.enabled=true for PostgreSQL-backed Aptos validation");
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                env("APTOS_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
-                env("APTOS_DB_USER", "wallet"),
-                env("APTOS_DB_PASSWORD", ""));
+        var dataSource = com.surprising.wallet.custody.CustodyIntegrationDatabase.dataSource();
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
+            jdbc.update("update chain_profile set enabled=false where chain='APTOS'");
+            jdbc.update("update chain_profile set enabled=true where chain='APTOS' and network='testnet'");
             ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
-            AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
+            var addresses = new AddressRuntimeTestSupport(repository, WalletKeyTestFixture.provider(MASTER_SEED));
+            var profile = addresses.runtime.requireProfile("APTOS");
             long baseIndex = 1_200_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
-            ChainAddressRecord userA = addresses.createNativeAddress(5001, 0, baseIndex, "DEPOSIT");
-            ChainAddressRecord userAAfterRestart = new AptosAddressService(
-                    new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED)), repository.chainAddressRepository)
-                    .createNativeAddress(5001, 0, baseIndex, "DEPOSIT");
-            ChainAddressRecord userB = addresses.createNativeAddress(5002, 0, baseIndex + 1, "DEPOSIT");
+            ChainAddressRecord userA = addresses.runtime.generateDepositAddressAtIndex(profile, 5001, 0, baseIndex);
+            ChainAddressRecord userAAfterRestart = new AddressRuntimeTestSupport(repository, WalletKeyTestFixture.provider(MASTER_SEED)).runtime
+                    .generateDepositAddressAtIndex(profile, 5001, 0, baseIndex);
+            ChainAddressRecord userB = addresses.runtime.generateDepositAddressAtIndex(profile, 5002, 0, baseIndex + 1);
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());
             assertNotEquals(userA.getAddress(), userB.getAddress());
+            var tenant = AptosTenantIntegrationFixture.attachDepositAddress(jdbc, userA).tenantId();
+            AptosTenantIntegrationFixture.attachDepositAddress(jdbc, userB);
 
             String txHash = "0x" + UUID.randomUUID().toString().replace("-", "")
                     + UUID.randomUUID().toString().replace("-", "");
@@ -64,9 +65,9 @@ class AptosDatabaseFlowIntegrationTest {
                     123L, txHash, 1, null, "{}");
             assertTrue(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
             assertFalse(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
-            assertTrue(repository.ledgerBalanceRepository.freeze("APTOS", "APT", userA.getAccountId(), new BigDecimal("20000000"), null));
-            assertFalse(repository.ledgerBalanceRepository.freeze("APTOS", "APT", userA.getAccountId(), new BigDecimal("90000000"), null));
-            assertTrue(repository.ledgerBalanceRepository.release("APTOS", "APT", userA.getAccountId(), new BigDecimal("20000000"), null));
+            assertTrue(repository.ledgerBalanceRepository.freeze("APTOS", "APT", userA.getAccountId(), new BigDecimal("20000000"), tenant));
+            assertFalse(repository.ledgerBalanceRepository.freeze("APTOS", "APT", userA.getAccountId(), new BigDecimal("90000000"), tenant));
+            assertTrue(repository.ledgerBalanceRepository.release("APTOS", "APT", userA.getAccountId(), new BigDecimal("20000000"), tenant));
 
             long seq0 = repository.accountSequenceRepository.reserve("APTOS", userA.getAddress(), 4);
             long seq1 = repository.accountSequenceRepository.reserve("APTOS", userA.getAddress(), 4);
@@ -128,11 +129,4 @@ class AptosDatabaseFlowIntegrationTest {
         }
     }
 
-    /**
-     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value;
-    }
 }

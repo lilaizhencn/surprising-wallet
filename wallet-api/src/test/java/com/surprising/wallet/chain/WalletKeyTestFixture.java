@@ -32,7 +32,6 @@ public final class WalletKeyTestFixture {
     /** Use the same key-material boundary while preserving each test's derivation vectors. */
     public static WalletKeyMaterialProvider provider(String ed25519Seed) {
         var material = mock(WalletKeyMaterialProvider.class);
-        when(material.isConfigured()).thenReturn(true);
         when(material.ed25519()).thenReturn(new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(ed25519Seed)));
         return material;
     }

@@ -100,9 +100,8 @@ public class Evm7702CollectionWorkflowService {
             for (RuntimeTarget target : listRuntimeTargets()) {
                 try {
                     AccountChainProfile profile = target.profile();
-                    if (!"evm".equalsIgnoreCase(profile.getFamily()) ||
-                            !profile.getNetwork().equalsIgnoreCase(target.profile().getNetwork())) {
-                        throw new IllegalStateException("EIP-7702 target/profile network mismatch");
+                    if (!"evm".equalsIgnoreCase(profile.getFamily())) {
+                        throw new IllegalStateException("EIP-7702 target must have EVM family");
                     }
                     recoverUnknown(profile);
                     confirm(profile);

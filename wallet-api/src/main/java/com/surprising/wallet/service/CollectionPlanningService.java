@@ -25,10 +25,10 @@ public class CollectionPlanningService {
         record BalanceKey(UUID tenantId, String assetSymbol, String address) { }
         record AddressKey(UUID tenantId, String address) { }
         Map<BalanceKey, BigDecimal> deposited = new HashMap<>();
-        for (Map<String, Object> row : deposits.listCreditedForCollectionBalance(chain)) {
-            BalanceKey key = new BalanceKey((UUID) row.get("tenant_id"),
-                    String.valueOf(row.get("asset_symbol")), String.valueOf(row.get("to_address")));
-            deposited.merge(key, (BigDecimal) row.get("amount"), BigDecimal::add);
+        for (var row : deposits.listCreditedForCollectionBalance(chain)) {
+            BalanceKey key = new BalanceKey(row.tenantId(),
+                    row.assetSymbol(), row.address());
+            deposited.merge(key, row.amount(), BigDecimal::add);
         }
         Map<AddressKey, List<Map.Entry<BalanceKey, BigDecimal>>> depositedByAddress = new HashMap<>();
         for (Map.Entry<BalanceKey, BigDecimal> entry : deposited.entrySet()) {
@@ -38,11 +38,11 @@ public class CollectionPlanningService {
         }
         Map<BalanceKey, BigDecimal> collected = new HashMap<>();
         Set<BalanceKey> pending = new HashSet<>();
-        for (Map<String, Object> row : collections.listForCollectionBalance(chain)) {
-            BalanceKey key = new BalanceKey((UUID) row.get("tenant_id"),
-                    String.valueOf(row.get("asset_symbol")), String.valueOf(row.get("from_address")));
-            collected.put(key, (BigDecimal) row.get("amount"));
-            if (Boolean.TRUE.equals(row.get("pending"))) {
+        for (var row : collections.listForCollectionBalance(chain)) {
+            BalanceKey key = new BalanceKey(row.tenantId(),
+                    row.assetSymbol(), row.address());
+            collected.put(key, row.amount());
+            if (row.pending()) {
                 pending.add(key);
             }
         }
@@ -51,30 +51,30 @@ public class CollectionPlanningService {
             activeAssets.put(row.getSymbol().toLowerCase(Locale.ROOT), row);
         }
         Map<Long, UUID> custodyByChainAddress = new HashMap<>();
-        for (Map<String, Object> row : custodyAddresses.listActiveByChain(chain)) {
-            custodyByChainAddress.put(((Number) row.get("chain_address_id")).longValue(),
-                    (UUID) row.get("id"));
+        for (var row : custodyAddresses.listActiveByChain(chain)) {
+            custodyByChainAddress.put(row.chainAddressId(),
+                    row.id());
         }
         List<CollectionCandidateRecord> result = new ArrayList<>();
-        for (Map<String, Object> address : addresses.listCollectionCandidatesByChain(chain)) {
-            UUID tenantId = (UUID) address.get("tenant_id");
-            String walletRole = String.valueOf(address.get("wallet_role"));
-            long userId = ((Number) address.get("user_id")).longValue();
+        for (var address : addresses.listCollectionCandidatesByChain(chain)) {
+            UUID tenantId = address.getTenantId();
+            String walletRole = address.getWalletRole();
+            long userId = address.getUserId();
             if (tenantId == null || !"DEPOSIT".equals(walletRole)
                     || userId == HotWalletRules.DEFAULT_HOT_USER_ID) {
                 continue;
             }
             ChainAsset nativeAsset = activeAssets.get(
-                    String.valueOf(address.get("asset_symbol")).toLowerCase(Locale.ROOT));
+                    address.getAssetSymbol().toLowerCase(Locale.ROOT));
             if (nativeAsset == null || !Boolean.TRUE.equals(nativeAsset.getNativeAsset())) {
                 continue;
             }
-            long chainAddressId = ((Number) address.get("id")).longValue();
+            long chainAddressId = address.getId();
             UUID custodyId = custodyByChainAddress.get(chainAddressId);
             if (custodyId == null) {
                 continue;
             }
-            String sourceAddress = String.valueOf(address.get("address"))
+            String sourceAddress = address.getAddress()
                     .toLowerCase(Locale.ROOT);
             for (Map.Entry<BalanceKey, BigDecimal> entry : depositedByAddress.getOrDefault(
                     new AddressKey(tenantId, sourceAddress), List.of())) {
@@ -95,10 +95,10 @@ public class CollectionPlanningService {
                     continue;
                 }
                 result.add(CollectionCandidateRecord.builder().tenantId(tenantId).custodyAddressId(custodyId)
-                        .chain(chain).assetSymbol(key.assetSymbol()).accountId((String) address.get("account_id"))
-                        .address((String) address.get("address")).ownerAddress((String) address.get("owner_address"))
-                        .userId(userId).biz(((Number) address.get("biz")).intValue())
-                        .addressIndex(((Number) address.get("address_index")).longValue())
+                        .chain(chain).assetSymbol(key.assetSymbol()).accountId(address.getAccountId())
+                        .address(address.getAddress()).ownerAddress(address.getOwnerAddress())
+                        .userId(userId).biz(address.getBiz())
+                        .addressIndex(address.getAddressIndex())
                         .walletRole(walletRole).amount(amount).build());
             }
         }

@@ -25,9 +25,6 @@ public class NearKeyService {
     public NearKeyService(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
-    public boolean isConfigured() {
-        return keyMaterial.isConfigured();
-    }
     public Ed25519DerivedKey derive(long derivationIndex) {
         return keyMaterial.ed25519().derive(Ed25519Chain.NEAR, derivationIndex);
     }

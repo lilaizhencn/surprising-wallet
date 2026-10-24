@@ -161,7 +161,7 @@ class RuntimeConfigurationIntegrationTest {
                     BigDecimal.ZERO, BigDecimal.ZERO);
             var management = WalletConfigTestSupport.tokens(jdbc, runtime);
             var keys = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
-            org.mockito.Mockito.when(keys.isConfigured()).thenReturn(true);
+            org.mockito.Mockito.when(keys.hasApiKeyMaterial()).thenReturn(true);
             var overview = new WalletConfigOverviewService(settings, profiles, tokens, assets, rpc, audits,
                     keys, "test", runtime);
             for (String task : List.of("scan", "withdraw", "collection", "transfer")) {

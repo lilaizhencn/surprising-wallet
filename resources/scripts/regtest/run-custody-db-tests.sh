@@ -6,7 +6,7 @@ source "$CUSTODY_DB_ROOT/resources/scripts/regtest/local-postgres.sh"
 
 CUSTODY_DB_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-custody-db-tests.XXXXXX)
 CUSTODY_DB_NAME="surprising_wallet_test_custody_$$"
-CUSTODY_DB_TESTS=${CUSTODY_DB_TESTS:-ChainProfileRepositoryIntegrationTest,RuntimeConfigurationIntegrationTest,TokenConfigurationIntegrationTest,CustodyDepositProjectionIntegrationTest,CustodyWebhookLifecycleIntegrationTest,CustodySecurityIntegrationTest,CustodyAuthenticationIntegrationTest,CustodyOperationsIntegrationTest,CustodyOperationalQueriesIntegrationTest,CustodyControlPlaneQueriesIntegrationTest,CustodyAddressAllocationIntegrationTest,CustodyTenantIsolationIntegrationTest,CustodyDepositFinalityIntegrationTest,CustodyAssetRecoveryIntegrationTest,Evm7702ProductionFlowIntegrationTest,CustodyEventPublicationIntegrationTest,CustodyWithdrawalProjectionIntegrationTest,CustodyGasAccountingIntegrationTest,WithdrawalSettlementIntegrationTest,EvmNonceReservationIntegrationTest,UtxoSigningSubmissionIntegrationTest,BtcCollectionRbfConcurrencyIntegrationTest,UtxoSigningPipelineIntegrationTest,UtxoDepositWorkflowIntegrationTest,EvmBatchOwnershipIntegrationTest,AccountSequenceReservationIntegrationTest,EvmUnknownAttemptRecoveryIntegrationTest,EvmBatchRowsIntegrationTest}
+CUSTODY_DB_TESTS=${CUSTODY_DB_TESTS:-AptosDatabaseFlowIntegrationTest,SuiDatabaseFlowIntegrationTest,CustodyAddressRuntimeIntegrationTest,ChainProfileRepositoryIntegrationTest,RuntimeConfigurationIntegrationTest,TokenConfigurationIntegrationTest,CustodyDepositProjectionIntegrationTest,CustodyWebhookLifecycleIntegrationTest,CustodySecurityIntegrationTest,CustodyAuthenticationIntegrationTest,CustodyOperationsIntegrationTest,CustodyOperationalQueriesIntegrationTest,CustodyControlPlaneQueriesIntegrationTest,CustodyAddressAllocationIntegrationTest,CustodyTenantIsolationIntegrationTest,CustodyDepositFinalityIntegrationTest,CustodyAssetRecoveryIntegrationTest,Evm7702ProductionFlowIntegrationTest,CustodyEventPublicationIntegrationTest,CustodyWithdrawalProjectionIntegrationTest,CustodyGasAccountingIntegrationTest,WithdrawalSettlementIntegrationTest,EvmNonceReservationIntegrationTest,UtxoSigningSubmissionIntegrationTest,BtcCollectionRbfConcurrencyIntegrationTest,UtxoSigningPipelineIntegrationTest,UtxoDepositWorkflowIntegrationTest,EvmBatchOwnershipIntegrationTest,AccountSequenceReservationIntegrationTest,EvmUnknownAttemptRecoveryIntegrationTest,EvmBatchRowsIntegrationTest}
 
 cleanup() {
   local status=$?
@@ -28,6 +28,9 @@ for command in git mvn rsync trash; do
 done
 local_pg_require
 local_pg_create "$CUSTODY_DB_NAME"
+local_pg_psql "$CUSTODY_DB_NAME" -q -v ON_ERROR_STOP=1 \
+  -f "$CUSTODY_DB_ROOT/resources/docs/db/surprising-wallet-init-pgsql.sql" \
+  >"$CUSTODY_DB_BUILD_ROOT/schema-init.log"
 
 rsync -a \
   --exclude=.git \
@@ -44,6 +47,8 @@ mvn -q -f "$CUSTODY_DB_BUILD_ROOT/pom.xml" \
   -pl wallet-api -am \
   -Dtest="$CUSTODY_DB_TESTS" \
   -Dsurefire.failIfNoSpecifiedTests=false \
+  -Daptos.db.enabled=true \
+  -Dsui.db.enabled=true \
   "$@" \
   test
 

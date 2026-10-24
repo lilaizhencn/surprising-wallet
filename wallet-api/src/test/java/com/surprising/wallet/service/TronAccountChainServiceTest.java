@@ -46,12 +46,12 @@ class TronAccountChainServiceTest {
         verify(f.keys).key(same(f.profile), same(f.from));
         if (nativeAsset) {
             verify(f.nativeTransfers).signTrxTransfer(same(f.client), any(KeyPair.class), eq(DESTINATION), eq(1_234_567L));
-            verify(f.nativeTransfers).broadcast(f.client, f.signed);
+            verify(f.client).broadcast(f.signed.transaction());
             verifyNoInteractions(f.tokens);
         } else {
             verify(f.tokens).signTransfer(same(f.client), any(KeyPair.class), eq(f.token.getContractAddress()),
                     eq(DESTINATION), eq(AMOUNT), eq(6), eq(12_500_000L));
-            verify(f.tokens).broadcast(f.client, f.signed);
+            verify(f.client).broadcast(f.signed.transaction());
             verifyNoInteractions(f.nativeTransfers);
         }
         var recorded = ArgumentCaptor.forClass(TronTransactionRecord.class);
@@ -88,11 +88,11 @@ class TronAccountChainServiceTest {
     void aBroadcastFailureClosesTheClientAndKeepsTheCollectionFailurePolicy() throws Exception {
         var f = new Fixture();
         var failure = new IllegalStateException("RPC failure");
-        when(f.nativeTransfers.broadcast(f.client, f.signed)).thenThrow(failure);
+        when(f.client.broadcast(f.signed.transaction())).thenThrow(failure);
         assertSame(failure, assertThrows(IllegalStateException.class, () -> f.send(true, "TRX", AMOUNT)));
         verifyNoInteractions(f.transactions);
-        var order = inOrder(f.nativeTransfers, f.client, f.collections);
-        order.verify(f.nativeTransfers).broadcast(f.client, f.signed);
+        var order = inOrder(f.client, f.collections);
+        order.verify(f.client).broadcast(f.signed.transaction());
         order.verify(f.client).close();
         order.verify(f.collections).updateStatus(TENANT, "TRON", "collection-test", "FAILED", null, "RPC failure", null);
     }
@@ -162,8 +162,7 @@ class TronAccountChainServiceTest {
             when(collections.claimSigning(TENANT, "TRON", "collection-test", null)).thenReturn(1);
             when(nativeTransfers.signTrxTransfer(same(client), any(KeyPair.class), anyString(), anyLong())).thenReturn(signed);
             when(tokens.signTransfer(same(client), any(KeyPair.class), anyString(), anyString(), any(), anyInt(), anyLong())).thenReturn(signed);
-            when(nativeTransfers.broadcast(client, signed)).thenReturn("untrusted-remote-hash");
-            when(tokens.broadcast(client, signed)).thenReturn("untrusted-remote-hash");
+            when(client.broadcast(signed.transaction())).thenReturn("untrusted-remote-hash");
         }
 
         void send(boolean collection, String symbol, BigDecimal amount) throws Exception {

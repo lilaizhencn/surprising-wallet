@@ -245,6 +245,6 @@
   <rect x="30" y="2240" width="1040" height="160" class="svc"/>
   <text x="50" y="2268" class="label">账户链：扫描 Job 直达 DepositWorkflow；各入口共用 profile 顺序与开关</text>
   <text x="50" y="2302" class="desc">提现 / 归集 / 确认保留各自业务规则；TRON 只共享发送，SENT 仍先于客户端关闭</text>
-  <text x="50" y="2336" class="desc">七链密钥服务 → 必需 WalletKeyMaterialProvider → Ed25519；删除测试构造器 / 空依赖分支</text>
-  <text x="50" y="2370" class="desc">派生路径 / 密钥角色 / 种子校验 / 调度池 / 数据库基线沿用既有规则</text>
+  <text x="50" y="2336" class="desc">托管地址：一次 profile → 正式运行时 → 持久化记录；归集类型聚合；删除 Aptos / Sui 重复服务</text>
+  <text x="50" y="2370" class="desc">TRON SDK 私有；参考块分别限流后本地构建；密钥状态按实际材料判断；开关统一读取</text>
 </svg>

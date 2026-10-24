@@ -97,11 +97,12 @@ public class BitcoinLikeChainRuntime {
     @Transactional(rollbackFor = Throwable.class)
     public synchronized Address generateDepositAddress(ChainType chainType, long userId, int biz) {
         rejectReservedHotAddress(userId, biz);
-        AssetRuntimeMetadata asset = assetMetadata(chainType);
+        AccountChainProfile profile = profile(chainType);
+        AssetRuntimeMetadata asset = assetMetadata(profile);
         for (int attempt = 0; attempt < 5; attempt++) {
             try {
                 int index = nextAddressIndex(asset, userId, biz);
-                Address address = buildAddress(chainType, userId, biz, index);
+                Address address = buildAddress(profile, asset, userId, biz, index);
                 addresses.upsert(toChainAddressRecord(address, asset));
                 return address;
             } catch (DuplicateKeyException e) {
@@ -116,7 +117,7 @@ public class BitcoinLikeChainRuntime {
     /**
      * 按指定派生索引生成充值地址。
      *
-     * @param chainType  链类型
+     * @param profile    本次操作已读取的启用链配置
      * @param userId     用户 ID
      * @param biz        业务标识
      * @param childIndex BIP44 子索引（0 到 2147483647）
@@ -124,16 +125,17 @@ public class BitcoinLikeChainRuntime {
      * @throws IllegalArgumentException 如果 childIndex 超出范围
      */
     @Transactional(rollbackFor = Throwable.class)
-    public synchronized Address generateDepositAddressAtIndex(
-            ChainType chainType, long userId, int biz, long childIndex) {
+    public synchronized ChainAddressRecord generateDepositAddressAtIndex(
+            AccountChainProfile profile, long userId, int biz, long childIndex) {
         rejectReservedHotAddress(userId, biz);
         if (childIndex < 0 || childIndex > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("childIndex must be between 0 and 2147483647");
         }
-        AssetRuntimeMetadata asset = assetMetadata(chainType);
-        Address address = buildAddress(chainType, userId, biz, Math.toIntExact(childIndex));
+        AssetRuntimeMetadata asset = assetMetadata(profile);
+        Address address = buildAddress(profile, asset, userId, biz, Math.toIntExact(childIndex));
         addresses.upsert(toChainAddressRecord(address, asset));
-        return address;
+        return addresses.find(profile.getChain(), profile.getNativeSymbol(), userId, biz, childIndex, "DEPOSIT")
+                .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
     }
     /**
      * 校验链地址格式是否合法。
@@ -268,8 +270,15 @@ public class BitcoinLikeChainRuntime {
      * @throws IllegalStateException 如果链配置或资产信息缺失
      */
     public AssetRuntimeMetadata assetMetadata(ChainType chainType) {
-        AccountChainProfile profile = chainProfileRepository.findAccountByChain(chainType.name())
+        return assetMetadata(profile(chainType));
+    }
+
+    private AccountChainProfile profile(ChainType chainType) {
+        return chainProfileRepository.findAccountByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
+    }
+
+    private AssetRuntimeMetadata assetMetadata(AccountChainProfile profile) {
         ChainAsset asset = chainAssetRepository.findActiveDefinition(profile.getChain(), profile.getNativeSymbol()).orElse(null);
         return AssetRuntimeMetadata.fromProfile(
                 profile.getRuntimeCurrencyId(),
@@ -285,27 +294,28 @@ public class BitcoinLikeChainRuntime {
                 .map(value -> Math.toIntExact(value + 1))
                 .orElse(0);
     }
-    private Address buildAddress(ChainType chainType, long userId, int biz, int index) {
-        AssetRuntimeMetadata asset = assetMetadata(chainType);
+    private Address buildAddress(AccountChainProfile profile, AssetRuntimeMetadata asset, long userId, int biz, int index) {
+        ChainType chainType = ChainType.valueOf(profile.getChain());
+        NetworkParameters params = BitcoinLikeNetwork.parse(profile.getNetwork()).parameters(profile.getChain());
         PubKeyConfig.AddressMetadata metadata;
         String address;
         if (chainType == ChainType.DOGE || chainType == ChainType.BCH) {
             metadata = pubKeyConfig.genLegacyThreeTwoAddressMetadata(
-                    networkParameters(chainType), asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
+                    params, asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
             address = metadata.address();
             if (chainType == ChainType.BCH) {
-                BitcoinCashNetworkParameters params = (BitcoinCashNetworkParameters) networkParameters(chainType);
+                BitcoinCashNetworkParameters bchParams = (BitcoinCashNetworkParameters) params;
                 address = BitcoinCashAddressCodec.fromLegacy(
-                        LegacyAddress.fromBase58(params, metadata.address()), params.cashPrefix());
+                        LegacyAddress.fromBase58(bchParams, metadata.address()), bchParams.cashPrefix());
             }
         } else {
             metadata = pubKeyConfig.genThreeTwoAddressMetadata(
-                    networkParameters(chainType), asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
+                    params, asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
             address = metadata.address();
         }
         return Address.builder()
                 .address(address)
-                .network(networkParameters(chainType).getPaymentProtocolId())
+                .network(params.getPaymentProtocolId())
                 .scriptType(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "P2SH" : "P2WSH")
                 .redeemScript(metadata.redeemScript())
                 .witnessScript(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "" : metadata.witnessScript())

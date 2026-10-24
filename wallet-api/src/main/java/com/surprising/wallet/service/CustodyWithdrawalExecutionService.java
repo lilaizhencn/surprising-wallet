@@ -15,7 +15,6 @@ import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import java.security.SecureRandom;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -24,7 +23,6 @@ public class CustodyWithdrawalExecutionService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final WithdrawalOrderRepository withdrawalOrderRepository;
     private final CollectionPlanningService collectionPlanningService;
-
 
     private final WalletRuntimeConfigService runtimeConfig;
     private final BlockchainRuntimeService runtime;
@@ -144,11 +142,10 @@ public class CustodyWithdrawalExecutionService {
                 .filter(row -> Boolean.TRUE.equals(row.getEnabled()))
                 .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
         String accountId = String.valueOf(address.getAccountId());
-        Map<String, Object> balance = ledgerBalanceRepository.listAvailable(
-                        tenantId, chain, symbol, accountId, requiredAmount).stream()
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
-        return new SpendAccount(String.valueOf(balance.get("account_id")),
-                String.valueOf(address.getAddress()));
+        String availableAccount = ledgerBalanceRepository.findAvailableAccount(
+                        tenantId, chain, symbol, accountId, requiredAmount)
+                .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
+        return new SpendAccount(availableAccount, address.getAddress());
     }
     private String withdrawalSourceAddress(UUID tenantId, AssetMeta asset, SpendAccount spend) {
         if (ChainType.valueOf(asset.chain()).isUtxo()) {

@@ -4,7 +4,7 @@ import com.surprising.wallet.model.PageView;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.model.custody.TenantRecord;
 import com.surprising.wallet.repository.Evm7702AccountRepository;
@@ -116,14 +116,9 @@ public class CustodyAddressService {
             return toView(existing);
         }
 
-        BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
-        Address generated = runtime.generateDepositAddressAtIndex(
-                chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(),
-                childIndex);
-        ChainAddressRecord chainAddress = chainRepository.find(
-                        chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(derivationSubject),
-                        tenant.derivationNamespace(), generated.getIndex(), "DEPOSIT")
-                .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
+        AccountChainProfile profile = runtime.requireProfile(chain);
+        ChainAddressRecord chainAddress = runtime.generateDepositAddressAtIndex(
+                profile, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(), childIndex);
         if (chainRepository.assignTenant(tenant.id(), chainAddress.getId()) != 1) {
             throw new IllegalStateException("generated chain address tenant assignment failed");
         }
@@ -133,8 +128,8 @@ public class CustodyAddressService {
                 addressId,
                 tenant.id(),
                 chainAddress.getId(),
-                runtimeChain.chain(),
-                runtimeChain.network(),
+                profile.getChain(),
+                profile.getNetwork(),
                 chainAddress.getAddress(),
                 null,
                 subject,
@@ -143,12 +138,12 @@ public class CustodyAddressService {
                 normalizedSource,
                 derivationSubject,
                 addressVersion,
-                generated.getIndex(),
+                chainAddress.getAddressIndex(),
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
         if (inserted != 1) throw new IllegalStateException("failed to create custody address");
-        if ("evm".equalsIgnoreCase(runtimeChain.family())) {
+        if ("evm".equalsIgnoreCase(profile.getFamily())) {
             evmAccounts.createProjection(
-                    tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress());
+                    tenant.id(), addressId, chain, profile.getNetwork(), chainAddress.getAddress());
         }
         AddressView result = toView(addressRepository.require(tenant.id(), addressId));
         audits.insert(
@@ -161,7 +156,7 @@ public class CustodyAddressService {
                 addressId.toString(),
                 sourceIp,
                 addressAuditDetails(
-                        chain, normalizedSource, subject, addressVersion, generated.getIndex()));
+                        chain, normalizedSource, subject, addressVersion, chainAddress.getAddressIndex()));
         return result;
     }
 
