@@ -5,7 +5,7 @@ import com.surprising.wallet.chain.evm.Evm7702ReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.service.CustodyGasAccountingService;
 import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.repository.EvmNonceRepository;
 import java.math.BigDecimal;
@@ -22,17 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class Evm7702CollectionCoordinator {
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final Evm7702CollectionRepository repository;
-    /**
-     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final CustodyRepository custodyRepository;
-    /**
-     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
+    private final CustodyGasAccountingService gasAccounting;
     private final ChainProfileRepository chainProfileRepository;
     private final ChainAssetRepository chainAssetRepository;
     private final EvmNonceRepository nonces;
@@ -41,12 +32,12 @@ public class Evm7702CollectionCoordinator {
      */
     public Evm7702CollectionCoordinator(
             Evm7702CollectionRepository repository,
-            CustodyRepository custodyRepository,
+            CustodyGasAccountingService gasAccounting,
             ChainProfileRepository chainProfileRepository,
             ChainAssetRepository chainAssetRepository,
             EvmNonceRepository nonces) {
         this.repository = repository;
-        this.custodyRepository = custodyRepository;
+        this.gasAccounting = gasAccounting;
         this.chainProfileRepository = chainProfileRepository;
         this.chainAssetRepository = chainAssetRepository;
         this.nonces = nonces;
@@ -66,9 +57,9 @@ public class Evm7702CollectionCoordinator {
             throw new IllegalStateException("signed EIP-7702 attempt uses an unreserved relayer nonce");
         }
         repository.saveSignedAttempt(batch, signedAttempt.attempt());
-        custodyRepository.reserveGasUsage(
+        gasAccounting.reserve(
                 batch.tenantId(), "COLLECTION_BATCH", batch.id(),
-                batch.id().toString(), batch.chain(), signedAttempt.reservedFee());
+                signedAttempt.reservedFee());
         return signedAttempt.signedTransaction();
     }
 
@@ -86,7 +77,7 @@ public class Evm7702CollectionCoordinator {
                 batch.tenantId(), batch.batchId(), txHash, gasUsed, effectiveGasPrice,
                 l2Fee, l1Fee, operatorFee, actualFee,
                 blockNumber, blockHash, results);
-        custodyRepository.settleGasUsage(
+        gasAccounting.settle(
                 batch.tenantId(), "COLLECTION_BATCH", batch.batchId(),
                 actualFee, "EVM_RECEIPT", txHash);
     }

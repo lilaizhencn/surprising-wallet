@@ -537,8 +537,8 @@ class CustodyOperationsIntegrationTest {
                     withdrawalId, tenantId, customerAddressId, orderNo, null, null,
                     "ETH", "USDT", accountId, new BigDecimal("0.25"),
                     BigDecimal.ZERO, "FROZEN", "CONSOLE", "qa");
-            repository.reserveGasUsage(
-                    tenantId, withdrawalId, orderNo, "ETH", new BigDecimal("0.1"));
+            com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
+                    tenantId, "WITHDRAWAL", withdrawalId, new BigDecimal("0.1"));
             jdbc.update("""
                     insert into evm_tx(
                         chain, tx_hash, from_address, to_address, asset_symbol,
@@ -546,13 +546,10 @@ class CustodyOperationsIntegrationTest {
                     values ('ETH', ?, ?, ?, 'USDT', 0.25, 0.04, 12, 'CONFIRMED')
                     """, txHash, accountId, accountId);
 
-            var change = repository.findWithdrawalStatusChanges(10).stream()
-                    .filter(item -> item.id().equals(withdrawalId))
-                    .findFirst().orElseThrow();
-            assertTrue(repository.applyWithdrawalStatusChange(
-                    change, UUID.randomUUID(), "WITHDRAWAL.CONFIRMED", "{}"));
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc,
+                    new CustodyJacksonConfiguration().custodyObjectMapper()).project(tenantId, withdrawalId));
 
-            var usage = repository.findGasUsage(withdrawalId).orElseThrow();
+            var usage = new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc).find(tenantId, "WITHDRAWAL", withdrawalId).orElseThrow();
             assertEquals("SETTLED", usage.status());
             assertEquals(0, new BigDecimal("0.04").compareTo(usage.actualAmount()));
             var account = repository.requireGasAccount(tenantId, gasAccountId);
@@ -615,11 +612,8 @@ class CustodyOperationsIntegrationTest {
                             .toString().replace("-", "") + "12345678",
                     new BigDecimal("0.25"), BigDecimal.ZERO, "SIGNING", "API_KEY", "qa");
 
-            var change = repository.findWithdrawalStatusChanges(10).stream()
-                    .filter(item -> item.id().equals(withdrawalId))
-                    .findFirst().orElseThrow();
-            assertTrue(repository.applyWithdrawalStatusChange(
-                    change, UUID.randomUUID(), "WITHDRAWAL.FAILED", "{}"));
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc,
+                    new CustodyJacksonConfiguration().custodyObjectMapper()).project(tenantId, withdrawalId));
 
             assertEquals("FAILED", jdbc.queryForObject(
                     "select status from custody_withdrawal where id = ?", String.class, withdrawalId));
@@ -693,11 +687,11 @@ class CustodyOperationsIntegrationTest {
                     withdrawalId, tenantId, addressId, orderNo, null, null,
                     "ETH", "ETH", accountId, new BigDecimal("0.25"),
                     BigDecimal.ZERO, "CONFIRMED", "CONSOLE", "qa");
-            repository.reserveGasUsage(
-                    tenantId, withdrawalId, orderNo, "ETH", new BigDecimal("0.1"));
+            com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
+                    tenantId, "WITHDRAWAL", withdrawalId, new BigDecimal("0.1"));
 
-            var overdue = repository.settleGasUsage(
-                    withdrawalId, new BigDecimal("0.15"),
+            var overdue = com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).settle(
+                    tenantId, "WITHDRAWAL", withdrawalId, new BigDecimal("0.15"),
                     "CHAIN_RECORDED", "0xoverdue");
             assertEquals("OVERDUE", overdue.status());
             assertNull(overdue.settledAt());
@@ -709,8 +703,8 @@ class CustodyOperationsIntegrationTest {
                      where chain = 'ETH' and asset_symbol = 'ETH'
                        and lower(account_id) = lower(?)
                     """, accountId);
-            var settled = repository.settleGasUsage(
-                    withdrawalId, overdue.actualAmount(),
+            var settled = com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).settle(
+                    tenantId, "WITHDRAWAL", withdrawalId, overdue.actualAmount(),
                     overdue.pricingSource(), overdue.txHash());
             assertEquals("SETTLED", settled.status());
             var account = repository.requireGasAccount(tenantId, gasAccountId);
@@ -718,8 +712,8 @@ class CustodyOperationsIntegrationTest {
             assertEquals(0, BigDecimal.ZERO.compareTo(account.lockedBalance()));
             assertEquals(0, new BigDecimal("0.05").compareTo(account.totalBalance()));
 
-            repository.settleGasUsage(
-                    withdrawalId, overdue.actualAmount(),
+            com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).settle(
+                    tenantId, "WITHDRAWAL", withdrawalId, overdue.actualAmount(),
                     overdue.pricingSource(), overdue.txHash());
             var unchanged = repository.requireGasAccount(tenantId, gasAccountId);
             assertEquals(0, new BigDecimal("0.05").compareTo(unchanged.availableBalance()));

@@ -159,8 +159,8 @@ class CustodyTenantIsolationIntegrationTest {
 
         assertEquals(0, BigDecimal.ZERO.compareTo(
                 repository.requireGasAccount(gasTenant, gasAccountId).availableBalance()));
-        assertThrows(IllegalStateException.class, () -> repository.reserveGasUsage(
-                gasTenant, withdrawalId, orderNo, "ETH", new BigDecimal("0.1")));
+        assertThrows(IllegalStateException.class, () -> com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
+                gasTenant, "WITHDRAWAL", withdrawalId, new BigDecimal("0.1")));
         assertEquals(0, new BigDecimal("5").compareTo(jdbc.queryForObject("""
                 select available_balance from ledger_balance
                  where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'

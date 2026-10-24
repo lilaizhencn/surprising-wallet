@@ -277,7 +277,6 @@ class WalletConfigOverviewServiceTest {
             super(null,
                     new com.surprising.wallet.repository.CustodyTenantTableRepository(null),
                     new com.surprising.wallet.repository.CustodyTenantUserRepository(null),
-                    com.surprising.wallet.testutil.CustodyTestSupport.events(null),
                     org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyApiKeyRepository.class),
                     org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodySessionRepository.class),
                     org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyIpRuleRepository.class));

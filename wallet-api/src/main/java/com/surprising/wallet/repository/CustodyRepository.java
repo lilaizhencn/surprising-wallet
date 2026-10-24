@@ -1,15 +1,10 @@
 package com.surprising.wallet.repository;
 
-import com.surprising.wallet.model.custody.WithdrawalStatusChange;
 import com.surprising.wallet.model.custody.TenantRecord;
-import com.surprising.wallet.model.custody.NetworkFee;
 import com.surprising.wallet.model.custody.IdempotencyRecord;
-import com.surprising.wallet.model.custody.GasUsageRecord;
-import com.surprising.wallet.model.custody.GasPricingMetadata;
 import com.surprising.wallet.model.custody.GasAccountRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.service.CustodyEventService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,16 +43,8 @@ public class CustodyRepository {
     private final ChainAddressRepository chainAddresses;
     /** Gas 账户单表仓储。 */
     private final CustodyGasAccountRepository gasAccounts;
-    /** Gas 使用单表仓储。 */
-    private final CustodyGasUsageRepository gasUsages;
     /** 账本单表仓储。 */
     private final LedgerBalanceRepository ledgerBalances;
-    /** 链配置单表仓储。 */
-    private final ChainProfileRepository chainProfiles;
-    /** 链资产单表仓储。 */
-    private final ChainAssetRepository chainAssets;
-    /** 代币配置单表仓储。 */
-    private final TokenConfigRepository tokenConfigs;
     /** 幂等键单表仓储。 */
     private final CustodyIdempotencyRepository idempotencies;
     /** Webhook 端点单表仓储。 */
@@ -74,51 +61,22 @@ public class CustodyRepository {
     private final CustodyDepositRepository custodyDeposits;
     /** 重组赤字单表仓储。 */
     private final CustodyReorgDeficitRepository reorgDeficits;
-    /** EVM 归集批次单表仓储。 */
-    private final EvmCollectionBatchRepository collectionBatches;
-    /** EVM 提现批次单表仓储。 */
-    private final EvmWithdrawalBatchRepository withdrawalBatches;
     /** 租户链配置单表编排。 */
     private final CustodyTenantChainRepository tenantChains;
-    /** EVM 交易单表仓储。 */
-    private final EvmTransactionRepository evmTransactions;
-    /** Solana 交易单表仓储。 */
-    private final SolanaTransactionRepository solanaTransactions;
-    /** Aptos 交易单表仓储。 */
-    private final AptosTransactionRepository aptosTransactions;
-    /** Sui 交易单表仓储。 */
-    private final SuiTransactionRepository suiTransactions;
-    /** TON 交易单表仓储。 */
-    private final TonTransactionRepository tonTransactions;
-    /** XRP 交易单表仓储。 */
-    private final XrpTransactionRepository xrpTransactions;
-    /** Monero 交易单表仓储。 */
-    private final MoneroTransactionRepository moneroTransactions;
-    /** TRON 交易单表仓储。 */
-    private final TronTransactionRepository tronTransactions;
-    /** 托管流水单表仓储。 */
-    private final CustodyLedgerEntryRepository ledgerEntries;
-
-    private final CustodyEventService eventService;
 
     public CustodyRepository(JdbcTemplate jdbc, CustodyTenantTableRepository tenantTable,
-                             CustodyTenantUserRepository tenantUsers, CustodyEventService eventService,
-                             CustodyApiKeyRepository apiKeys, CustodySessionRepository sessions,
-                             CustodyIpRuleRepository ipRules) {
+                            CustodyTenantUserRepository tenantUsers,
+                            CustodyApiKeyRepository apiKeys, CustodySessionRepository sessions,
+                            CustodyIpRuleRepository ipRules) {
         this.tenantTable = tenantTable;
         this.tenantUsers = tenantUsers;
-        this.eventService = eventService;
         this.apiKeys = apiKeys;
         this.sessions = sessions;
         this.ipRules = ipRules;
         this.custodyAddresses = new CustodyAddressRepository(jdbc);
         this.chainAddresses = new ChainAddressRepository(jdbc);
         this.gasAccounts = new CustodyGasAccountRepository(jdbc);
-        this.gasUsages = new CustodyGasUsageRepository(jdbc);
         this.ledgerBalances = new LedgerBalanceRepository(jdbc);
-        this.chainProfiles = new ChainProfileRepository(jdbc);
-        this.chainAssets = new ChainAssetRepository(jdbc);
-        this.tokenConfigs = new TokenConfigRepository(jdbc);
         this.idempotencies = new CustodyIdempotencyRepository(jdbc);
         this.webhookEndpoints = new CustodyWebhookEndpointRepository(jdbc);
         this.webhookDeliveries = new CustodyWebhookDeliveryRepository(jdbc);
@@ -127,18 +85,7 @@ public class CustodyRepository {
         this.withdrawalOrders = new WithdrawalOrderRepository(jdbc);
         this.custodyDeposits = new CustodyDepositRepository(jdbc);
         this.reorgDeficits = new CustodyReorgDeficitRepository(jdbc);
-        this.collectionBatches = new EvmCollectionBatchRepository(jdbc);
-        this.withdrawalBatches = new EvmWithdrawalBatchRepository(jdbc);
         this.tenantChains = new CustodyTenantChainRepository(jdbc);
-        this.evmTransactions = new EvmTransactionRepository(jdbc);
-        this.solanaTransactions = new SolanaTransactionRepository(jdbc);
-        this.aptosTransactions = new AptosTransactionRepository(jdbc);
-        this.suiTransactions = new SuiTransactionRepository(jdbc);
-        this.tonTransactions = new TonTransactionRepository(jdbc);
-        this.xrpTransactions = new XrpTransactionRepository(jdbc);
-        this.moneroTransactions = new MoneroTransactionRepository(jdbc);
-        this.tronTransactions = new TronTransactionRepository(jdbc);
-        this.ledgerEntries = new CustodyLedgerEntryRepository(jdbc);
     }
 
     /** 创建租户及其管理员。 */
@@ -358,184 +305,6 @@ public class CustodyRepository {
         return requireGasAccount(tenantId, gasAccountId);
     }
 
-    /** 查询 Gas 定价元数据。 */
-    public GasPricingMetadata gasPricingMetadata(String chain, String assetSymbol) {
-        Map<String, Object> profile = chainProfiles.listAll().stream()
-                .filter(row -> chain.equalsIgnoreCase(text(row.get("chain")))
-                        && Boolean.TRUE.equals(row.get("enabled"))).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("enabled chain gas pricing is unavailable for " + chain));
-        Map<String, Object> nativeAsset = chainAssets.findActive(chain, text(profile.get("native_symbol")))
-                .orElseThrow(() -> new IllegalArgumentException("native asset is missing"));
-        boolean requestedNative = chainAssets.findActive(chain, assetSymbol)
-                .map(row -> Boolean.TRUE.equals(row.get("native_asset"))).orElse(false);
-        return new GasPricingMetadata(text(profile.get("family")), text(profile.get("native_symbol")),
-                longValue(profile.get("default_fee_rate"), 1L), ((Number) nativeAsset.get("decimals")).intValue(),
-                requestedNative);
-    }
-
-    /** 预留提现 Gas。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord reserveGasUsage(UUID tenantId, UUID custodyWithdrawalId, String orderNo,
-                                           String chain, BigDecimal reservedAmount) {
-        return reserveGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId, orderNo, chain, reservedAmount);
-    }
-
-    /** 预留业务操作 Gas，并同步冻结账本余额。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord reserveGasUsage(UUID tenantId, String operationType, UUID operationId,
-                                          String referenceNo, String chain, BigDecimal reservedAmount) {
-        if (reservedAmount == null || reservedAmount.signum() <= 0) {
-            throw new IllegalArgumentException("reserved gas amount must be positive");
-        }
-        requireGasOperation(tenantId, operationType, operationId, chain);
-        GasAccountRecord account = findGasAccount(tenantId, chain)
-                .filter(row -> "ACTIVE".equals(row.status()))
-                .orElseThrow(() -> new IllegalStateException("active gas account is missing"));
-        if (gasUsages.existsOverdue(tenantId, account.id())) {
-            throw new IllegalStateException("gas account has an overdue reservation");
-        }
-        if (!ledgerBalances.freeze(chain, account.nativeSymbol(), account.accountId(), reservedAmount, tenantId)) {
-            throw new IllegalStateException("insufficient gas balance");
-        }
-        gasUsages.insert(UUID.randomUUID(), tenantId, account.id(), operationType, operationId,
-                referenceNo, chain, account.nativeSymbol(), reservedAmount, "CONFIGURED_RESERVE");
-        return findGasUsage(tenantId, operationType, operationId).orElseThrow();
-    }
-
-    /** 释放提现 Gas。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord releaseGasUsage(UUID custodyWithdrawalId, String reason) {
-        return gasUsages.findByOperationId(custodyWithdrawalId).map(row ->
-                releaseGasUsage(uuid(row.get("tenant_id")), text(row.get("operation_type")),
-                        uuid(row.get("operation_id")), reason)).orElseThrow();
-    }
-
-    /** 释放业务操作 Gas。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord releaseGasUsage(UUID tenantId, String operationType, UUID operationId, String reason) {
-        GasUsageRecord usage = gasUsages.findForUpdate(tenantId, operationType, operationId)
-                .map(CustodyRepository::mapGasUsage).orElseThrow();
-        if (!"RESERVED".equals(usage.status())) return usage;
-        GasAccountRecord account = requireGasAccount(tenantId, usage.gasAccountId());
-        if (!ledgerBalances.release(usage.chain(), usage.nativeSymbol(), account.accountId(),
-                usage.reservedAmount(), tenantId)) throw new IllegalStateException("gas balance is inconsistent");
-        gasUsages.release(tenantId, operationType, operationId, reason);
-        return findGasUsage(tenantId, operationType, operationId).orElseThrow();
-    }
-
-    /** 结算提现 Gas。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord settleGasUsage(UUID custodyWithdrawalId, BigDecimal actualAmount,
-                                         String pricingSource, String txHash) {
-        return gasUsages.findByOperationId(custodyWithdrawalId).map(row -> settleGasUsage(
-                uuid(row.get("tenant_id")), text(row.get("operation_type")), uuid(row.get("operation_id")),
-                actualAmount, pricingSource, txHash)).orElseThrow();
-    }
-
-    /** 结算业务操作 Gas。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord settleGasUsage(UUID tenantId, String operationType, UUID operationId,
-                                         BigDecimal actualAmount, String pricingSource, String txHash) {
-        GasUsageRecord usage = gasUsages.findForUpdate(tenantId, operationType, operationId)
-                .map(CustodyRepository::mapGasUsage).orElseThrow();
-        if (!Set.of("RESERVED", "OVERDUE").contains(usage.status())) return usage;
-        BigDecimal actual = actualAmount == null || actualAmount.signum() <= 0
-                ? usage.reservedAmount() : actualAmount.stripTrailingZeros();
-        if (actual.signum() <= 0) throw new IllegalArgumentException("actual gas amount must be positive");
-        GasAccountRecord account = requireGasAccount(tenantId, usage.gasAccountId());
-        boolean settled = ledgerBalances.settleReserved(usage.chain(), usage.nativeSymbol(), account.accountId(),
-                usage.reservedAmount(), actual, tenantId);
-        if (!settled) {
-            gasUsages.markOverdue(tenantId, usage.id(), actual, pricingSource, txHash,
-                    "actual network fee exceeded funded gas balance");
-            return findGasUsage(tenantId, operationType, operationId).orElseThrow();
-        }
-        gasUsages.settleReservedOrOverdue(tenantId, usage.id(), actual, pricingSource, txHash);
-        ledgerEntries.insertIfAbsent(UUID.randomUUID(), usage.tenantId(), account.custodyAddressId(),
-                usage.chain(), usage.nativeSymbol(), account.accountId(), "NETWORK_FEE", "DEBIT", actual,
-                usage.operationType(), usage.referenceNo());
-        return findGasUsage(tenantId, operationType, operationId).orElseThrow();
-    }
-
-    /** 查询 Gas 使用记录列表。 */
-    public List<Map<String, Object>> listGasUsage(UUID tenantId, String chain, String status,
-                                                  int limit, int offset) {
-        return gasUsages.list(tenantId, blank(chain), blank(status), limit, offset);
-    }
-
-    /** 查询逾期 Gas 使用记录。 */
-    public List<GasUsageRecord> listOverdueGasUsage(int limit) {
-        return gasUsages.listOverdue(limit).stream().map(CustodyRepository::mapGasUsage).toList();
-    }
-
-    /** 查询提现 Gas 使用记录。 */
-    public Optional<GasUsageRecord> findGasUsage(UUID custodyWithdrawalId) {
-        return gasUsages.findByOperationId(custodyWithdrawalId).map(CustodyRepository::mapGasUsage);
-    }
-
-    /** 查询业务 Gas 使用记录。 */
-    public Optional<GasUsageRecord> findGasUsage(UUID tenantId, String operationType, UUID operationId) {
-        return gasUsages.find(tenantId, operationType, operationId).map(CustodyRepository::mapGasUsage);
-    }
-
-    /** 查询已确认网络费用。 */
-    public Optional<NetworkFee> confirmedNetworkFee(String chain, String orderNo, String txHash, int nativeDecimals) {
-        if (txHash == null || txHash.isBlank()) return Optional.empty();
-        String normalizedChain = chain == null ? "" : chain.toUpperCase(Locale.ROOT);
-        Optional<BigDecimal> amount;
-        String source;
-        switch (normalizedChain) {
-            case "SOLANA" -> {
-                amount = solanaTransactions.findConfirmedFeeAtomic(chain, txHash)
-                        .map(value -> value.movePointLeft(9));
-                source = "CHAIN_CONFIRMED";
-            }
-            case "APTOS" -> {
-                amount = aptosTransactions.findConfirmedFeeAtomic(chain, txHash)
-                        .map(value -> value.movePointLeft(8));
-                source = "CHAIN_CONFIRMED";
-            }
-            case "SUI" -> {
-                amount = suiTransactions.findConfirmedFeeAtomic(chain, txHash)
-                        .map(value -> value.movePointLeft(9));
-                source = "CHAIN_CONFIRMED";
-            }
-            case "TON" -> {
-                amount = tonTransactions.findConfirmedFeeAtomic(chain, txHash)
-                        .map(value -> value.movePointLeft(9));
-                source = "CHAIN_CONFIRMED";
-            }
-            case "XRP" -> {
-                amount = xrpTransactions.findConfirmedFeeAtomic(chain, txHash)
-                        .map(value -> value.movePointLeft(6));
-                source = "CHAIN_CONFIRMED";
-            }
-            case "XMR" -> {
-                amount = moneroTransactions.findConfirmedFeeAtomic(chain, txHash)
-                        .map(value -> value.movePointLeft(nativeDecimals));
-                source = "CHAIN_CONFIRMED";
-            }
-            case "NEAR" -> {
-                amount = Optional.empty();
-                source = "CONFIGURED_RESERVE";
-            }
-            case "TRON" -> {
-                amount = tronTransactions.findConfirmedFee(chain, txHash);
-                source = "CHAIN_CONFIRMED";
-            }
-            default -> {
-                amount = evmTransactions.findConfirmedFee(chain, txHash);
-                source = amount.isPresent() ? "CHAIN_RECORDED" : "CONFIGURED_RESERVE";
-                if (amount.isEmpty()) {
-                    amount = withdrawalOrders.find(chain, orderNo, null).map(WithdrawalOrderRecord::getFee);
-                }
-            }
-        }
-        String pricingSource = source;
-        return amount.filter(value -> value != null && value.signum() > 0)
-                .map(value -> new NetworkFee(value.stripTrailingZeros(), pricingSource));
-    }
-
     /** 查询租户初始化状态。 */
     public Map<String, Object> onboardingStatus(UUID tenantId) {
         TenantRecord tenant = requireTenant(tenantId);
@@ -602,57 +371,6 @@ public class CustodyRepository {
                 idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status, createdByType, createdById);
     }
 
-    /** 查询状态不同步的提现记录。 */
-    public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
-        List<WithdrawalStatusChange> result = new ArrayList<>();
-        for (Map<String, Object> row : custodyWithdrawals.listStatusChanges(limit)) {
-            UUID tenantId = uuid(row.get("tenant_id"));
-            Map<String, Object> order = withdrawalOrders.findById(tenantId, ((Number) row.get("withdrawal_order_id")).longValue()).orElse(Map.of());
-            String next = text(order.get("status"));
-            if (next == null || next.equals(row.get("status"))) continue;
-            Map<String, Object> address = custodyAddresses.findByTenantAndId(tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
-            result.add(new WithdrawalStatusChange(uuid(row.get("id")), tenantId, uuid(row.get("custody_address_id")), text(row.get("order_no")),
-                    text(row.get("external_reference")), text(row.get("chain")), text(row.get("asset_symbol")), text(row.get("to_address")),
-                    (BigDecimal) row.get("amount"), (BigDecimal) row.get("fee"), text(row.get("status")), next,
-                    (String) order.get("tx_hash"), (String) order.get("error_message"),
-                    text(order.get("debit_account_id")), text(address.get("source"))));
-        }
-        return result;
-    }
-
-    /** 应用提现状态同步。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public boolean applyWithdrawalStatusChange(WithdrawalStatusChange change, UUID eventId,
-                                               String eventType, String payloadJson) {
-        if (change.previousStatus().equals(change.nextStatus())
-                || custodyWithdrawals.transitionStatus(change.tenantId(), change.id(),
-                        change.previousStatus(), change.nextStatus()) != 1) return false;
-        if ("CONFIRMED".equals(change.nextStatus())) {
-            // Record the debit already settled by the chain workflow; never settle its lock again.
-            ledgerEntries.insertIfAbsent(UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
-                    change.chain(), change.assetSymbol(), change.debitAccountId(), "WITHDRAWAL", "DEBIT",
-                    change.amount().add(change.fee()), "WITHDRAWAL", change.id().toString());
-            findGasUsage(change.tenantId(), "WITHDRAWAL", change.id()).ifPresent(usage -> {
-                GasPricingMetadata metadata = gasPricingMetadata(change.chain(), change.assetSymbol());
-                NetworkFee networkFee = confirmedNetworkFee(change.chain(), change.orderNo(), change.txHash(),
-                                metadata.decimals())
-                        .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
-                settleGasUsage(change.tenantId(), "WITHDRAWAL", change.id(),
-                        networkFee.amount(), networkFee.pricingSource(), change.txHash());
-            });
-        } else if (Set.of("FAILED", "REJECTED", "CANCELLED").contains(change.nextStatus())) {
-            // Failure handlers release the customer lock as part of the chain state
-            // transition. Releasing it again here can strand status reconciliation and
-            // repeatedly fail after the balance has already been returned.
-            findGasUsage(change.tenantId(), "WITHDRAWAL", change.id()).ifPresent(usage -> releaseGasUsage(
-                    change.tenantId(), "WITHDRAWAL", change.id(),
-                    "withdrawal ended as " + change.nextStatus()));
-        }
-        if (eventType != null) eventService.publish(eventId, change.tenantId(), eventType,
-                "WITHDRAWAL", change.orderNo(), payloadJson, "API".equals(change.addressSource()));
-        return true;
-    }
-
     /** 写入审计日志。 */
     public void audit(UUID tenantId, String actorType, String actorId, String action,
                       String resourceType, String resourceId, String sourceIp, String detailsJson) {
@@ -672,21 +390,6 @@ public class CustodyRepository {
     /** 统计平台审计日志。 */
     public long countPlatformAudit() { return audits.countPlatform(); }
 
-    /** 校验 Gas 操作归属租户和链。 */
-    private void requireGasOperation(UUID tenantId, String operationType, UUID operationId, String chain) {
-        String type = operationType == null ? "" : operationType.trim().toUpperCase(Locale.ROOT);
-        boolean valid = switch (type) {
-            case "WITHDRAWAL" -> custodyWithdrawals.find(tenantId, operationId).stream()
-                    .anyMatch(row -> chain.equalsIgnoreCase(text(row.get("chain"))));
-            case "COLLECTION_BATCH" -> collectionBatches.find(tenantId, operationId).stream()
-                    .anyMatch(row -> chain.equalsIgnoreCase(text(row.get("chain"))));
-            case "WITHDRAWAL_BATCH" -> withdrawalBatches.find(tenantId, operationId).stream()
-                    .anyMatch(row -> chain.equalsIgnoreCase(text(row.get("chain"))));
-            default -> throw new IllegalArgumentException("unsupported gas operation type");
-        };
-        if (!valid) throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
-    }
-
     /** 将数据库 Gas 字段和账本余额转换为模型。 */
     private GasAccountRecord mapGas(UUID tenantId, Map<String, Object> row) {
         UUID custodyId = uuid(row.get("custody_address_id"));
@@ -702,16 +405,6 @@ public class CustodyRepository {
                 text(row.get("native_symbol")), text(custody.get("address")), text(custody.get("memo")),
                 longValue(address.get("address_index"), 0), accountId, available, locked, total,
                 (BigDecimal) row.get("low_balance_threshold"), text(row.get("status")), instant(row.get("created_at")), instant(row.get("updated_at")));
-    }
-
-    /** 将数据库 Gas 使用字段转换为模型。 */
-    private static GasUsageRecord mapGasUsage(Map<String, Object> row) {
-        return new GasUsageRecord(uuid(row.get("id")), uuid(row.get("tenant_id")), uuid(row.get("gas_account_id")),
-                text(row.get("operation_type")), uuid(row.get("operation_id")), text(row.get("reference_no")),
-                text(row.get("chain")), text(row.get("native_symbol")), (BigDecimal) row.get("reserved_amount"),
-                (BigDecimal) row.get("actual_amount"), text(row.get("status")), text(row.get("pricing_source")),
-                text(row.get("tx_hash")), text(row.get("error_message")), instant(row.get("created_at")),
-                instant(row.get("updated_at")), instant(row.get("settled_at")));
     }
 
     /** 读取文本字段。 */

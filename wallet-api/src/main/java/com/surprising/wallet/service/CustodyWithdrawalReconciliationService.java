@@ -1,83 +1,131 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.model.custody.WithdrawalStatusChange;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.CustodyLedgerEntryRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * 托管提现状态对账服务，负责把提现状态变化投影为 Webhook 事件。
- */
+/** Project the current owned order, debit receipt, Gas and event in one short transaction. */
+@Slf4j
 @Service
 public class CustodyWithdrawalReconciliationService {
-    /** 失败状态集合。 */
-    private static final Set<String> FAILURE_STATES = Set.of("FAILED", "REJECTED", "CANCELLED");
+    private final CustodyWithdrawalRepository withdrawals;
+    private final WithdrawalOrderRepository orders;
+    private final CustodyAddressRepository addresses;
+    private final CustodyLedgerEntryRepository entries;
+    private final CustodyGasReconciliationService gas;
+    private final CustodyEventService events;
+    private final ObjectMapper mapper;
+    private final TransactionTemplate transactions;
 
-    /** 托管数据仓储。 */
-    private final CustodyRepository repository;
-    /** JSON 序列化器。 */
-    private final ObjectMapper objectMapper;
-
-    /** 构造提现状态对账服务。 */
-    public CustodyWithdrawalReconciliationService(
-            CustodyRepository repository, ObjectMapper objectMapper) {
-        this.repository = repository;
-        this.objectMapper = objectMapper;
+    public CustodyWithdrawalReconciliationService(CustodyWithdrawalRepository withdrawals,
+            WithdrawalOrderRepository orders, CustodyAddressRepository addresses,
+            CustodyLedgerEntryRepository entries, CustodyGasReconciliationService gas,
+            CustodyEventService events, ObjectMapper mapper, PlatformTransactionManager manager) {
+        this.withdrawals = withdrawals;
+        this.orders = orders;
+        this.addresses = addresses;
+        this.entries = entries;
+        this.gas = gas;
+        this.events = events;
+        this.mapper = mapper;
+        this.transactions = new TransactionTemplate(manager);
     }
 
-    /** 批量处理尚未投影为事件的提现状态变化。 */
+    /** Scan fixed-size pages; old unchanged rows cannot hide later status changes. */
     public void reconcile() {
-        for (WithdrawalStatusChange change
-                : repository.findWithdrawalStatusChanges(100)) {
-            String eventType = eventType(change.nextStatus());
-            UUID eventId = eventType == null ? null : UUID.randomUUID();
-            repository.applyWithdrawalStatusChange(
-                    change, eventId, eventType,
-                    eventType == null ? null : payload(eventId, eventType, change));
+        UUID cursor = null;
+        while (true) {
+            var page = withdrawals.listReconciliationCandidates(cursor, 100);
+            if (page.isEmpty()) return;
+            cursor = page.getLast().id();
+            var tenants = page.stream().collect(Collectors.groupingBy(CustodyWithdrawalRepository.StatusRow::tenantId));
+            for (var tenant : tenants.entrySet()) {
+                Map<Long, WithdrawalOrderRepository.HistoryOrder> current = orders.findHistoryOrders(tenant.getKey(),
+                        tenant.getValue().stream().map(CustodyWithdrawalRepository.StatusRow::withdrawalOrderId).toList())
+                        .stream().collect(Collectors.toMap(WithdrawalOrderRepository.HistoryOrder::id, row -> row));
+                for (var row : tenant.getValue()) {
+                    var order = current.get(row.withdrawalOrderId());
+                    if (order != null && row.status().equals(order.status())) continue;
+                    try { project(row.tenantId(), row.id()); }
+                    catch (RuntimeException error) {
+                        log.warn("custody withdrawal projection failed: withdrawalId={} error={}", row.id(), error.getMessage());
+                    }
+                }
+            }
         }
     }
 
-    /** 将提现状态映射为事件类型。 */
-    private String eventType(String status) {
+    public boolean project(UUID tenantId, UUID withdrawalId) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
+        return Boolean.TRUE.equals(transactions.execute(status -> {
+            var row = withdrawals.lockProjection(tenantId, withdrawalId).orElse(null);
+            if (row == null) return false;
+            var order = orders.find(row.chain(), row.orderNo(), tenantId)
+                    .orElseThrow(() -> new IllegalStateException("custody withdrawal order is missing"));
+            if (row.withdrawalOrderId() != order.getId()) throw new IllegalStateException("custody withdrawal order identity mismatch");
+            if (row.status().equals(order.getStatus())) return false;
+            if (withdrawals.transitionStatus(tenantId, withdrawalId, row.status(), order.getStatus()) != 1) return false;
+            if ("CONFIRMED".equals(order.getStatus())) {
+                entries.insertIfAbsent(UUID.randomUUID(), tenantId, row.custodyAddressId(), row.chain(),
+                        order.getAssetSymbol(), order.getDebitAccountId(), "WITHDRAWAL", "DEBIT",
+                        order.getAmount().add(order.getFee()), "WITHDRAWAL", row.id().toString());
+            }
+            gas.reconcileWithdrawal(tenantId, withdrawalId);
+            String eventType = eventType(order.getStatus());
+            if (eventType != null) {
+                UUID eventId = UUID.randomUUID();
+                var address = addresses.require(tenantId, row.custodyAddressId());
+                events.publish(eventId, tenantId, eventType, "WITHDRAWAL", row.orderNo(),
+                        payload(eventId, eventType, row, order), "API".equals(address.source()));
+            }
+            return true;
+        }));
+    }
+
+    private static String eventType(String status) {
         return switch (status) {
             case "SENT" -> "WITHDRAWAL.BROADCAST";
             case "BROADCAST_UNKNOWN" -> "WITHDRAWAL.BROADCAST_UNKNOWN";
             case "CONFIRMED" -> "WITHDRAWAL.CONFIRMED";
-            default -> FAILURE_STATES.contains(status) ? "WITHDRAWAL.FAILED" : null;
+            default -> Set.of("FAILED", "REJECTED", "CANCELLED").contains(status) ? "WITHDRAWAL.FAILED" : null;
         };
     }
 
-    /** 生成提现事件 JSON。 */
-    private String payload(UUID eventId, String eventType,
-                           WithdrawalStatusChange change) {
+    private String payload(UUID eventId, String eventType, CustodyWithdrawalRepository.StatusRow row,
+                           WithdrawalOrderRecord order) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("withdrawalId", change.id());
-        data.put("custodyAddressId", change.custodyAddressId());
-        data.put("externalReference", change.externalReference());
-        data.put("orderNo", change.orderNo());
-        data.put("chain", change.chain());
-        data.put("asset", change.assetSymbol());
-        data.put("toAddress", change.toAddress());
-        data.put("amount", change.amount());
-        data.put("fee", change.fee());
-        data.put("status", change.nextStatus());
-        data.put("txHash", change.txHash());
-        data.put("errorMessage", change.errorMessage());
+        data.put("withdrawalId", row.id());
+        data.put("custodyAddressId", row.custodyAddressId());
+        data.put("externalReference", row.externalReference());
+        data.put("orderNo", row.orderNo());
+        data.put("chain", row.chain());
+        data.put("asset", order.getAssetSymbol());
+        data.put("toAddress", order.getToAddress());
+        data.put("amount", order.getAmount());
+        data.put("fee", order.getFee());
+        data.put("status", order.getStatus());
+        data.put("txHash", order.getTxHash());
+        data.put("errorMessage", order.getErrorMessage());
         try {
-            return objectMapper.writeValueAsString(Map.of(
-                    "id", eventId,
-                    "type", eventType,
-                    "createdAt", Instant.now(),
-                    "data", data));
-        } catch (JacksonException e) {
-            throw new IllegalStateException("failed to serialize withdrawal event", e);
+            return mapper.writeValueAsString(Map.of("id", eventId, "type", eventType,
+                    "createdAt", Instant.now(), "data", data));
+        } catch (JacksonException error) {
+            throw new IllegalStateException("failed to serialize withdrawal event", error);
         }
     }
 }

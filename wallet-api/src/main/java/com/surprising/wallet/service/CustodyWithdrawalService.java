@@ -169,7 +169,7 @@ public class CustodyWithdrawalService {
                 "API".equals(normalizedSource) ? "API_KEY" : "CONSOLE",
                 principal.actorId().toString());
         gasService.reserveWithdrawal(
-                tenant.id(), withdrawalId, orderNo, chain, symbol);
+                tenant.id(), withdrawalId, chain, symbol);
 
         UUID eventId = UUID.randomUUID();
         WithdrawalView view = new WithdrawalView(

@@ -10,6 +10,26 @@ import java.util.UUID;
 /** custody_gas_account 单表仓储。 */
 @Repository
 public class CustodyGasAccountRepository {
+    public record AccountingAccount(UUID id, UUID custodyAddressId, String chain, String nativeSymbol, String status) { }
+
+    public java.util.Optional<AccountingAccount> lockForChain(UUID tenantId, String chain) {
+        return jdbc.query("""
+                select id, custody_address_id, chain, native_symbol, status from custody_gas_account
+                 where tenant_id=? and chain=? for update
+                """, CustodyGasAccountRepository::mapAccountingAccount, tenantId, chain).stream().findFirst();
+    }
+
+    public java.util.Optional<AccountingAccount> lockById(UUID tenantId, UUID id) {
+        return jdbc.query("""
+                select id, custody_address_id, chain, native_symbol, status from custody_gas_account
+                 where tenant_id=? and id=? for update
+                """, CustodyGasAccountRepository::mapAccountingAccount, tenantId, id).stream().findFirst();
+    }
+
+    private static AccountingAccount mapAccountingAccount(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return new AccountingAccount(rs.getObject("id", UUID.class), rs.getObject("custody_address_id", UUID.class),
+                rs.getString("chain"), rs.getString("native_symbol"), rs.getString("status"));
+    }
     public java.util.Optional<Reference> findReference(UUID tenantId, UUID id) {
         return jdbc.query("""
                 select custody_address_id, chain, native_symbol from custody_gas_account

@@ -4,6 +4,8 @@ import com.surprising.wallet.model.custody.GasPricingMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.CustodyGasUsageRepository;
 import com.surprising.wallet.repository.CustodyDepositRepository;
 import com.surprising.wallet.repository.CustodyDerivationSubjectRepository;
@@ -38,39 +40,25 @@ import com.surprising.wallet.repository.CustodyRepository;
 public class CustodyGasService {
     /** 归集合约交互使用的子地址索引 */
     static final long COLLECTION_CHILD_INDEX = 1L;
-    /**
-     * 定义 {@code DEFAULT_LOW_BALANCE_THRESHOLD} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");
-    /**
-     * 定义 {@code SYSTEM_REFERENCE_PREFIX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyRepository repository;
     private final CustodyGasAccountRepository gasAccounts;
     private final CustodyGasUsageRepository usages;
+    private final CustodyGasAccountingService accounting;
+    private final ChainProfileRepository profiles;
+    private final ChainAssetRepository assets;
     private final CustodyDepositRepository deposits;
     private final CustodyDerivationSubjectRepository subjects;
-    /**
-     * 保存 {@code addresses}，表示链、网络、资产或代币配置。
-     */
     private final CustodyAddressService addresses;
-    /**
-     * 保存 {@code runtime}，用于记录时间边界或审计时间。
-     */
     private final BlockchainRuntimeService runtime;
 
-    /**
-     * 构造 {@code CustodyGasService}，初始化该组件运行所需的状态和依赖。
-     */
     public CustodyGasService(CustodyRepository repository,
                              CustodyAddressService addresses,
                              BlockchainRuntimeService runtime, CustodyGasAccountRepository gasAccounts,
                              CustodyGasUsageRepository usages, CustodyDepositRepository deposits,
-                             CustodyDerivationSubjectRepository subjects) {
+                             CustodyDerivationSubjectRepository subjects, CustodyGasAccountingService accounting,
+                             ChainProfileRepository profiles, ChainAssetRepository assets) {
         this.repository = repository;
         this.addresses = addresses;
         this.runtime = runtime;
@@ -78,19 +66,16 @@ public class CustodyGasService {
         this.usages = usages;
         this.deposits = deposits;
         this.subjects = subjects;
+        this.accounting = accounting;
+        this.profiles = profiles;
+        this.assets = assets;
     }
-    /**
-     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
-     */
     public List<GasAccountView> list(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         return repository.listGasAccounts(principal.tenantId())
                 .stream().map(CustodyGasService::toView).toList();
     }
 
-    /**
-     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public GasAccountView create(CustodyPrincipal principal, CreateGasAccountCommand command,
                                  String sourceIp) {
@@ -136,9 +121,6 @@ public class CustodyGasService {
                         + chainRuntime.nativeSymbol() + "\"}");
         return toView(saved);
     }
-    /**
-     * 处理 {@code collectionSubject} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public static String collectionSubject(String chain, ChainType chainType) {
         String namespace = chainType.isEvm()
                 ? "evm"
@@ -146,9 +128,6 @@ public class CustodyGasService {
         return SYSTEM_REFERENCE_PREFIX + namespace;
     }
 
-    /**
-     * 设置或更新 {@code update} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public GasAccountView update(CustodyPrincipal principal, UUID gasAccountId,
                                  UpdateGasAccountCommand command, String sourceIp) {
@@ -179,9 +158,6 @@ public class CustodyGasService {
         return toView(saved);
     }
 
-    /**
-     * 编码 {@code topups} 对应的数据，生成链上或接口所需的表示。
-     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<Map<String, Object>> topups(CustodyPrincipal principal, UUID gasAccountId,
                                              int limit, int offset) {
@@ -192,9 +168,6 @@ public class CustodyGasService {
                 account.nativeSymbol(), limit, offset);
     }
 
-    /**
-     * 执行 {@code usage} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<CustodyGasUsageEntry> usage(CustodyPrincipal principal, UUID gasAccountId,
                                            int limit, int offset) {
@@ -204,21 +177,14 @@ public class CustodyGasService {
         return usages.listForAccount(principal.tenantId(), gasAccountId, limit, offset);
     }
 
-    /**
-     * 执行 {@code reserveWithdrawal} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    void reserveWithdrawal(UUID tenantId, UUID custodyWithdrawalId, String orderNo,
+    void reserveWithdrawal(UUID tenantId, UUID custodyWithdrawalId,
                            String chain, String assetSymbol) {
         BigDecimal reservation = reservationAmount(chain, assetSymbol);
-        repository.reserveGasUsage(
-                tenantId, custodyWithdrawalId, orderNo, chain, reservation);
+        accounting.reserve(tenantId, "WITHDRAWAL", custodyWithdrawalId, reservation);
     }
-    /**
-     * 执行 {@code reservationAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     BigDecimal reservationAmount(String chain, String assetSymbol) {
         GasPricingMetadata metadata =
-                repository.gasPricingMetadata(chain, assetSymbol);
+                pricingMetadata(chain, assetSymbol);
         BigDecimal atomic = BigDecimal.ONE.movePointLeft(metadata.decimals());
         BigDecimal configured = BigDecimal.valueOf(
                         Math.max(1L, metadata.defaultFeeRate()))
@@ -242,16 +208,22 @@ public class CustodyGasService {
                 .setScale(metadata.decimals(), RoundingMode.UP)
                 .stripTrailingZeros();
     }
-    /**
-     * 执行 {@code onboarding} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    /** New reservations require an enabled profile and its active native asset. */
+    private GasPricingMetadata pricingMetadata(String chain, String symbol) {
+        var profile = profiles.findAccountByChain(chain)
+                .orElseThrow(() -> new IllegalArgumentException("enabled chain gas pricing is unavailable for " + chain));
+        var nativeAsset = assets.findActiveDefinition(chain, profile.getNativeSymbol())
+                .orElseThrow(() -> new IllegalArgumentException("native asset is missing"));
+        boolean nativeRequested = assets.findActiveDefinition(chain, symbol)
+                .map(asset -> Boolean.TRUE.equals(asset.getNativeAsset())).orElse(false);
+        return new GasPricingMetadata(profile.getFamily(), profile.getNativeSymbol(),
+                profile.getDefaultFee() == null ? 1 : profile.getDefaultFee(), nativeAsset.getDecimals(), nativeRequested);
+    }
+
     public Map<String, Object> onboarding(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         return repository.onboardingStatus(principal.tenantId());
     }
-    /**
-     * 编码 {@code toView} 对应的数据，生成链上或接口所需的表示。
-     */
     private static GasAccountView toView(GasAccountRecord record) {
         return new GasAccountView(
                 record.id(),
@@ -271,9 +243,6 @@ public class CustodyGasService {
                 record.createdAt(),
                 record.updatedAt());
     }
-    /**
-     * 执行 {@code positiveAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static BigDecimal positiveAmount(String value, String field) {
         try {
             BigDecimal amount = new BigDecimal(value == null ? "" : value.trim());
@@ -286,9 +255,6 @@ public class CustodyGasService {
                     field + " must be a positive decimal with at most 24 fraction digits");
         }
     }
-    /**
-     * 校验 {@code requireChain} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static String requireChain(String value) {
         String chain = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!chain.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -296,18 +262,12 @@ public class CustodyGasService {
         }
         return chain;
     }
-    /**
-     * 校验 {@code requireTenantAdmin} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void requireTenantAdmin(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() == null
                 || !"TENANT_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("tenant administrator required");
         }
     }
-    /**
-     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

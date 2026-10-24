@@ -12,8 +12,8 @@ import com.surprising.wallet.service.CustodyGasReconciliationService;
 /**
  * 托管 Gas 费用对账任务。
  * <p>
- * 每 2 秒执行一次：扫描 DB 中状态为 OVERDUE 的 Gas 预留记录，
- * 逐笔调用 settleGasUsage 结算实际 Gas 消耗，确保 Gas 账户余额与链上一致。
+ * 每 2 秒执行一次：分页扫描 OVERDUE 和超时未结束的 Gas 预留记录，
+ * 按已观察费用和订单确认结果对账；超时但结果未知的预留继续冻结。
  *
  * @author atomex
  */

@@ -143,7 +143,7 @@ class CustodyMultiChainLoadIntegrationTest {
 
             CustodyWithdrawalReconciliationJob reconciliation =
                     new CustodyWithdrawalReconciliationJob(
-                            new CustodyWithdrawalReconciliationService(custody, objectMapper));
+                            com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc, objectMapper));
             for (int pass = 0; pass < users / 100 + 5; pass++) {
                 reconciliation.reconcile();
                 if (count(jdbc, "select count(*) from custody_withdrawal where status <> 'CONFIRMED'") == 0) {

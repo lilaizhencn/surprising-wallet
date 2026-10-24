@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.GasOperationReference;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
@@ -15,6 +16,35 @@ import java.util.Objects;
 /** custody_withdrawal 单表仓储。 */
 @Repository
 public class CustodyWithdrawalRepository {
+    private static final String STATUS_COLUMNS = "id, tenant_id, custody_address_id, withdrawal_order_id, order_no, "
+            + "external_reference, chain, status";
+
+    public List<StatusRow> listReconciliationCandidates(UUID afterId, int limit) {
+        return jdbc.query("select " + STATUS_COLUMNS + """
+                 from custody_withdrawal where status <> 'CONFIRMED'
+                   and (cast(? as uuid) is null or id > cast(? as uuid))
+                 order by id limit ?
+                """, CustodyWithdrawalRepository::mapStatusRow, afterId, afterId, Math.min(Math.max(limit, 1), 500));
+    }
+
+    public java.util.Optional<StatusRow> lockProjection(UUID tenantId, UUID id) {
+        return jdbc.query("select " + STATUS_COLUMNS + " from custody_withdrawal where tenant_id=? and id=? for update",
+                CustodyWithdrawalRepository::mapStatusRow, tenantId, id).stream().findFirst();
+    }
+
+    private static StatusRow mapStatusRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return new StatusRow(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
+                rs.getObject("custody_address_id", UUID.class), rs.getLong("withdrawal_order_id"),
+                rs.getString("order_no"), rs.getString("external_reference"), rs.getString("chain"), rs.getString("status"));
+    }
+
+    public record StatusRow(UUID id, UUID tenantId, UUID custodyAddressId, long withdrawalOrderId,
+                            String orderNo, String externalReference, String chain, String status) { }
+    public java.util.Optional<GasOperationReference> lockGasOperation(UUID tenantId, UUID id) {
+        return jdbc.query("select chain, order_no from custody_withdrawal where tenant_id=? and id=? for update",
+                (rs, rowNum) -> new GasOperationReference(
+                        rs.getString("chain"), rs.getString("order_no")), tenantId, id).stream().findFirst();
+    }
     private static final String HISTORY_WHERE = """
              where tenant_id = ?
                and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
@@ -132,15 +162,6 @@ public class CustodyWithdrawalRepository {
                                BigDecimal amount, BigDecimal fee, String status, String createdByType,
                                Instant createdAt, Instant updatedAt) { }
 
-    /** 查询状态不一致的托管提现记录。 */
-    public List<Map<String, Object>> listStatusChanges(int limit) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, withdrawal_order_id, order_no, external_reference,
-                       chain, asset_symbol, to_address, amount, fee, status, created_by_type, created_by_id,
-                       created_at, updated_at
-                  from custody_withdrawal where status <> 'CONFIRMED' order by updated_at, id limit ?
-                """, Math.min(Math.max(limit, 1), 500));
-    }
 
     /** 更新托管提现记录状态。 */
     public int updateStatus(UUID tenantId, UUID id, String status) {

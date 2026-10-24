@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.GasOperationReference;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -8,11 +9,17 @@ import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /** evm_withdrawal_batch 单表仓储。 */
 @Repository
 public class EvmWithdrawalBatchRepository {
+    public Optional<GasOperationReference> lockGasOperation(UUID tenantId, UUID id) {
+        return jdbc.query("select chain, id::text as reference_no from evm_withdrawal_batch where tenant_id=? and id=? for update",
+                (rs, rowNum) -> new GasOperationReference(
+                        rs.getString("chain"), rs.getString("reference_no")), tenantId, id).stream().findFirst();
+    }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

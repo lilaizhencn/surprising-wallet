@@ -258,7 +258,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc));
         collectionRepository = new Evm7702CollectionRepository(jdbc);
         Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(collectionRepository,
-                custodyRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc),
                 chainRepository.chainProfileRepository,
                 chainRepository.chainAssetRepository, new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
         workflow = new Evm7702CollectionWorkflowService(
@@ -273,12 +273,12 @@ class Evm7702ProductionFlowIntegrationTest {
         withdrawalRepository = new Evm7702WithdrawalRepository(jdbc, collectionRepository);
         Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
                 withdrawalRepository,
-                custodyRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc),
                 chainRepository.ledgerBalanceRepository,
                 chainRepository.chainProfileRepository,
                 chainRepository.chainAssetRepository,
                 com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
-                new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
+                new com.surprising.wallet.repository.EvmNonceRepository(jdbc), new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc));
         withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
                 withdrawalRepository,
                 withdrawalCoordinator,
@@ -289,7 +289,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 crypto,
                 runtimeConfig);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
-                new CustodyWithdrawalReconciliationService(custodyRepository, objectMapper));
+                com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc, objectMapper));
     }
 
     @AfterEach

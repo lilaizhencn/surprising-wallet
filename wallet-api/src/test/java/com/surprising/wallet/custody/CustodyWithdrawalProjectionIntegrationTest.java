@@ -1,6 +1,6 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.model.custody.WithdrawalStatusChange;
+import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.testutil.CustodyTestSupport;
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +29,7 @@ class CustodyWithdrawalProjectionIntegrationTest {
     private AnnotationConfigApplicationContext context;
     private JdbcTemplate jdbc;
     private CustodyRepository repository;
+    private CustodyWithdrawalReconciliationService projection;
 
     @Configuration(proxyBeanMethods = false)
     @EnableTransactionManagement
@@ -42,8 +43,11 @@ class CustodyWithdrawalProjectionIntegrationTest {
         context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(dataSource));
         context.registerBean(CustodyRepository.class, () -> CustodyTestSupport.repository(jdbc));
+        context.registerBean(CustodyWithdrawalReconciliationService.class, () -> CustodyTestSupport.withdrawalReconciliation(jdbc,
+                new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper()));
         context.refresh();
         repository = context.getBean(CustodyRepository.class);
+        projection = context.getBean(CustodyWithdrawalReconciliationService.class);
     }
 
     @AfterEach void close() { if (context != null) context.close(); }
@@ -117,11 +121,7 @@ class CustodyWithdrawalProjectionIntegrationTest {
         UUID otherTenant = UUID.randomUUID();
         new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc)
                 .insert(otherTenant, "projection-" + otherTenant, "Other projection tenant");
-        var foreign = new WithdrawalStatusChange(change.id(), otherTenant, change.custodyAddressId(),
-                change.orderNo(), change.externalReference(), change.chain(), change.assetSymbol(),
-                change.toAddress(), change.amount(), change.fee(), change.previousStatus(), change.nextStatus(),
-                change.txHash(), change.errorMessage(), change.debitAccountId(), change.addressSource());
-        assertFalse(project(foreign));
+        assertFalse(projection.project(otherTenant, change.id()));
         assertEquals("FROZEN", jdbc.queryForObject(
                 "select status from custody_withdrawal where id=?", String.class, change.id()));
         assertEquals(0, entries(change));
@@ -131,31 +131,57 @@ class CustodyWithdrawalProjectionIntegrationTest {
 
     @Test void projectionDoesNotWriteAnOlderSnapshotBackToTheChainOrder() {
         var confirmed = withdrawal("ETH", "advanced-order");
-        var earlier = new WithdrawalStatusChange(confirmed.id(), confirmed.tenantId(), confirmed.custodyAddressId(),
-                confirmed.orderNo(), confirmed.externalReference(), confirmed.chain(), confirmed.assetSymbol(),
-                confirmed.toAddress(), confirmed.amount(), confirmed.fee(), "FROZEN", "SENT",
-                confirmed.txHash(), null, confirmed.debitAccountId(), confirmed.addressSource());
-        assertTrue(repository.applyWithdrawalStatusChange(earlier, UUID.randomUUID(), "WITHDRAWAL.BROADCAST", "{}"));
+        assertTrue(project(confirmed));
         assertEquals("CONFIRMED", jdbc.queryForObject(
                 "select status from withdrawal_order where tenant_id=? and order_no=?", String.class, TENANT, confirmed.orderNo()));
-        var current = repository.findWithdrawalStatusChanges(100).stream()
-                .filter(change -> change.id().equals(confirmed.id())).findFirst().orElseThrow();
-        assertTrue(project(current));
-        assertFalse(project(earlier));
+        assertFalse(project(confirmed));
         assertEquals(1, entries(confirmed));
-        assertEquals(2, events());
+        assertEquals(1, events());
+        assertEquals("WITHDRAWAL.CONFIRMED", jdbc.queryForObject("select event_type from custody_event", String.class));
         assertCustomerAlreadySettled(confirmed);
     }
 
-    private boolean project(WithdrawalStatusChange change) {
-        return repository.applyWithdrawalStatusChange(change, UUID.randomUUID(), "WITHDRAWAL.CONFIRMED", "{}");
+    private boolean project(Projection change) {
+        return projection.project(change.tenantId(), change.id());
     }
 
-    private WithdrawalStatusChange withdrawal(String chain, String orderNo) {
+    @Test void unchangedOldRowsCannotHideAConfirmationAfterTheFirstPage() {
+        for (int i = 0; i < 110; i++) {
+            var pending = withdrawal("ETH", "pending-page-" + i);
+            jdbc.update("update withdrawal_order set status='SENT' where tenant_id=? and order_no=?", TENANT, pending.orderNo());
+            jdbc.update("update custody_withdrawal set status='SENT' where id=?", pending.id());
+            jdbc.update("update ledger_balance set locked_balance=3.25, total_balance=10 where tenant_id=? and account_id=?",
+                    TENANT, pending.debitAccountId());
+        }
+        var confirmed = withdrawal("ETH", "last-page-confirmed");
+        UUID lastId = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        jdbc.update("update custody_withdrawal set id=? where id=?", lastId, confirmed.id());
+        projection.reconcile();
+        assertEquals("CONFIRMED", jdbc.queryForObject("select status from custody_withdrawal where id=?", String.class, lastId));
+        assertEquals(1, entries(confirmed));
+        assertEquals(1, events());
+        assertCustomerAlreadySettled(confirmed);
+    }
+
+    @Test void serializationFailureKeepsItsExceptionContractAndRollsBackTheProjection() {
+        var change = withdrawal("ETH", "serialization-failure");
+        var mapper = org.mockito.Mockito.mock(tools.jackson.databind.ObjectMapper.class);
+        var cause = org.mockito.Mockito.mock(tools.jackson.core.JacksonException.class);
+        org.mockito.Mockito.when(mapper.writeValueAsString(org.mockito.ArgumentMatchers.any())).thenThrow(cause);
+        var failing = CustodyTestSupport.withdrawalReconciliation(jdbc, mapper);
+        var error = assertThrows(IllegalStateException.class, () -> failing.project(change.tenantId(), change.id()));
+        assertSame(cause, error.getCause());
+        assertEquals("FROZEN", jdbc.queryForObject("select status from custody_withdrawal where id=?", String.class, change.id()));
+        assertEquals(0, entries(change));
+        assertEquals(0, events());
+        assertCustomerAlreadySettled(change);
+    }
+
+    private Projection withdrawal(String chain, String orderNo) {
         return withdrawal(TENANT, chain, orderNo);
     }
 
-    private WithdrawalStatusChange withdrawal(UUID tenantId, String chain, String orderNo) {
+    private Projection withdrawal(UUID tenantId, String chain, String orderNo) {
         String account = "projection-" + UUID.randomUUID();
         int namespace = jdbc.queryForObject("select derivation_namespace from custody_tenant where id=?",
                 Integer.class, tenantId);
@@ -185,11 +211,12 @@ class CustodyWithdrawalProjectionIntegrationTest {
         repository.insertCustodyWithdrawal(withdrawalId, tenantId, addressId, orderNo,
                 null, null, chain, "USDT", "destination", new BigDecimal("3"), new BigDecimal("0.25"),
                 "FROZEN", "API_KEY", "projection-test");
-        return repository.findWithdrawalStatusChanges(100).stream()
-                .filter(change -> change.id().equals(withdrawalId)).findFirst().orElseThrow();
+        return new Projection(withdrawalId, tenantId, addressId, chain, orderNo, account);
     }
 
-    private int entries(WithdrawalStatusChange change) {
+    private record Projection(UUID id, UUID tenantId, UUID custodyAddressId, String chain, String orderNo, String debitAccountId) { }
+
+    private int entries(Projection change) {
         return jdbc.queryForObject("""
                 select count(*) from custody_ledger_entry where tenant_id=? and custody_address_id=?
                 """, Integer.class, change.tenantId(), change.custodyAddressId());
@@ -197,7 +224,7 @@ class CustodyWithdrawalProjectionIntegrationTest {
 
     private int events() { return jdbc.queryForObject("select count(*) from custody_event", Integer.class); }
 
-    private void assertCustomerAlreadySettled(WithdrawalStatusChange change) {
+    private void assertCustomerAlreadySettled(Projection change) {
         var balance = jdbc.queryForMap("""
                 select available_balance, locked_balance, total_balance from ledger_balance
                  where tenant_id=? and chain=? and asset_symbol='USDT' and account_id=?

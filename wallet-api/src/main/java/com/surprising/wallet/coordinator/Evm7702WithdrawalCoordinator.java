@@ -5,7 +5,8 @@ import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyGasUsageRepository;
+import com.surprising.wallet.service.CustodyGasAccountingService;
 import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 import com.surprising.wallet.repository.EvmNonceRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
@@ -28,17 +29,9 @@ public class Evm7702WithdrawalCoordinator {
      * 定义 {@code MAX_ITEM_FAILURES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     private static final int MAX_ITEM_FAILURES = 3;
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final Evm7702WithdrawalRepository repository;
-    /**
-     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final CustodyRepository custodyRepository;
-    /**
-     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
+    private final CustodyGasAccountingService gasAccounting;
+    private final CustodyGasUsageRepository gasUsages;
     private final LedgerBalanceRepository ledgerBalanceRepository;
     private final ChainProfileRepository chainProfileRepository;
     private final ChainAssetRepository chainAssetRepository;
@@ -50,14 +43,15 @@ public class Evm7702WithdrawalCoordinator {
      */
     public Evm7702WithdrawalCoordinator(
             Evm7702WithdrawalRepository repository,
-            CustodyRepository custodyRepository,
+            CustodyGasAccountingService gasAccounting,
             LedgerBalanceRepository ledgerBalanceRepository,
             ChainProfileRepository chainProfileRepository,
             ChainAssetRepository chainAssetRepository,
             WithdrawalSettlementService settlements,
-            EvmNonceRepository nonces) {
+            EvmNonceRepository nonces, CustodyGasUsageRepository gasUsages) {
         this.repository = repository;
-        this.custodyRepository = custodyRepository;
+        this.gasAccounting = gasAccounting;
+        this.gasUsages = gasUsages;
         this.ledgerBalanceRepository = ledgerBalanceRepository;
         this.chainProfileRepository = chainProfileRepository;
         this.chainAssetRepository = chainAssetRepository;
@@ -80,14 +74,14 @@ public class Evm7702WithdrawalCoordinator {
         }
         repository.saveSignedAttempt(batch, signedAttempt.attempt());
         for (Evm7702WithdrawalRepository.ClaimedItem item : batch.items()) {
-            custodyRepository.findGasUsage(item.custodyWithdrawalId()).ifPresent(usage ->
-                    custodyRepository.releaseGasUsage(
+            gasUsages.find(batch.tenantId(), "WITHDRAWAL", item.custodyWithdrawalId()).ifPresent(usage ->
+                    gasAccounting.release(
                             usage.tenantId(), usage.operationType(), usage.operationId(),
                             "network fee consolidated into EIP-7702 withdrawal batch " + batch.id()));
         }
-        custodyRepository.reserveGasUsage(
+        gasAccounting.reserve(
                 batch.tenantId(), "WITHDRAWAL_BATCH", batch.id(),
-                batch.id().toString(), batch.chain(), signedAttempt.reservedFee());
+                signedAttempt.reservedFee());
         return signedAttempt.signedTransaction();
     }
 
@@ -162,7 +156,7 @@ public class Evm7702WithdrawalCoordinator {
                 actualFee,
                 blockNumber, blockHash, failures, results.size(), state.operationNonce(),
                 payoutDelegateAddress);
-        custodyRepository.settleGasUsage(
+        gasAccounting.settle(
                 batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(),
                 actualFee, "EVM_RECEIPT", txHash);
     }
@@ -208,7 +202,7 @@ public class Evm7702WithdrawalCoordinator {
         repository.completeRevertedBatchMetadata(
                 batch, txHash, gasUsed, effectiveGasPrice, l2Fee, l1Fee,
                 operatorFee, actualFee, blockNumber, blockHash, errorHash);
-        custodyRepository.settleGasUsage(
+        gasAccounting.settle(
                 batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(),
                 actualFee, "EVM_REVERTED_RECEIPT", txHash);
     }

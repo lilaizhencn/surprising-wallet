@@ -25,12 +25,13 @@ public final class CustodyTestSupport {
             com.surprising.wallet.chain.BlockchainRuntimeService runtime) {
         return new com.surprising.wallet.service.CustodyGasService(custody, addresses, runtime,
                 new CustodyGasAccountRepository(jdbc), new CustodyGasUsageRepository(jdbc),
-                new CustodyDepositRepository(jdbc), new CustodyDerivationSubjectRepository(jdbc));
+                new CustodyDepositRepository(jdbc), new CustodyDerivationSubjectRepository(jdbc), gasAccounting(jdbc),
+                new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc));
     }
 
     public static CustodyRepository repository(JdbcTemplate jdbc) {
         return new CustodyRepository(jdbc, new CustodyTenantTableRepository(jdbc),
-                new CustodyTenantUserRepository(jdbc), events(jdbc), new CustodyApiKeyRepository(jdbc),
+                new CustodyTenantUserRepository(jdbc), new CustodyApiKeyRepository(jdbc),
                 new CustodySessionRepository(jdbc), new CustodyIpRuleRepository(jdbc));
     }
 
@@ -67,4 +68,28 @@ public final class CustodyTestSupport {
     public static WithdrawalSettlementService settlements(JdbcTemplate jdbc) {
         return new WithdrawalSettlementService(new WithdrawalOrderRepository(jdbc), new LedgerBalanceRepository(jdbc));
     }
+    public static com.surprising.wallet.service.CustodyGasAccountingService gasAccounting(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.CustodyGasAccountingService(new CustodyGasUsageRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc), new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
+                new LedgerBalanceRepository(jdbc), new CustodyLedgerEntryRepository(jdbc), new CustodyWithdrawalRepository(jdbc),
+                new EvmCollectionBatchRepository(jdbc), new EvmWithdrawalBatchRepository(jdbc),
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+    }
+
+    public static com.surprising.wallet.service.CustodyGasReconciliationService gasReconciliation(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.CustodyGasReconciliationService(new CustodyGasUsageRepository(jdbc),
+                gasAccounting(jdbc), new ChainAssetRepository(jdbc), new WithdrawalOrderRepository(jdbc),
+                new EvmTransactionRepository(jdbc), new SolanaTransactionRepository(jdbc), new AptosTransactionRepository(jdbc),
+                new SuiTransactionRepository(jdbc), new TonTransactionRepository(jdbc), new XrpTransactionRepository(jdbc),
+                new MoneroTransactionRepository(jdbc), new TronTransactionRepository(jdbc));
+    }
+
+    public static com.surprising.wallet.service.CustodyWithdrawalReconciliationService withdrawalReconciliation(
+            JdbcTemplate jdbc, tools.jackson.databind.ObjectMapper mapper) {
+        return new com.surprising.wallet.service.CustodyWithdrawalReconciliationService(new CustodyWithdrawalRepository(jdbc),
+                new WithdrawalOrderRepository(jdbc), new CustodyAddressRepository(jdbc), new CustodyLedgerEntryRepository(jdbc),
+                gasReconciliation(jdbc), events(jdbc), mapper,
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+    }
+
 }

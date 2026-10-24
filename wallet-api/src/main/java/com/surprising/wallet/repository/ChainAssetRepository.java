@@ -146,6 +146,15 @@ public class ChainAssetRepository {
                 """, (rs, rowNum) -> mapDefinition(rs), chain, symbol).stream().findFirst();
     }
 
+    /** Observed fees retain their stored precision even when new asset work is disabled. */
+    public Optional<ChainAsset> findDefinition(String chain, String symbol) {
+        return jdbc.query("""
+                select id, chain, symbol, asset_kind, contract_address, decimals,
+                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
+                  from chain_asset where upper(chain)=upper(?) and upper(symbol)=upper(?)
+                """, (rs, rowNum) -> mapDefinition(rs), chain, symbol).stream().findFirst();
+    }
+
     public int countActiveNativeAssets(String chain) {
         return jdbc.queryForObject("""
                 select count(*) from chain_asset

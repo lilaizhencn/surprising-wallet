@@ -13,6 +13,13 @@ import java.util.UUID;
 /** chain_address 单表仓储。 */
 @Repository
 public class ChainAddressRepository {
+    public Optional<ChainAddressRecord> findOwned(UUID tenantId, long id) {
+        return jdbc.query("""
+                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                       address, owner_address, derivation_path, wallet_role, enabled
+                  from chain_address where tenant_id=? and id=?
+                """, (rs, rowNum) -> map(rs), tenantId, id).stream().findFirst();
+    }
     public List<ChainAddressRecord> findByIds(UUID tenantId, List<Long> ids) {
         if (ids.isEmpty()) return List.of();
         return jdbc.queryForList("""
