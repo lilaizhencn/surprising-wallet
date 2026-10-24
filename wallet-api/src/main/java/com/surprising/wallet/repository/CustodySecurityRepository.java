@@ -1,10 +1,6 @@
 package com.surprising.wallet.repository;
 
-import com.surprising.wallet.repository.CustodyRepository.ApiKeyRecord;
-import com.surprising.wallet.repository.CustodyRepository.AuthUser;
-import com.surprising.wallet.repository.CustodyRepository.SessionRecord;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.surprising.wallet.model.custody.ApiKeyRecord;
 import org.springframework.stereotype.Component;
 
 import java.sql.Timestamp;
@@ -31,15 +27,7 @@ public class CustodySecurityRepository {
     /** IP 规则单表仓储。 */
     private final CustodyIpRuleRepository ipRules;
 
-    /** 兼容测试和手工构造。 */
-    public CustodySecurityRepository(JdbcTemplate jdbc) {
-        this(new CustodyTenantUserRepository(jdbc), new CustodyTenantTableRepository(jdbc),
-                new CustodySessionRepository(jdbc), new CustodyApiKeyRepository(jdbc),
-                new CustodyApiNonceRepository(jdbc), new CustodyIpRuleRepository(jdbc));
-    }
-
     /** Spring 构造器，注入各自负责单表的数据访问组件。 */
-    @Autowired
     public CustodySecurityRepository(
             CustodyTenantUserRepository users,
             CustodyTenantTableRepository tenants,
@@ -60,71 +48,6 @@ public class CustodySecurityRepository {
         return sessions.revokeByTenant(tenantId);
     }
 
-    /** 查询租户用户并在 Java 中补充租户状态。 */
-    public Optional<AuthUser> findTenantUser(String email) {
-        Map<String, Object> user = first(users.findByEmail(email, false));
-        if (user == null) {
-            return Optional.empty();
-        }
-        Map<String, Object> tenant = tenants.findById(uuid(user.get("tenant_id")));
-        if (tenant == null) {
-            return Optional.empty();
-        }
-        return Optional.of(toAuthUser(user, tenant));
-    }
-
-    /** 查询平台管理员用户。 */
-    public Optional<AuthUser> findPlatformUser(String email) {
-        Map<String, Object> user = first(users.findByEmail(email, true));
-        return user == null ? Optional.empty() : Optional.of(toAuthUser(user, null));
-    }
-
-    /** 判断平台管理员是否存在。 */
-    public boolean platformAdminExists() {
-        return users.platformAdminExists();
-    }
-
-    /** 插入平台管理员。 */
-    public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
-        users.insertPlatformAdmin(userId, email, passwordHash);
-    }
-
-    /** 记录登录失败。 */
-    public void recordLoginFailure(UUID userId, Instant lockedUntil) {
-        users.recordLoginFailure(userId, timestampOrNull(lockedUntil));
-    }
-
-    /** 记录登录成功。 */
-    public void recordLoginSuccess(UUID userId) {
-        users.recordLoginSuccess(userId);
-    }
-
-    /** 插入登录会话。 */
-    public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
-                              String sourceIp, String userAgent, Instant expiresAt) {
-        sessions.insert(sessionId, userId, tenantId, tokenHash, sourceIp, userAgent,
-                Timestamp.from(expiresAt));
-    }
-
-    /** 查询会话并在 Java 中组合用户和租户信息。 */
-    public Optional<SessionRecord> findActiveSession(String tokenHash) {
-        Map<String, Object> session = first(sessions.findActive(tokenHash));
-        if (session == null) {
-            return Optional.empty();
-        }
-        Map<String, Object> user = first(users.findById(uuid(session.get("tenant_user_id"))));
-        if (user == null) {
-            return Optional.empty();
-        }
-        Map<String, Object> tenant = tenants.findById(uuid(session.get("tenant_id")));
-        return Optional.of(new SessionRecord(
-                uuid(session.get("id")), uuid(session.get("tenant_user_id")),
-                uuid(session.get("tenant_id")), text(tenant, "slug"),
-                text(user, "email"), text(user, "display_name"), text(user, "role"),
-                text(user, "status"), tenant == null ? "ACTIVE" : text(tenant, "status"),
-                instant(session.get("expires_at"))));
-    }
-
     /** 查询租户用户列表。 */
     public List<Map<String, Object>> listTenantUsers(UUID tenantId) {
         return users.listByTenant(tenantId).stream()
@@ -140,16 +63,6 @@ public class CustodySecurityRepository {
                 .filter(row -> userId.equals(row.get("id")))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("tenant administrator not found"));
-    }
-
-    /** 更新会话最近访问时间。 */
-    public void touchSession(UUID sessionId) {
-        sessions.touch(sessionId);
-    }
-
-    /** 撤销会话。 */
-    public void revokeSession(String tokenHash) {
-        sessions.revoke(tokenHash);
     }
 
     /** 插入并读取 API 密钥。 */
@@ -242,15 +155,6 @@ public class CustodySecurityRepository {
         }
     }
 
-    /** 将原始用户字段转换为认证模型。 */
-    private static AuthUser toAuthUser(Map<String, Object> user, Map<String, Object> tenant) {
-        return new AuthUser(uuid(user.get("id")), uuid(user.get("tenant_id")),
-                text(tenant, "slug"), tenant == null ? "ACTIVE" : text(tenant, "status"),
-                text(user, "email"), text(user, "display_name"), text(user, "password_hash"),
-                text(user, "role"), text(user, "status"), intValue(user.get("failed_login_count")),
-                instant(user.get("locked_until")));
-    }
-
     /** 将 API 密钥字段和租户字段转换为认证模型。 */
     private ApiKeyRecord toApiKey(Map<String, Object> key) {
         Map<String, Object> tenant = tenants.findById(uuid(key.get("tenant_id")));
@@ -297,11 +201,6 @@ public class CustodySecurityRepository {
         return rows.stream().findFirst().map(this::toApiKey);
     }
 
-    /** 取列表第一项。 */
-    private static Map<String, Object> first(List<Map<String, Object>> rows) {
-        return rows.stream().findFirst().orElse(null);
-    }
-
     /** 读取 Map 文本字段。 */
     private static String text(Map<String, Object> row, String key) {
         Object value = row == null ? null : row.get(key);
@@ -326,8 +225,4 @@ public class CustodySecurityRepository {
         return value instanceof Instant result ? result : null;
     }
 
-    /** 转换可空时间。 */
-    private static Timestamp timestampOrNull(Instant value) {
-        return value == null ? null : Timestamp.from(value);
-    }
 }

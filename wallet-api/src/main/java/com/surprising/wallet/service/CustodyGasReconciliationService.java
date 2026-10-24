@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.GasUsageRecord;
 import com.surprising.wallet.repository.CustodyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,7 @@ public class CustodyGasReconciliationService {
 
     /** 批量结算逾期 Gas 使用记录。 */
     public void reconcile() {
-        for (CustodyRepository.GasUsageRecord usage : repository.listOverdueGasUsage(100)) {
+        for (GasUsageRecord usage : repository.listOverdueGasUsage(100)) {
             try {
                 repository.settleGasUsage(
                         usage.tenantId(), usage.operationType(), usage.operationId(),

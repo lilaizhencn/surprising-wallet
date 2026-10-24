@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.TenantRecord;
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.model.PageView;
@@ -39,7 +40,7 @@ public class CustodySecurityService {
      */
     public Map<String, Object> ipAllowlist(CustodyPrincipal principal) {
         requireTenantAdmin(principal);
-        CustodyRepository.TenantRecord tenant = repository.requireTenant(principal.tenantId());
+        TenantRecord tenant = repository.requireTenant(principal.tenantId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("enabled", tenant.ipAllowlistEnabled());
         result.put("rules", repository.listIpRules(principal.tenantId()));

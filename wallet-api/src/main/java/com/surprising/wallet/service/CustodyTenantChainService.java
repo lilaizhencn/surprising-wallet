@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.GasAccountRecord;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,10 +49,10 @@ public class CustodyTenantChainService {
      */
     public List<ChainView> list(CustodyPrincipal principal) {
         requireScope(principal, "chains:read");
-        Map<String, CustodyRepository.GasAccountRecord> addresses = custody
+        Map<String, GasAccountRecord> addresses = custody
                 .listGasAccounts(principal.tenantId()).stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        CustodyRepository.GasAccountRecord::chain, row -> row));
+                        GasAccountRecord::chain, row -> row));
         return chains.list(principal.tenantId()).stream()
                 .map(row -> toView(row, addresses.get(row.chain())))
                 .toList();
@@ -76,10 +77,10 @@ public class CustodyTenantChainService {
                 enabled ? "TENANT_CHAIN.OPEN" : "TENANT_CHAIN.CLOSE",
                 "TENANT_CHAIN", chain, sourceIp,
                 "{\"chain\":\"" + chain + "\",\"status\":\"" + status + "\"}");
-        Map<String, CustodyRepository.GasAccountRecord> addresses = custody
+        Map<String, GasAccountRecord> addresses = custody
                 .listGasAccounts(principal.tenantId()).stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        CustodyRepository.GasAccountRecord::chain, row -> row));
+                        GasAccountRecord::chain, row -> row));
         return chains.list(principal.tenantId()).stream()
                 .filter(row -> row.chain().equals(chain))
                 .map(row -> toView(row, addresses.get(row.chain())))
@@ -112,7 +113,7 @@ public class CustodyTenantChainService {
      * 将数据库开关和资产配置投影为租户可见的链信息。
      */
     private ChainView toView(CustodyTenantChainRepository.ChainRecord row,
-                                      CustodyRepository.GasAccountRecord address) {
+                                      GasAccountRecord address) {
         List<TokenView> tokens = row.tokens().stream()
                 .map(CustodyTenantChainService::tokenView)
                 .toList();

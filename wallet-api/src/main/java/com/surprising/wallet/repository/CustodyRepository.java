@@ -1,5 +1,15 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.WithdrawalStatusChange;
+import com.surprising.wallet.model.custody.WebhookEndpointRecord;
+import com.surprising.wallet.model.custody.WebhookDeliveryTask;
+import com.surprising.wallet.model.custody.TenantRecord;
+import com.surprising.wallet.model.custody.NetworkFee;
+import com.surprising.wallet.model.custody.IdempotencyRecord;
+import com.surprising.wallet.model.custody.GasUsageRecord;
+import com.surprising.wallet.model.custody.GasPricingMetadata;
+import com.surprising.wallet.model.custody.GasAccountRecord;
+import com.surprising.wallet.model.custody.ApiKeyRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.service.CustodyEventService;
@@ -220,45 +230,6 @@ public class CustodyRepository {
     /** 撤销租户会话。 */
     public int revokeTenantSessions(UUID tenantId) { return securityRepository.revokeTenantSessions(tenantId); }
 
-    /** 查询租户用户。 */
-    public Optional<AuthUser> findTenantUser(String email) { return securityRepository.findTenantUser(email); }
-
-    /** 查询平台用户。 */
-    public Optional<AuthUser> findPlatformUser(String email) { return securityRepository.findPlatformUser(email); }
-
-    /** 判断平台管理员是否存在。 */
-    public boolean platformAdminExists() { return securityRepository.platformAdminExists(); }
-
-    /** 创建平台管理员。 */
-    public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
-        securityRepository.insertPlatformAdmin(userId, email, passwordHash);
-    }
-
-    /** 记录登录失败。 */
-    public void recordLoginFailure(UUID userId, Instant lockedUntil) {
-        securityRepository.recordLoginFailure(userId, lockedUntil);
-    }
-
-    /** 记录登录成功。 */
-    public void recordLoginSuccess(UUID userId) { securityRepository.recordLoginSuccess(userId); }
-
-    /** 创建会话。 */
-    public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
-                              Instant expiresAt, String sourceIp, String userAgent) {
-        securityRepository.insertSession(sessionId, userId, tenantId, tokenHash, sourceIp, userAgent, expiresAt);
-    }
-
-    /** 兼容认证服务使用的会话参数顺序。 */
-    public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
-                              String sourceIp, String userAgent, Instant expiresAt) {
-        securityRepository.insertSession(sessionId, userId, tenantId, tokenHash, sourceIp, userAgent, expiresAt);
-    }
-
-    /** 查询有效会话。 */
-    public Optional<SessionRecord> findActiveSession(String tokenHash) {
-        return securityRepository.findActiveSession(tokenHash);
-    }
-
     /** 查询租户用户列表。 */
     public List<Map<String, Object>> listTenantUsers(UUID tenantId) { return securityRepository.listTenantUsers(tenantId); }
 
@@ -266,12 +237,6 @@ public class CustodyRepository {
     public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
         return securityRepository.unlockTenantAdministrator(tenantId, userId);
     }
-
-    /** 更新会话访问时间。 */
-    public void touchSession(UUID sessionId) { securityRepository.touchSession(sessionId); }
-
-    /** 撤销会话。 */
-    public void revokeSession(String tokenHash) { securityRepository.revokeSession(tokenHash); }
 
     /** 创建 API 密钥。 */
     public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
@@ -945,53 +910,4 @@ public class CustodyRepository {
     /** 规范化可选筛选参数。 */
     private static String blank(String value) { return value == null ? "" : value.trim(); }
 
-
-    /** 租户记录。 */
-    public record TenantRecord(UUID id, String slug, String name, String status, int derivationNamespace,
-                               boolean ipAllowlistEnabled, String displayCurrency, Instant createdAt, Instant updatedAt) { }
-    /** 认证用户记录。 */
-    public record AuthUser(UUID id, UUID tenantId, String tenantSlug, String tenantStatus, String email,
-                           String displayName, String passwordHash, String role, String status,
-                           int failedLoginCount, Instant lockedUntil) { }
-    /** 会话记录。 */
-    public record SessionRecord(UUID sessionId, UUID userId, UUID tenantId, String tenantSlug, String email,
-                               String displayName, String role, String userStatus, String tenantStatus, Instant expiresAt) { }
-    /** API 密钥记录。 */
-    public record ApiKeyRecord(UUID id, UUID tenantId, String tenantSlug, String tenantStatus,
-                               boolean ipAllowlistEnabled, String keyId, String name, String secretCiphertext,
-                               String status, Instant expiresAt, Instant createdAt) { }
-    /** Gas 账户记录。 */
-    public record GasAccountRecord(UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
-                                   String nativeSymbol, String address, String memo, long childIndex, String accountId,
-                                   BigDecimal availableBalance, BigDecimal lockedBalance, BigDecimal totalBalance,
-                                   BigDecimal lowBalanceThreshold, String status, Instant createdAt, Instant updatedAt) {
-        /** 判断 Gas 余额是否低于阈值。 */
-        public boolean lowBalance() { return "ACTIVE".equals(status) && availableBalance.compareTo(lowBalanceThreshold) < 0; }
-    }
-    /** 幂等记录。 */
-    public record IdempotencyRecord(String requestHash, Integer responseStatus, String responseJson, Instant expiresAt) { }
-    /** Webhook 端点记录。 */
-    public record WebhookEndpointRecord(UUID id, UUID tenantId, String name, String url, String secretCiphertext,
-                                        String status, String verificationTokenHash, Instant verifiedAt,
-                                        Instant lastDeliveryAt, Instant createdAt, Instant updatedAt) { }
-    /** Webhook 投递任务。 */
-    public record WebhookDeliveryTask(UUID id, UUID tenantId, UUID endpointId, UUID eventId, int attemptCount,
-                                      int totalAttemptCount, int manualRetryCount, String attemptTrigger,
-                                      UUID attemptId, String workerId, String url, String secretCiphertext,
-                                      String eventType, String payload) { }
-    /** 提现状态变化记录。 */
-    public record WithdrawalStatusChange(UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
-                                         String externalReference, String chain, String assetSymbol, String toAddress,
-                                         BigDecimal amount, BigDecimal fee, String previousStatus, String nextStatus,
-                                         String txHash, String errorMessage, String debitAccountId, String addressSource) { }
-    /** Gas 定价元数据。 */
-    public record GasPricingMetadata(String family, String nativeSymbol, long defaultFeeRate, int decimals,
-                                     boolean requestedNative) { }
-    /** Gas 使用记录。 */
-    public record GasUsageRecord(UUID id, UUID tenantId, UUID gasAccountId, String operationType, UUID operationId,
-                                 String referenceNo, String chain, String nativeSymbol, BigDecimal reservedAmount,
-                                 BigDecimal actualAmount, String status, String pricingSource, String txHash,
-                                 String errorMessage, Instant createdAt, Instant updatedAt, Instant settledAt) { }
-    /** 网络费用记录。 */
-    public record NetworkFee(BigDecimal amount, String pricingSource) { }
 }

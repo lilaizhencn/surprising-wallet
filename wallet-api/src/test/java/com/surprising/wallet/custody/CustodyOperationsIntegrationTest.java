@@ -76,7 +76,7 @@ class CustodyOperationsIntegrationTest {
     @Test
     void tenantLoginLookupUsesGloballyUniqueEmail() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
+            var users = new com.surprising.wallet.repository.CustodyTenantUserRepository(jdbc);
             UUID firstTenantId = createTenant();
             UUID secondTenantId = createTenant();
             String email = "shared-login@example.test";
@@ -87,9 +87,8 @@ class CustodyOperationsIntegrationTest {
                             'TENANT_ADMIN', 'ACTIVE')
                     """, UUID.randomUUID(), firstTenantId, email);
 
-            var user = repository.findTenantUser(email.toUpperCase(java.util.Locale.ROOT))
-                    .orElseThrow();
-            assertEquals(firstTenantId, user.tenantId());
+            var user = users.findByEmail(email.toUpperCase(java.util.Locale.ROOT), false).getFirst();
+            assertEquals(firstTenantId, user.get("tenant_id"));
             assertThrows(DuplicateKeyException.class, () -> jdbc.update("""
                     insert into custody_tenant_user(
                         id, tenant_id, email, display_name, password_hash, role, status)
@@ -741,7 +740,7 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, 'Operations administrator', 'test-only-hash',
                             'TENANT_ADMIN', 'ACTIVE', 5, now() + interval '15 minutes')
                     """, administratorId, tenantId, slug + "@example.test");
-            repository.insertSession(
+            new com.surprising.wallet.repository.CustodySessionRepository(jdbc).insert(
                     UUID.randomUUID(),
                     administratorId,
                     tenantId,

@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.WebhookDeliveryTask;
 import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.repository.CustodyRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -57,15 +58,15 @@ public class CustodyWebhookDispatchService {
 
     /** 领取并投递一批待处理 Webhook。 */
     public void dispatch() {
-        List<CustodyRepository.WebhookDeliveryTask> tasks =
+        List<WebhookDeliveryTask> tasks =
                 repository.claimWebhookDeliveries(workerId, 25);
-        for (CustodyRepository.WebhookDeliveryTask task : tasks) {
+        for (WebhookDeliveryTask task : tasks) {
             deliveryExecutor.execute(() -> deliver(task));
         }
     }
 
     /** 投递单个 Webhook，并根据返回结果更新状态。 */
-    private void deliver(CustodyRepository.WebhookDeliveryTask task) {
+    private void deliver(WebhookDeliveryTask task) {
         long startedAt = System.nanoTime();
         try {
             String secret = crypto.decrypt(task.secretCiphertext());
@@ -86,7 +87,7 @@ public class CustodyWebhookDispatchService {
     }
 
     /** 计算失败后的重试状态并持久化。 */
-    private void fail(CustodyRepository.WebhookDeliveryTask task, Integer httpStatus,
+    private void fail(WebhookDeliveryTask task, Integer httpStatus,
                       String error, String response, String retryAfter, long durationMs) {
         CustodyWebhookRetryPolicy.RetryDecision decision = retryPolicy.decide(
                 task.id(), task.attemptCount(), retryAfter, java.time.Instant.now());

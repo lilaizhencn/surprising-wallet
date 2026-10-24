@@ -29,7 +29,10 @@ public final class CustodyTestSupport {
     }
 
     public static CustodyRepository repository(JdbcTemplate jdbc) {
-        return new CustodyRepository(jdbc, new CustodySecurityRepository(jdbc),
+        return new CustodyRepository(jdbc, new CustodySecurityRepository(
+                new CustodyTenantUserRepository(jdbc), new CustodyTenantTableRepository(jdbc),
+                new CustodySessionRepository(jdbc), new CustodyApiKeyRepository(jdbc),
+                new CustodyApiNonceRepository(jdbc), new CustodyIpRuleRepository(jdbc)),
                 new CustodyTenantTableRepository(jdbc), new CustodyTenantUserRepository(jdbc), events(jdbc));
     }
 

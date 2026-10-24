@@ -70,13 +70,13 @@ public class CustodyTenantUserRepository {
     }
 
     /** 记录登录失败。 */
-    public void recordLoginFailure(UUID userId, java.sql.Timestamp lockedUntil) {
+    public void recordLoginFailure(UUID userId, Instant lockedUntil) {
         jdbc.update("""
                 update custody_tenant_user
                    set failed_login_count = failed_login_count + 1,
                        locked_until = ?, updated_at = now()
                  where id = ?
-                """, lockedUntil, userId);
+                """, lockedUntil == null ? null : java.sql.Timestamp.from(lockedUntil), userId);
     }
 
     /** 记录登录成功。 */

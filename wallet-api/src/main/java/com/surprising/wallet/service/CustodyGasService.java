@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.GasPricingMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
@@ -9,7 +10,7 @@ import com.surprising.wallet.repository.CustodyDerivationSubjectRepository;
 import org.springframework.transaction.annotation.Isolation;
 import com.surprising.wallet.service.CustodyAddressService.AddressView;
 import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
-import com.surprising.wallet.repository.CustodyRepository.GasAccountRecord;
+import com.surprising.wallet.model.custody.GasAccountRecord;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -216,7 +217,7 @@ public class CustodyGasService {
      * 执行 {@code reservationAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     BigDecimal reservationAmount(String chain, String assetSymbol) {
-        CustodyRepository.GasPricingMetadata metadata =
+        GasPricingMetadata metadata =
                 repository.gasPricingMetadata(chain, assetSymbol);
         BigDecimal atomic = BigDecimal.ONE.movePointLeft(metadata.decimals());
         BigDecimal configured = BigDecimal.valueOf(

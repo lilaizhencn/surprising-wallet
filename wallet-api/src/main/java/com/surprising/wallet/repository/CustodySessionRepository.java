@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,14 +30,14 @@ public class CustodySessionRepository {
 
     /** 插入登录会话。 */
     public void insert(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
-                       String sourceIp, String userAgent, Timestamp expiresAt) {
+                       String sourceIp, String userAgent, Instant expiresAt) {
         jdbc.update("""
                 insert into custody_session(
                     id, tenant_user_id, tenant_id, token_hash, source_ip, user_agent, expires_at)
                 values (?, ?, ?, ?, cast(nullif(?, '') as inet), ?, ?)
                 """, sessionId, userId, tenantId, tokenHash, sourceIp,
                 userAgent == null ? null : userAgent.substring(0, Math.min(userAgent.length(), 512)),
-                expiresAt);
+                Timestamp.from(expiresAt));
     }
 
     /** 按令牌查询当前会话单表字段。 */

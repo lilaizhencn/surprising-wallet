@@ -193,7 +193,7 @@ class DevFaucetJobTest {
          * 验证 {@code FakeCustodyRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeCustodyRepository() {
-            super(null, new com.surprising.wallet.repository.CustodySecurityRepository(null),
+            super(null, org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodySecurityRepository.class),
                     new com.surprising.wallet.repository.CustodyTenantTableRepository(null),
                     new com.surprising.wallet.repository.CustodyTenantUserRepository(null),
                     com.surprising.wallet.testutil.CustodyTestSupport.events(null));

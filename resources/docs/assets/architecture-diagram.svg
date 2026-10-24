@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="930" viewBox="0 0 1100 930">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1090" viewBox="0 0 1100 1090">
   <style>
     .svc   { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 10; }
     .lib   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 10; }
@@ -202,4 +202,10 @@
 <text x="50" y="832" style="font:14px sans-serif;fill:#1e293b">Cloudflare：Static Assets + Worker → 单租户 Durable Object / SQLite</text>
 <text x="50" y="860" style="font:14px sans-serif;fill:#1e293b">Worker ⇄ HTTPS Custody API / HMAC Webhook ⇄ Alibaba Cloud wallet-api</text>
 <text x="50" y="888" style="font:14px sans-serif;fill:#1e293b">GitHub master / resources/tenant-demo/** → 验证测试 Worker → cf deploy</text>
+  <rect x="30" y="932" width="1040" height="138" class="svc"/>
+  <text x="50" y="956" class="label">Console 认证 · model/custody 独立记录</text>
+  <text x="50" y="981" class="desc">CustodyAuthService → 用户 / 租户 / 会话单表仓储（直接读取，组合当前状态）</text>
+  <text x="50" y="1006" class="desc">CustodyAuthService → 用户状态 / 会话 / 审计单表仓储（登录事务）</text>
+  <text x="50" y="1031" class="desc">认证路径无总仓储 / 安全仓储门面转发，无独立查询中间层；仅保留正常注入构造器</text>
+  <text x="50" y="1056" class="desc">会话校验当前用户和租户状态、路由范围；业务记录不再嵌入仓储类</text>
 </svg>

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1255" viewBox="0 0 1180 1255">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1430" viewBox="0 0 1180 1430">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -262,4 +262,10 @@
   <text x="772" y="1172" class="bold">原交易 / 替换交易确认 → 仅结算一次</text>
   <text x="772" y="1192" class="small">提现：冻结扣款/确认同事务；归集不改变用户余额 / Webhook</text>
   <text x="40" y="1230" class="small">最多 5 次；≤1000 sat/vB；费用 ≤100000 sat 且 ≤输入10%；终态不可重开</text>
+  <rect x="20" y="1260" width="1140" height="150" class="phase-bg"/>
+  <text x="40" y="1285" class="phase-label">Console 登录与会话：业务记录使用独立 model/custody 类型</text>
+  <text x="40" y="1312" class="small">Controller → CustodyAuthService 直接读取单表仓储，组合用户 / 租户 / 有效会话 → 密码 / 锁定 / 当前状态校验</text>
+  <text x="40" y="1338" class="small">AuthService → 用户登录状态 + 会话哈希 + 审计同事务；审计失败整体回滚</text>
+  <text x="40" y="1364" class="small">密码错误保留失败次数；五次锁定十五分钟；会话过期 / 撤销 / 账户停用拒绝访问</text>
+  <text x="40" y="1390" class="small">平台 / 租户路由范围校验 → 会话访问时间更新；登出直接撤销会话，无两层仓储门面转发</text>
 </svg>

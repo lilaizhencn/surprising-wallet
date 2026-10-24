@@ -1,7 +1,7 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.model.CustodyPrincipal.ActorType;
-import com.surprising.wallet.repository.CustodyRepository.ApiKeyRecord;
+import com.surprising.wallet.model.custody.ApiKeyRecord;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

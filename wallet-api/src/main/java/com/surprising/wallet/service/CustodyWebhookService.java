@@ -3,7 +3,7 @@ package com.surprising.wallet.service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.CustodyRepository.WebhookEndpointRecord;
+import com.surprising.wallet.model.custody.WebhookEndpointRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

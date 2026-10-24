@@ -6,7 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.chain.model.CustodyAddressRecord;
-import com.surprising.wallet.repository.CustodyRepository.TenantRecord;
+import com.surprising.wallet.model.custody.TenantRecord;
 import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.repository.ChainAddressRepository;

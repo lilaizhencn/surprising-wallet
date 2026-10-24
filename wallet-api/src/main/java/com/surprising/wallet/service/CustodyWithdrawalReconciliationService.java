@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.WithdrawalStatusChange;
 import com.surprising.wallet.repository.CustodyRepository;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -33,7 +34,7 @@ public class CustodyWithdrawalReconciliationService {
 
     /** 批量处理尚未投影为事件的提现状态变化。 */
     public void reconcile() {
-        for (CustodyRepository.WithdrawalStatusChange change
+        for (WithdrawalStatusChange change
                 : repository.findWithdrawalStatusChanges(100)) {
             String eventType = eventType(change.nextStatus());
             UUID eventId = eventType == null ? null : UUID.randomUUID();
@@ -55,7 +56,7 @@ public class CustodyWithdrawalReconciliationService {
 
     /** 生成提现事件 JSON。 */
     private String payload(UUID eventId, String eventType,
-                           CustodyRepository.WithdrawalStatusChange change) {
+                           WithdrawalStatusChange change) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("withdrawalId", change.id());
         data.put("custodyAddressId", change.custodyAddressId());
