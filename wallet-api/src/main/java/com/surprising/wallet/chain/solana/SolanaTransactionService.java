@@ -104,9 +104,6 @@ public class SolanaTransactionService {
         Account sender = keyService.account(derivationIndex);
         return sendNative(sender, toAddress, lamports);
     }
-    /**
-     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendNative(ChainAddressRecord from, String toAddress, long lamports) {
         if (lamports <= 0) {
             throw new IllegalArgumentException("lamports must be positive");
@@ -114,9 +111,6 @@ public class SolanaTransactionService {
         Account sender = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
         return sendNative(sender, toAddress, lamports);
     }
-    /**
-     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
-     */
     private String sendNative(Account sender, String toAddress, long lamports) {
         Transaction transaction = new Transaction()
                 .addInstruction(SystemProgram.transfer(
@@ -124,9 +118,6 @@ public class SolanaTransactionService {
         return signAndSend(transaction, List.of(sender));
     }
 
-    /**
-     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendToken(long derivationIndex, String mintAddress, String toOwnerAddress,
                             long atomicAmount, int decimals) {
         if (atomicAmount <= 0) {
@@ -136,9 +127,6 @@ public class SolanaTransactionService {
         return sendToken(sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
     }
 
-    /**
-     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendToken(ChainAddressRecord from, String mintAddress, String toOwnerAddress,
                             long atomicAmount, int decimals) {
         if (atomicAmount <= 0) {
@@ -148,9 +136,6 @@ public class SolanaTransactionService {
         return sendToken(sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
     }
 
-    /**
-     * 发送或广播 {@code sendTokenAmount} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendTokenAmount(ChainAddressRecord from, String mintAddress, String toOwnerAddress,
                                   BigDecimal amount, int decimals) {
         ChainAddressRecord hot = defaultHotFeePayer(
@@ -161,9 +146,6 @@ public class SolanaTransactionService {
                 toAtomicAmount(amount, decimals), decimals);
     }
 
-    /**
-     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
-     */
     private String sendToken(Account sender, String mintAddress, String toOwnerAddress,
                              long atomicAmount, int decimals) {
         return sendTokenWithFeePayer(sender, sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
@@ -231,9 +213,6 @@ public class SolanaTransactionService {
         return new DeploySplMintResult(signature, mint.getPublicKeyBase58(), ownerAta.toBase58());
     }
 
-    /**
-     * 发送或广播 {@code sendTokenWithFeePayer} 对应的链上请求，并返回节点处理结果。
-     */
     private String sendTokenWithFeePayer(Account sourceOwner, Account feePayer, String mintAddress,
                                          String toOwnerAddress, long atomicAmount, int decimals) {
         PublicKey mint = new PublicKey(mintAddress);
@@ -524,24 +503,15 @@ public class SolanaTransactionService {
         }
         throw new IllegalStateException("Solana confirmation timeout for " + signature);
     }
-    /**
-     * 为 {@code signAndSend} 对应的交易或消息生成签名，并保持原始数据不被改变。
-     */
     private String signAndSend(Transaction transaction, List<Account> signers) {
         transaction.setRecentBlockHash(rpc.getLatestBlockhash());
         transaction.sign(signers);
         return rpc.sendTransaction(transaction.serialize());
     }
-    /**
-     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
-     */
     private AccountChainProfile profile() {
         return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-    /**
-     * 执行 {@code defaultHotFeePayer} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private ChainAddressRecord defaultHotFeePayer(UUID tenantId) {
         return chainAddressRepository.listDefaultHot(
                 CHAIN,
@@ -554,17 +524,11 @@ public class SolanaTransactionService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing enabled Solana default hot fee payer"));
     }
-    /**
-     * 编码 {@code toAtomicAmount} 对应的数据，生成链上或接口所需的表示。
-     */
     private long toAtomicAmount(BigDecimal amount, int decimals) {
         BigInteger atomic = amount.movePointRight(decimals).toBigIntegerExact();
         return atomic.longValueExact();
     }
 
-    /**
-     * 记录或保存 {@code recordTransaction} 对应的数据，并遵守幂等和事务约束。
-     */
     private void recordTransaction(String signature, String from, String to, String symbol, String mint,
                                    BigDecimal amount, long fee, String status) {
         solanaTransactionRepository.upsert(SolanaTransactionRecord.builder()
@@ -580,9 +544,6 @@ public class SolanaTransactionService {
                 .status(status)
                 .build());
     }
-    /**
-     * 设置或更新 {@code updateConfirmedTransaction} 对应的状态，并保持相关业务字段一致。
-     */
     private void updateConfirmedTransaction(String signature, JsonNode status) {
         JsonNode transaction = rpc.getTransaction(signature);
         solanaTransactionRepository.upsert(SolanaTransactionRecord.builder()

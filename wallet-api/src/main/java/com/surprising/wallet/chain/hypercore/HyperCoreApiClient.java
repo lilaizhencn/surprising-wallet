@@ -29,21 +29,9 @@ public class HyperCoreApiClient {
 
     /** 链标识常量 */
     static final String CHAIN = "HYPERCORE";
-    /**
-     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
-     */
     private final ObjectMapper objectMapper;
-    /**
-     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final HttpClient httpClient;
-    /**
-     * 保存 {@code profiles}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final ChainProfileRepository profiles;
-    /**
-     * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final ChainRpcNodeService rpcNodeService;
 
     public HyperCoreApiClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
@@ -56,21 +44,12 @@ public class HyperCoreApiClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
-    /**
-     * 执行 {@code postInfo} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public JsonNode postInfo(ObjectNode body) {
         return post("info", "/info", body);
     }
-    /**
-     * 执行 {@code postExchange} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public JsonNode postExchange(ObjectNode body) {
         return post("exchange", "/exchange", body);
     }
-    /**
-     * 执行 {@code post} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private JsonNode post(String purpose, String path, ObjectNode body) {
         try {
             String requestBody = objectMapper.writeValueAsString(body);
@@ -83,9 +62,6 @@ public class HyperCoreApiClient {
             throw new IllegalStateException("HyperCore request serialization failed", e);
         }
     }
-    /**
-     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
-     */
     private JsonNode execute(String path, String requestBody, String baseUrl, ChainRpcNode node) {
         String url = endpoint(baseUrl, path);
         try {
@@ -116,9 +92,6 @@ public class HyperCoreApiClient {
             throw new IllegalStateException("HyperCore HTTP request interrupted for " + path, e);
         }
     }
-    /**
-     * 执行 {@code endpoint} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String endpoint(String baseUrl, String path) {
         String value = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
         if (value.endsWith(path)) {
@@ -129,9 +102,6 @@ public class HyperCoreApiClient {
         }
         return value + path;
     }
-    /**
-     * 执行 {@code abbreviate} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";

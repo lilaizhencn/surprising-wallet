@@ -65,9 +65,6 @@ class CustodyWebhookRetryPolicy {
         }
         return new RetryDecision(false, now.plus(delay), delay);
     }
-    /**
-     * 解析或转换 {@code parseRetryAfter} 对应的数据，并校验其格式和边界。
-     */
     private static Duration parseRetryAfter(String value, Instant now) {
         if (value == null || value.isBlank()) {
             return null;

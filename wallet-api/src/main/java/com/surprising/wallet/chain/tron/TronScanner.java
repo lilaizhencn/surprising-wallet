@@ -15,9 +15,6 @@ import java.util.Map;
  */
 @Component
 public class TronScanner {
-    /**
-     * 解析或转换 {@code decodeTrc20Transfers} 对应的数据，并校验其格式和边界。
-     */
     public List<TronTokenTransferEvent> decodeTrc20Transfers(Response.TransactionInfo txInfo,
                                                              Map<String, TokenConfig> tokenByContractHex) {
         List<TronTokenTransferEvent> transfers = new ArrayList<>();
@@ -55,9 +52,6 @@ public class TronScanner {
                                          java.math.BigDecimal amount, java.math.BigInteger rawAmount,
                                          long blockHeight, long logIndex) {
     }
-    /**
-     * 转换或计算 {@code normalizeLogContractAddress} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalizeLogContractAddress(Response.TransactionInfo.Log log) {
         String rawHex = Numeric.toHexStringNoPrefix(log.getAddress().toByteArray()).toLowerCase(Locale.ROOT);
         if (rawHex.length() == 40) {

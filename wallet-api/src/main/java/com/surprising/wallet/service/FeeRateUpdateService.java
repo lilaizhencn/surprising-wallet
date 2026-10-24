@@ -44,9 +44,6 @@ public class FeeRateUpdateService {
 
     /** 运行时开关服务。 */
     private final WalletRuntimeConfigService runtimeConfigService;
-    /**
-     * 保存 {@code feeRates}，用于承载当前对象的运行配置或业务数据。
-     */
     private final ChainFeeRateRepository feeRates;
 
     /** 构造费率更新任务。 */

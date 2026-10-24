@@ -116,17 +116,11 @@ public class AptosTransactionService {
         return hash;
     }
 
-    /**
-     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendToken(ChainAddressRecord from, TokenDefinition token,
                             String toAddress, long amountAtomic) {
         return sendFungibleAsset(from, AptosFungibleAsset.requireMetadata(token), toAddress, amountAtomic);
     }
 
-    /**
-     * 发送或广播 {@code sendFungibleAsset} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendFungibleAsset(ChainAddressRecord from, String metadataAddress,
                                     String toAddress, long amountAtomic) {
         TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
@@ -151,9 +145,6 @@ public class AptosTransactionService {
         return hash;
     }
 
-    /**
-     * 执行或处理 {@code runEntryFunction} 对应的业务流程，并维护状态和异常边界。
-     */
     public String runEntryFunction(long derivationIndex, String fromAddress,
                                    String module, String function,
                                    List<String> typeArguments,
@@ -201,9 +192,6 @@ public class AptosTransactionService {
         return new DeployPackageResult(hash, sequence);
     }
 
-    /**
-     * 处理 {@code withdrawNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountOctas) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawNative");
@@ -247,9 +235,6 @@ public class AptosTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code withdrawToken} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String withdrawToken(String orderNo, long userId, ChainAddressRecord from,
                                 String contractAddress, String toAddress, BigDecimal atomicAmount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawToken");
@@ -292,9 +277,6 @@ public class AptosTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code collectNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountOctas) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectNative");
@@ -316,9 +298,6 @@ public class AptosTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code collectToken} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String collectToken(java.util.UUID tenantId, String collectionNo,
                                ChainAddressRecord from, String contractAddress,
                                String hotAddress, BigDecimal atomicAmount) {
@@ -355,9 +334,6 @@ public class AptosTransactionService {
         }
         return false;
     }
-    /**
-     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
         String hash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
@@ -367,9 +343,6 @@ public class AptosTransactionService {
         }
         return false;
     }
-    /**
-     * 校验 {@code requireSuccessfulConfirmation} 对应的前置条件，不满足时抛出明确异常。
-     */
     public JsonNode requireSuccessfulConfirmation(String hash, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -387,26 +360,17 @@ public class AptosTransactionService {
         }
         throw new IllegalStateException("Aptos confirmation timeout for " + hash);
     }
-    /**
-     * 执行 {@code gasPlan} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private GasPlan gasPlan() {
         long gasUnitPrice = Math.max(1L, rpc.estimateGasPrice());
         long feeReserve = Math.max(1L, profile().getDefaultFee());
         long maxGasAmount = Math.max(50_000L, (feeReserve + gasUnitPrice - 1L) / gasUnitPrice);
         return new GasPlan(maxGasAmount, gasUnitPrice);
     }
-    /**
-     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
-     */
     private AccountChainProfile profile() {
         return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 
-    /**
-     * 记录或保存 {@code record} 对应的数据，并遵守幂等和事务约束。
-     */
     private void record(String hash, String sender, String receiver, String symbol, String coinType,
                         BigDecimal amount, long gasUsed, long gasUnitPrice, long sequenceNumber,
                         String status, String rawPayload) {
@@ -426,9 +390,6 @@ public class AptosTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-    /**
-     * 写入或更新 {@code markConfirmed} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     private void markConfirmed(String hash, JsonNode transaction) {
         long version = transaction.path("version").asLong(0);
         long gasUsed = transaction.path("gas_used").asLong(0);
@@ -439,9 +400,6 @@ public class AptosTransactionService {
             accountSequenceRepository.synchronize(CHAIN, AptosHex.normalizeAddress(sender), transaction.path("sequence_number").asLong(0) + 1L);
         }
     }
-    /**
-     * 转换或计算 {@code sleep} 对应的值，统一金额、格式和边界规则。
-     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

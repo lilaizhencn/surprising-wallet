@@ -15,9 +15,6 @@ public final class CustodyRequestSupport {
     public static final String PRINCIPAL_ATTRIBUTE =
             CustodyRequestSupport.class.getName() + ".principal";
 
-    /**
-     * 构造 {@code CustodyRequestSupport}，初始化该组件运行所需的状态和依赖。
-     */
     private CustodyRequestSupport() {
     }
 

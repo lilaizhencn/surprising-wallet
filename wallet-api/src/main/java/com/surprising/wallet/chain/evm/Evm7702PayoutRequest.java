@@ -44,24 +44,15 @@ public record Evm7702PayoutRequest(
         Evm7702PayoutItem.requireUint(deadline, "deadline", false);
     }
 
-    /**
-     * 执行 {@code batchId} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     @Override
     public byte[] batchId() {
         return batchId.clone();
     }
-    /**
-     * 校验 {@code requireNotExpired} 对应的前置条件，不满足时抛出明确异常。
-     */
     public void requireNotExpired(Instant now) {
         if (deadline.compareTo(BigInteger.valueOf(now.getEpochSecond())) <= 0) {
             throw new IllegalArgumentException("payout signature deadline has expired");
         }
     }
-    /**
-     * 执行 {@code allZero} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static boolean allZero(byte[] value) {
         for (byte current : value) if (current != 0) return false;
         return true;

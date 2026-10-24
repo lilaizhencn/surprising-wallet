@@ -241,9 +241,6 @@ public class XrpRpcClient {
         }
         return hash;
     }
-    /**
-     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private JsonNode call(String method, JsonNode paramsObject) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("method", method);
@@ -261,9 +258,6 @@ public class XrpRpcClient {
             throw new IllegalStateException("XRPL RPC serialization failed for " + method, e);
         }
     }
-    /**
-     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
-     */
     private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -316,22 +310,13 @@ public class XrpRpcClient {
      * XRPL RPC 调用异常，包含 error 字段。
      */
     public static class XrpRpcException extends RuntimeException {
-        /**
-         * 保存 {@code error}，用于承载当前对象的运行配置或业务数据。
-         */
         private final String error;
 
-        /**
-         * 构造 {@code XrpRpcException}，初始化该组件运行所需的状态和依赖。
-         */
         XrpRpcException(String error, String message) {
             super(message);
             this.error = error;
         }
 
-        /**
-         * 执行 {@code error} 对应的辅助逻辑，完成数据处理并维护状态边界。
-         */
         public String error() {
             return error;
         }

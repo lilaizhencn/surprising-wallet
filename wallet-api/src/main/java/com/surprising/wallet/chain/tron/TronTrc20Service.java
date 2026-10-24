@@ -11,14 +11,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
- */
 @Service
 public class TronTrc20Service {
-    /**
-     * 为 {@code signTransfer} 对应的交易或消息生成签名，并保持原始数据不被改变。
-     */
     public TronTransactionService.SignedTronTransaction signTransfer(TronTridentClient client,
                                                                     KeyPair keyPair,
                                                                     String contractAddress,
@@ -39,9 +33,6 @@ public class TronTrc20Service {
         Chain.Transaction signed = client.api().signTransaction(unsigned, keyPair);
         return new TronTransactionService.SignedTronTransaction(TronTransactionService.txId(signed), signed);
     }
-    /**
-     * 发送或广播 {@code broadcast} 对应的链上请求，并返回节点处理结果。
-     */
     public String broadcast(TronTridentClient client, TronTransactionService.SignedTronTransaction transaction) {
         return client.broadcast(transaction.transaction());
     }

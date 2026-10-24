@@ -126,9 +126,6 @@ public class XrpDepositScanner {
         return events;
     }
 
-    /**
-     * 扫描或观察 {@code scanEntry} 对应的链上状态，并转换为业务可用结果。
-     */
     private void scanEntry(JsonNode entry, Map<String, ChainAddressRecord> nativeAddresses,
                            Map<String, ChainAddressRecord> tokenAddresses,
                            Map<String, TokenDefinition> tokens, AccountChainProfile profile, long latest,
@@ -197,9 +194,6 @@ public class XrpDepositScanner {
         events.add(event);
     }
 
-    /**
-     * 记录或保存 {@code recordTransaction} 对应的数据，并遵守幂等和事务约束。
-     */
     private void recordTransaction(DepositEvent event, JsonNode tx, long ledgerIndex, int confirmations,
                                    String issuer, String currencyCode, AccountChainProfile profile) {
         xrpTransactionRepository.upsert(XrpTransactionRecord.builder()
@@ -219,9 +213,6 @@ public class XrpDepositScanner {
                 .rawPayload(event.rawPayload())
                 .build());
     }
-    /**
-     * 编码 {@code tokenMap} 对应的数据，生成链上或接口所需的表示。
-     */
     private Map<String, TokenDefinition> tokenMap() {
         Map<String, TokenDefinition> tokens = new LinkedHashMap<>();
         for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
@@ -234,9 +225,6 @@ public class XrpDepositScanner {
         }
         return tokens;
     }
-    /**
-     * 执行 {@code txNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private JsonNode txNode(JsonNode entry) {
         JsonNode tx = entry.path("tx_json");
         if (!tx.isMissingNode() && !tx.isNull()) {
@@ -245,16 +233,10 @@ public class XrpDepositScanner {
         tx = entry.path("tx");
         return tx.isMissingNode() || tx.isNull() ? entry : tx;
     }
-    /**
-     * 执行 {@code metaNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private JsonNode metaNode(JsonNode entry) {
         JsonNode meta = entry.path("meta");
         return meta.isMissingNode() || meta.isNull() ? entry.path("metaData") : meta;
     }
-    /**
-     * 执行 {@code deliveredAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private JsonNode deliveredAmount(JsonNode entry) {
         JsonNode meta = metaNode(entry);
         JsonNode delivered = meta.path("delivered_amount");
@@ -263,9 +245,6 @@ public class XrpDepositScanner {
         }
         return txNode(entry).path("Amount");
     }
-    /**
-     * 执行 {@code txHash} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private String txHash(JsonNode entry, JsonNode tx) {
         String hash = tx.path("hash").asText("");
         if (hash.isBlank()) {
@@ -276,45 +255,27 @@ public class XrpDepositScanner {
         }
         return hash;
     }
-    /**
-     * 执行 {@code ledgerIndex} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private long ledgerIndex(JsonNode entry, JsonNode tx) {
         long ledger = entry.path("ledger_index").asLong(0);
         return ledger == 0 ? tx.path("ledger_index").asLong(0) : ledger;
     }
-    /**
-     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
-     */
     private AccountChainProfile profile() {
         return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-    /**
-     * 扫描或观察 {@code scanLimit} 对应的链上状态，并转换为业务可用结果。
-     */
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         int configured = batchSize == null || batchSize <= 0 ? 100 : batchSize;
         return Math.max(configured, Math.max(1, profile.getDepositConfirmations()));
     }
-    /**
-     * 判断 {@code isUserDepositAddress} 对应的条件是否成立，并返回明确的布尔结果。
-     */
     private boolean isUserDepositAddress(ChainAddressRecord address) {
         return address.getUserId() != HotWalletRules.DEFAULT_HOT_USER_ID;
     }
-    /**
-     * 判断 {@code isSystemActivationTransaction} 对应的条件是否成立，并返回明确的布尔结果。
-     */
     private boolean isSystemActivationTransaction(String txHash) {
         return xrpTransactionRepository.findAssetSymbol(CHAIN, txHash)
                 .filter(XrpTransactionService.ACTIVATION_SYMBOL::equals)
                 .isPresent();
     }
-    /**
-     * 编码 {@code tokenKey} 对应的数据，生成链上或接口所需的表示。
-     */
     private String tokenKey(String issuer, String currency) {
         return issuer + "|" + (currency == null ? "" : currency.toUpperCase(Locale.ROOT));
     }

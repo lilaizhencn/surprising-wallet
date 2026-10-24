@@ -30,19 +30,10 @@ import java.util.List;
  * {@code chain_asset.decimals}，禁止假定所有 EVM 链都是 18 位。</p>
  */
 public final class EvmFeeSupport {
-    /**
-     * 定义 {@code OP_STACK_GAS_PRICE_ORACLE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     public static final String OP_STACK_GAS_PRICE_ORACLE =
             "0x420000000000000000000000000000000000000F";
-    /**
-     * 定义 {@code SCROLL_L1_GAS_PRICE_ORACLE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     public static final String SCROLL_L1_GAS_PRICE_ORACLE =
             "0x5300000000000000000000000000000000000002";
-    /**
-     * 构造 {@code EvmFeeSupport}，初始化该组件运行所需的状态和依赖。
-     */
     private EvmFeeSupport() {
     }
 
@@ -254,16 +245,10 @@ public final class EvmFeeSupport {
         }
     }
 
-    /**
-     * 判断 {@code isLocal} 对应的条件是否成立，并返回明确的布尔结果。
-     */
     private static boolean isLocal(AccountChainProfile profile) {
         return "local".equalsIgnoreCase(profile.getNetwork());
     }
 
-    /**
-     * 校验 {@code requirePositive} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static BigInteger requirePositive(BigInteger value, String source) {
         if (value == null || value.signum() <= 0) {
             throw new IllegalStateException(source + " returned a non-positive value");
@@ -273,9 +258,6 @@ public final class EvmFeeSupport {
 
     public record FeeQuote(
             BigInteger maxPriorityFeePerGas, BigInteger maxFeePerGas, boolean eip1559) {
-        /**
-         * 执行 {@code legacyGasPrice} 对应的辅助逻辑，完成数据处理并维护状态边界。
-         */
         public BigInteger legacyGasPrice() {
             if (eip1559) {
                 throw new IllegalStateException("EIP-1559 quote has no legacy gas price");
@@ -286,9 +268,6 @@ public final class EvmFeeSupport {
 
     public record FeeComponents(
             BigInteger executionFee, BigInteger l1Fee, BigInteger operatorFee) {
-        /**
-         * 编码 {@code total} 对应的数据，生成链上或接口所需的表示。
-         */
         public BigInteger total() {
             return executionFee.add(l1Fee).add(operatorFee);
         }

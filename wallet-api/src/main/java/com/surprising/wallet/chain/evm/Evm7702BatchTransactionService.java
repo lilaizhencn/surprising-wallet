@@ -11,9 +11,6 @@ import org.web3j.utils.Numeric;
 import java.math.BigInteger;
 import java.util.List;
 
-/**
- * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
- */
 public class Evm7702BatchTransactionService {
     /**
      * 构建并签名包含授权列表的 EIP-7702 type-4 交易。

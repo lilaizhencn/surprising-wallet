@@ -19,21 +19,12 @@ import java.util.Optional;
  */
 @Repository
 public class UtxoRepository {
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final JdbcTemplate jdbc;
 
-    /**
-     * 构造 {@code UtxoRepository}，初始化该组件运行所需的状态和依赖。
-     */
     public UtxoRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    /**
-     * 写入或更新 {@code upsert} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     public void upsert(String chain, String assetSymbol, String txHash, int vout, String address,
                        BigDecimal amount, long blockHeight, String blockHash,
                        int confirmations, boolean credited) {
@@ -59,9 +50,6 @@ public class UtxoRepository {
                 confirmations, credited, Timestamp.from(now), Timestamp.from(now));
     }
 
-    /**
-     * 写入或更新 {@code markCredited} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     public int markCredited(String chain, String txHash, int vout) {
         return jdbc.update("""
                         update utxo_record
@@ -70,9 +58,6 @@ public class UtxoRepository {
                         """, Timestamp.from(Instant.now()), chain, txHash, vout);
     }
 
-    /**
-     * 执行 {@code lock} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public int lock(String chain, String txHash, int vout, String lockRef) {
         return jdbc.update("""
                         update utxo_record
@@ -110,9 +95,6 @@ public class UtxoRepository {
                         """, Timestamp.from(Instant.now()), chain, lockRef);
     }
 
-    /**
-     * 写入或更新 {@code markSpent} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     public int markSpent(String chain, String lockRef, String spentTxHash) {
         return jdbc.update("""
                         update utxo_record
@@ -121,9 +103,6 @@ public class UtxoRepository {
                         """, spentTxHash, Timestamp.from(Instant.now()), chain, lockRef);
     }
 
-    /**
-     * 设置或更新 {@code updateConfirmations} 对应的状态，并保持相关业务字段一致。
-     */
     public int updateConfirmations(String chain, String txHash, int vout, int confirmations) {
         return jdbc.update("""
                         update utxo_record
@@ -141,9 +120,6 @@ public class UtxoRepository {
                 """, Timestamp.from(Instant.now()), chain, blockHeight, replacementHash);
     }
 
-    /**
-     * 获取或查询 {@code listSpendable} 对应的数据，供调用方读取当前状态。
-     */
     public List<UtxoTransaction> listSpendable(
             String chain, String assetSymbol, long requiredConfirmations, int limit, int offset,
             int runtimeCurrencyId) {
@@ -163,9 +139,6 @@ public class UtxoRepository {
                 runtimeCurrencyId, chain, assetSymbol, requiredConfirmations, limit, offset);
     }
 
-    /**
-     * 获取或查询 {@code listSpendable} 对应的数据，供调用方读取当前状态。
-     */
     public List<UtxoTransaction> listSpendable(
             String chain, String assetSymbol, long requiredConfirmations, int limit, int offset,
             int runtimeCurrencyId, List<String> addresses) {
@@ -208,9 +181,6 @@ public class UtxoRepository {
                 chain, assetSymbol, address, requiredConfirmations, limit);
     }
 
-    /**
-     * 获取或查询 {@code listAvailableBelowConfirmations} 对应的数据，供调用方读取当前状态。
-     */
     public List<UtxoTransaction> listAvailableBelowConfirmations(
             String chain, String assetSymbol, long maxConfirmations, long afterId, int limit,
             int runtimeCurrencyId) {
@@ -230,9 +200,6 @@ public class UtxoRepository {
                 runtimeCurrencyId, chain, assetSymbol, maxConfirmations, afterId, limit);
     }
 
-    /**
-     * 执行 {@code sumAvailableAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public BigDecimal sumAvailableAmount(String chain, String assetSymbol) {
         BigDecimal balance = jdbc.queryForObject("""
                         select coalesce(sum(amount), 0)
@@ -244,9 +211,6 @@ public class UtxoRepository {
         return balance == null ? BigDecimal.ZERO : balance;
     }
 
-    /**
-     * 获取或查询 {@code listByAddress} 对应的数据，供调用方读取当前状态。
-     */
     public List<UtxoTransaction> listByAddress(String chain, String address, int limit,
                                                 int runtimeCurrencyId) {
         return jdbc.query("""
@@ -262,9 +226,6 @@ public class UtxoRepository {
                 runtimeCurrencyId, chain, address, limit);
     }
 
-    /**
-     * 执行 {@code map} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private UtxoTransaction map(ResultSet rs, String chain, int runtimeCurrencyId) throws SQLException {
         return UtxoTransaction.builder()
                 .id(rs.getLong("id"))

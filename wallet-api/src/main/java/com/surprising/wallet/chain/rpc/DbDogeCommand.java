@@ -11,9 +11,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DbDogeCommand extends DbBtcLikeJsonRpcCommand implements DogeCommand {
-    /**
-     * 构造 {@code DbDogeCommand}，初始化该组件运行所需的状态和依赖。
-     */
     public DbDogeCommand(ChainProfileRepository profiles, ChainRpcNodeService rpcNodeService) {
         super("DOGE", profiles, rpcNodeService);
     }

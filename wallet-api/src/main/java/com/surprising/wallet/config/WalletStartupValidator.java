@@ -184,9 +184,6 @@ public class WalletStartupValidator implements ApplicationRunner {
         return enabledProfiles;
     }
 
-    /**
-     * 校验 {@code validateEvmProfile} 对应的前置条件，不满足时抛出明确异常。
-     */
     private void validateEvmProfile(AccountChainProfile profile) {
         if (!"evm".equalsIgnoreCase(profile.getFamily())) {
             return;
@@ -222,9 +219,6 @@ public class WalletStartupValidator implements ApplicationRunner {
         }
     }
 
-    /**
-     * 校验 {@code validateActiveEip7702Profiles} 对应的前置条件，不满足时抛出明确异常。
-     */
     private void validateActiveEip7702Profiles(List<AccountChainProfile> enabledProfiles) {
         Map<String, AccountChainProfile> profiles = enabledProfiles.stream()
                 .collect(Collectors.toMap(

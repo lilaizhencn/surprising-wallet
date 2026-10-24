@@ -104,9 +104,6 @@ public class CustodyConsoleWebhookController {
         return Map.of("ok", true);
     }
 
-    /**
-     * 处理 {@code retryFailed} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     @PostMapping("/webhook-deliveries/retry-failed")
     public Map<String, Object> retryFailed(@RequestParam UUID endpointId,
                                            HttpServletRequest request) {

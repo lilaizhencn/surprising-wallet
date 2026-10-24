@@ -9,21 +9,9 @@ import java.util.Locale;
  * 负责链上地址、交易或合约数据的编码、解码和格式校验。
  */
 public final class TronAddressCodec {
-    /**
-     * 定义 {@code MAINNET_PREFIX_HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     public static final String MAINNET_PREFIX_HEX = "41";
-    /**
-     * 定义 {@code HEX_ADDRESS_LENGTH} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final int HEX_ADDRESS_LENGTH = 42;
-    /**
-     * 定义 {@code TOPIC_LENGTH} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final int TOPIC_LENGTH = 64;
-    /**
-     * 构造 {@code TronAddressCodec}，初始化该组件运行所需的状态和依赖。
-     */
     private TronAddressCodec() {
     }
     /**

@@ -36,34 +36,16 @@ import java.util.UUID;
  */
 @Service
 public class CustodyAssetRecoveryService {
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyAssetRecoveryRepository repository;
-    /**
-     * 保存 {@code audits}，用于承载当前对象的运行配置或业务数据。
-     */
     private final CustodyAuditRepository audits;
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyAddressRepository custodyAddressRepository;
     /** chain_address 单表仓储。 */
     private final ChainAddressRepository chainAddressRepository;
     /** deposit_record 单表仓储。 */
     private final DepositRecordRepository depositRecordRepository;
-    /**
-     * 保存 {@code gateways}，用于承载当前对象的运行配置或业务数据。
-     */
     private final List<CustodyAssetRecoveryChainGateway> gateways;
-    /**
-     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
-     */
     private final ObjectMapper objectMapper;
     private final CustodyEventService events;
-    /**
-     * 构造 {@code CustodyAssetRecoveryService}，初始化该组件运行所需的状态和依赖。
-     */
     public CustodyAssetRecoveryService(CustodyAssetRecoveryRepository repository,
                                        CustodyAuditRepository audits,
                                        CustodyAddressRepository custodyAddressRepository,
@@ -81,9 +63,6 @@ public class CustodyAssetRecoveryService {
         this.objectMapper = objectMapper;
         this.events = events;
     }
-    /**
-     * 发送或广播 {@code submit} 对应的链上请求，并返回节点处理结果。
-     */
     public RecoveryView submit(CustodyPrincipal principal, SubmitCommand command, String sourceIp) {
         requireTenant(principal);
         String actualChain = upper(command.actualChain(), "actualChain", 32);
@@ -132,9 +111,6 @@ public class CustodyAssetRecoveryService {
                 "{\"actualChain\":\"" + actualChain + "\",\"txHash\":\"" + txHash + "\"}");
         return toView(verifyInternal(recovery, ownership, command.logIndex()));
     }
-    /**
-     * 校验 {@code requireSameTenant} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static RecoveryRecord requireSameTenant(UUID tenantId, RecoveryRecord recovery) {
         if (!tenantId.equals(recovery.tenantId())) {
             throw new IllegalStateException("recovery request already belongs to another tenant");
@@ -142,9 +118,6 @@ public class CustodyAssetRecoveryService {
         return recovery;
     }
 
-    /**
-     * 执行 {@code tenantList} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public PageView<RecoveryView> tenantList(CustodyPrincipal principal, String status,
                                              int limit, int offset) {
         requireTenant(principal);
@@ -158,9 +131,6 @@ public class CustodyAssetRecoveryService {
                 pageSize, pageOffset);
     }
 
-    /**
-     * 执行 {@code platformList} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public PageView<RecoveryView> platformList(CustodyPrincipal principal, String status,
                                                int limit, int offset) {
         requirePlatform(principal);
@@ -173,9 +143,6 @@ public class CustodyAssetRecoveryService {
                 repository.count(null, normalizedStatus),
                 pageSize, pageOffset);
     }
-    /**
-     * 验证 {@code verify} 对应的签名、交易或数据证明是否有效。
-     */
     public RecoveryView verify(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord recovery = repository.require(id);
@@ -190,9 +157,6 @@ public class CustodyAssetRecoveryService {
         return toView(result);
     }
 
-    /**
-     * 执行 {@code approve} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public RecoveryView approve(CustodyPrincipal principal, UUID id,
                                 ApproveCommand command, String sourceIp) {
@@ -212,9 +176,6 @@ public class CustodyAssetRecoveryService {
                 "{\"recoveryAddress\":\"" + recoveryAddress + "\"}");
         return toView(result);
     }
-    /**
-     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
-     */
     public RecoveryView execute(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord existing = repository.require(id);
@@ -241,9 +202,6 @@ public class CustodyAssetRecoveryService {
             return toView(repository.executionFailed(id, friendly(e)));
         }
     }
-    /**
-     * 处理 {@code confirm} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public RecoveryView confirm(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord result = confirm(repository.require(id));
@@ -254,9 +212,6 @@ public class CustodyAssetRecoveryService {
         }
         return toView(result);
     }
-    /**
-     * 处理 {@code confirmBroadcastRecoveries} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public void confirmBroadcastRecoveries() {
         for (RecoveryRecord recovery : repository.broadcastRecoveries(100)) {
             try {
@@ -271,9 +226,6 @@ public class CustodyAssetRecoveryService {
             }
         }
     }
-    /**
-     * 处理 {@code confirm} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private RecoveryRecord confirm(RecoveryRecord recovery) {
         if (!"BROADCAST".equals(recovery.status())) {
             throw new IllegalStateException("only a broadcast recovery can be confirmed");
@@ -312,9 +264,6 @@ public class CustodyAssetRecoveryService {
                 json(Map.of("id", eventId, "type", "ASSET_RECOVERY.RECOVERED",
                         "createdAt", java.time.Instant.now(), "data", data)), automatic);
     }
-    /**
-     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
-     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -323,9 +272,6 @@ public class CustodyAssetRecoveryService {
         }
     }
 
-    /**
-     * 执行 {@code reject} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public RecoveryView reject(CustodyPrincipal principal, UUID id,
                                RejectCommand command, String sourceIp) {
@@ -339,9 +285,6 @@ public class CustodyAssetRecoveryService {
         return toView(result);
     }
 
-    /**
-     * 判断 {@code cancel} 对应的条件是否成立，并返回明确的布尔结果。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public RecoveryView cancel(CustodyPrincipal principal, UUID id, String sourceIp) {
         requireTenant(principal);
@@ -351,9 +294,6 @@ public class CustodyAssetRecoveryService {
         return toView(result);
     }
 
-    /**
-     * 验证 {@code verifyInternal} 对应的签名、交易或数据证明是否有效。
-     */
     private RecoveryRecord verifyInternal(RecoveryRecord recovery, Ownership ownership,
                                           Long requestedLogIndex) {
         try {
@@ -374,9 +314,6 @@ public class CustodyAssetRecoveryService {
         }
     }
 
-    /**
-     * 校验 {@code requireOwnership} 对应的前置条件，不满足时抛出明确异常。
-     */
     private Ownership requireOwnership(UUID tenantId, String destinationAddress,
                                        String preferredChain) {
         List<Ownership> owners = new ArrayList<>();
@@ -407,9 +344,6 @@ public class CustodyAssetRecoveryService {
         }
         return selected;
     }
-    /**
-     * 执行 {@code sourceAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private ChainAddressRecord sourceAddress(UUID tenantId, String actualChain, Ownership ownership) {
         return ChainAddressRecord.builder()
                 .tenantId(tenantId)
@@ -426,17 +360,11 @@ public class CustodyAssetRecoveryService {
                 .enabled(true)
                 .build();
     }
-    /**
-     * 执行 {@code gateway} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private CustodyAssetRecoveryChainGateway gateway(String chain) {
         return gateways.stream().filter(candidate -> candidate.supports(chain)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "automatic recovery is not available for chain " + chain));
     }
-    /**
-     * 执行 {@code friendly} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String friendly(Throwable error) {
         Throwable value = error;
         while (value.getCause() != null && value.getMessage() == null) {
@@ -445,38 +373,23 @@ public class CustodyAssetRecoveryService {
         String message = value.getMessage();
         return message == null || message.isBlank() ? "chain verification failed" : message;
     }
-    /**
-     * 校验 {@code requireTenant} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void requireTenant(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope("deposits:read")) {
             throw new CustodyForbiddenException("tenant deposits access required");
         }
     }
-    /**
-     * 校验 {@code requirePlatform} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void requirePlatform(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() != null
                 || !"PLATFORM_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("platform administrator required");
         }
     }
-    /**
-     * 执行 {@code pageSize} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static int pageSize(int value) {
         return Math.max(1, Math.min(value, 200));
     }
-    /**
-     * 执行 {@code offset} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static int offset(int value) {
         return Math.max(0, value);
     }
-    /**
-     * 转换或计算 {@code normalizedStatus} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalizedStatus(String status) {
         return status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
     }
@@ -500,22 +413,13 @@ public class CustodyAssetRecoveryService {
     private static int intValue(Object value) {
         return value == null ? 0 : ((Number) value).intValue();
     }
-    /**
-     * 转换或计算 {@code upper} 对应的值，统一金额、格式和边界规则。
-     */
     private static String upper(String value, String field, int max) {
         return required(value, field, max).toUpperCase(Locale.ROOT);
     }
-    /**
-     * 执行 {@code optionalUpper} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String optionalUpper(String value, int max) {
         String result = optional(value, max);
         return result == null ? null : result.toUpperCase(Locale.ROOT);
     }
-    /**
-     * 校验 {@code required} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static String required(String value, String field, int max) {
         String result = value == null ? "" : value.trim();
         if (result.isEmpty() || result.length() > max) {
@@ -523,9 +427,6 @@ public class CustodyAssetRecoveryService {
         }
         return result;
     }
-    /**
-     * 执行 {@code optional} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String optional(String value, int max) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {

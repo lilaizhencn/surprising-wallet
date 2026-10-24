@@ -11,9 +11,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DbBtcCommand extends DbBtcLikeJsonRpcCommand implements BtcCommand {
-    /**
-     * 构造 {@code DbBtcCommand}，初始化该组件运行所需的状态和依赖。
-     */
     public DbBtcCommand(ChainProfileRepository profiles, ChainRpcNodeService rpcNodeService) {
         super("BTC", profiles, rpcNodeService);
     }

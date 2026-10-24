@@ -280,17 +280,11 @@ public class BitcoinLikeChainRuntime {
                 asset == null ? null : asset.getDecimals(),
                 asset == null ? null : asset.getContractAddress());
     }
-    /**
-     * 执行 {@code nextAddressIndex} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private int nextAddressIndex(AssetRuntimeMetadata asset, long userId, int biz) {
         return addresses.findMaxIndex(asset.chain(), asset.assetSymbol(), userId, biz, "DEPOSIT")
                 .map(value -> Math.toIntExact(value + 1))
                 .orElse(0);
     }
-    /**
-     * 构建或生成 {@code buildAddress} 对应的结果，并执行输入和状态校验。
-     */
     private Address buildAddress(ChainType chainType, long userId, int biz, int index) {
         AssetRuntimeMetadata asset = assetMetadata(chainType);
         PubKeyConfig.AddressMetadata metadata;
@@ -328,9 +322,6 @@ public class BitcoinLikeChainRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
-    /**
-     * 编码 {@code toChainAddressRecord} 对应的数据，生成链上或接口所需的表示。
-     */
     private ChainAddressRecord toChainAddressRecord(Address address, AssetRuntimeMetadata asset) {
         return ChainAddressRecord.builder()
                 .chain(asset.chain())
@@ -347,9 +338,6 @@ public class BitcoinLikeChainRuntime {
                 .build();
     }
 
-    /**
-     * 执行 {@code extractOutputAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private String extractOutputAddress(ChainType chainType, ScriptPubKey pubKey) {
         if (pubKey == null) {
             return null;
@@ -365,18 +353,12 @@ public class BitcoinLikeChainRuntime {
         }
         return null;
     }
-    /**
-     * 转换或计算 {@code normalizeScannedAddress} 对应的值，统一金额、格式和边界规则。
-     */
     private String normalizeScannedAddress(ChainType chainType, String address, NetworkParameters params) {
         if (chainType != ChainType.BCH) {
             return address;
         }
         return normalizeBchAddress(address, params);
     }
-    /**
-     * 转换或计算 {@code normalizeBchAddress} 对应的值，统一金额、格式和边界规则。
-     */
     private String normalizeBchAddress(String address, NetworkParameters params) {
         if (address == null || address.isBlank()) {
             return null;
@@ -396,9 +378,6 @@ public class BitcoinLikeChainRuntime {
             return null;
         }
     }
-    /**
-     * 获取或查询 {@code getRawTransaction} 对应的数据，供调用方读取当前状态。
-     */
     private BtcLikeRawTransaction getRawTransaction(ChainType chainType, String txid) {
         try {
             return command(chainType).getRawTransaction(txid, true);
@@ -412,16 +391,10 @@ public class BitcoinLikeChainRuntime {
             return null;
         }
     }
-    /**
-     * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public int confirmations(ChainType chainType, String txId) {
         BtcLikeRawTransaction transaction = getRawTransaction(chainType, txId);
         return transaction == null ? 0 : Math.max(0, transaction.getConfirmations());
     }
-    /**
-     * 执行 {@code transactionExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private boolean transactionExists(ChainType chainType, String txId) {
         try {
             return getRawTransaction(chainType, txId) != null;
@@ -429,30 +402,18 @@ public class BitcoinLikeChainRuntime {
             return false;
         }
     }
-    /**
-     * 执行 {@code rejectReservedHotAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private void rejectReservedHotAddress(long userId, int biz) {
         if (HotWalletRules.isDefaultHotUser(userId, biz)) {
             throw new IllegalArgumentException("userId=0,biz=0 is reserved for the unique default hot wallet address");
         }
     }
-    /**
-     * 执行 {@code bitcoinLikeProfile} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private AccountChainProfile bitcoinLikeProfile(ChainType chainType) {
         return chainProfileRepository.findAccountByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
     }
-    /**
-     * 获取或查询 {@code networkParameters} 对应的数据，并向调用方返回当前业务状态。
-     */
     private NetworkParameters networkParameters(ChainType chainType) {
         return BitcoinLikeNetwork.parse(bitcoinLikeProfile(chainType).getNetwork()).parameters(chainType.name());
     }
-    /**
-     * 执行 {@code command} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private BtcLikeCommand command(ChainType chainType) {
         return switch (chainType) {
             case BTC -> btcCommand;

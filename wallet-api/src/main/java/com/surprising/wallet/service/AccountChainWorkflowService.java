@@ -88,21 +88,9 @@ public class AccountChainWorkflowService {
     private final TokenConfigRepository tokenConfigRepository;
     private final ChainAddressRepository chainAddressRepository;
 
-    /**
-     * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
-     */
     private final WalletRuntimeConfigService runtimeConfigService;
-    /**
-     * 保存 {@code depositWorkflow}，用于承载当前对象的运行配置或业务数据。
-     */
     private final AccountChainDepositWorkflow depositWorkflow;
-    /**
-     * 保存 {@code assets}，表示链、网络、资产或代币配置。
-     */
     private final AccountChainAssetService assets;
-    /**
-     * 保存 {@code tronWorkflow}，用于承载当前对象的运行配置或业务数据。
-     */
     private final TronAccountChainService tronWorkflow;
     /** 各账户链下次允许扫描的时间，避免快速链和慢速链共用同一 RPC 轮询周期。 */
     private final java.util.concurrent.ConcurrentMap<String, Long> nextDepositScanAtMillis =
@@ -207,9 +195,6 @@ public class AccountChainWorkflowService {
             confirmCollections(profile);
         }
     }
-    /**
-     * 执行或处理 {@code processSingleAccountChain} 对应的业务流程，并维护状态和异常边界。
-     */
     private void processSingleAccountChain(AccountChainProfile profile) {
         depositWorkflow.scan(profile);
         processWithdrawals(profile);
@@ -218,9 +203,6 @@ public class AccountChainWorkflowService {
         confirmCollections(profile);
     }
 
-    /**
-     * 执行或处理 {@code processWithdrawals} 对应的业务流程，并维护状态和异常边界。
-     */
     private void processWithdrawals(AccountChainProfile profile) {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
             return;
@@ -243,9 +225,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 处理 {@code confirmWithdrawals} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private void confirmWithdrawals(AccountChainProfile profile) {
         for (WithdrawalOrderRecord order : withdrawalOrderRepository.listByStatus(profile.getChain(), "SENT", CONFIRM_LIMIT)) {
             try {
@@ -256,9 +235,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 执行或处理 {@code processCollections} 对应的业务流程，并维护状态和异常边界。
-     */
     private void processCollections(AccountChainProfile profile) {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
             return;
@@ -286,9 +262,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 处理 {@code confirmCollections} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private void confirmCollections(AccountChainProfile profile) {
         for (ChainCollectionRecord record : collectionRecordRepository.listByStatus(profile.getChain(), "SENT", CONFIRM_LIMIT)) {
             try {
@@ -299,9 +272,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 执行或处理 {@code processWithdrawal} 对应的业务流程，并维护状态和异常边界。
-     */
     private void processWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         ChainAddressRecord from = assets.requireAddress(tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
@@ -322,9 +292,6 @@ public class AccountChainWorkflowService {
         }
     }
 
-    /**
-     * 执行或处理 {@code dispatchWithdrawal} 对应的业务流程，并维护状态和异常边界。
-     */
     private String dispatchWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order,
                                       ChainAddressRecord from) throws Exception {
         String chain = profile.getChain();
@@ -403,9 +370,6 @@ public class AccountChainWorkflowService {
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
     }
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private void confirmWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) throws Exception {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         if ("evm".equalsIgnoreCase(profile.getFamily())
@@ -437,9 +401,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 构建或生成 {@code createCollectionCandidates} 对应的结果，并执行输入和状态校验。
-     */
     private void createCollectionCandidates(AccountChainProfile profile) {
         List<CollectionCandidateRecord> candidates = collectionPlanningService.candidates(profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT);
         if (candidates.isEmpty()) {
@@ -477,9 +438,6 @@ public class AccountChainWorkflowService {
                     null);
         }
     }
-    /**
-     * 执行或处理 {@code processCollection} 对应的业务流程，并维护状态和异常边界。
-     */
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())
                 && evm7702ConfigRepository.existsManaged(profile.getChain(), profile.getNetwork())) {
@@ -611,9 +569,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private void confirmCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             if (evmBatchOwnershipService.collectionPending(record.getTenantId(), record.getId())) {
@@ -652,9 +607,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    /**
-     * 发送或广播 {@code broadcastTonNative} 对应的链上请求，并返回节点处理结果。
-     */
     private String broadcastTonNative(WithdrawalOrderRecord order, ChainAddressRecord from) {
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareNative(
                 from, order.getToAddress(), assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())),
@@ -662,9 +614,6 @@ public class AccountChainWorkflowService {
         return tonTransactionService.broadcastAndRecord(prepared, from.getAddress(), order.getToAddress(),
                 order.getAssetSymbol(), null, order.getAmount());
     }
-    /**
-     * 发送或广播 {@code broadcastTonJetton} 对应的链上请求，并返回节点处理结果。
-     */
     private String broadcastTonJetton(WithdrawalOrderRecord order, ChainAddressRecord from, TokenDefinition token) {
         ChainAddressRecord jettonWallet = chainAddressRepository.find(
                 order.getChain(),
@@ -683,9 +632,6 @@ public class AccountChainWorkflowService {
                 order.getToAddress(), token.getSymbol(), token.getContractAddress(), order.getAmount());
     }
 
-    /**
-     * 处理 {@code confirmTonWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private void confirmTonWithdrawal(WithdrawalOrderRecord order) {
         if (order.getTxHash() == null || order.getTxHash().isBlank()) {
             return;
@@ -696,17 +642,11 @@ public class AccountChainWorkflowService {
             settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash());
         }
     }
-    /**
-     * 编码 {@code tonOwnerAddress} 对应的数据，生成链上或接口所需的表示。
-     */
     private static String tonOwnerAddress(ChainAddressRecord address) {
         return address.getOwnerAddress() == null || address.getOwnerAddress().isBlank()
                 ? address.getAddress() : address.getOwnerAddress();
     }
 
-    /**
-     * 写入或更新 {@code enabledAccountProfiles} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     private List<AccountChainProfile> enabledAccountProfiles() {
         return chainProfileRepository.listProfiles(true).stream()
                 .filter(profile -> !"utxo".equalsIgnoreCase(profile.getFamily()))
@@ -717,16 +657,10 @@ public class AccountChainWorkflowService {
                         .thenComparing(AccountChainProfile::getNetwork))
                 .toList();
     }
-    /**
-     * 执行 {@code accountChainPriority} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private int accountChainPriority(String chain) {
         int index = ACCOUNT_CHAIN_PRIORITY.indexOf(chain);
         return index < 0 ? ACCOUNT_CHAIN_PRIORITY.size() : index;
     }
-    /**
-     * 处理 {@code collectionNo} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private String collectionNo(CollectionCandidateRecord candidate, BigDecimal amount) {
         String basis = candidate.getChain() + "|" + candidate.getAssetSymbol() + "|"
                 + candidate.getAccountId() + "|" + candidate.getAddress() + "|"
@@ -734,9 +668,6 @@ public class AccountChainWorkflowService {
         return "COLL-" + candidate.getChain() + "-" + candidate.getAssetSymbol() + "-"
                 + shortHash(basis);
     }
-    /**
-     * 执行 {@code shortHash} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private String shortHash(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

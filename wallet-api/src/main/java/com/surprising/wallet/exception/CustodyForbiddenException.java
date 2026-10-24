@@ -6,9 +6,6 @@ package com.surprising.wallet.exception;
  * 被 {@code CustodyExceptionHandler} 统一转为 HTTP 403 响应。
  */
 public class CustodyForbiddenException extends RuntimeException {
-    /**
-     * 构造 {@code CustodyForbiddenException}，初始化该组件运行所需的状态和依赖。
-     */
     public CustodyForbiddenException(String message) {
         super(message);
     }

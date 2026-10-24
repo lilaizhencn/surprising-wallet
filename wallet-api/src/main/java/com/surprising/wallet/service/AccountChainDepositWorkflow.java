@@ -43,69 +43,24 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class AccountChainDepositWorkflow {
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final ChainAddressRepository chainAddressRepository;
     private final ChainScanHeightRepository chainScanHeightRepository;
     private final ChainProfileRepository chainProfileRepository;
     private final TokenConfigRepository tokenConfigRepository;
 
-    /**
-     * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
-     */
     private final WalletRuntimeConfigService runtimeConfigService;
-    /**
-     * 保存 {@code evmDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final EvmDepositScanner evmDepositScanner;
-    /**
-     * 保存 {@code hyperCoreDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final HyperCoreDepositScanner hyperCoreDepositScanner;
-    /**
-     * 保存 {@code solanaDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final SolanaDepositScanner solanaDepositScanner;
-    /**
-     * 保存 {@code aptosDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final AptosDepositScanner aptosDepositScanner;
-    /**
-     * 保存 {@code suiDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final SuiDepositScanner suiDepositScanner;
-    /**
-     * 保存 {@code tonDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final TonDepositScanner tonDepositScanner;
-    /**
-     * 保存 {@code xrpDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final XrpDepositScanner xrpDepositScanner;
-    /**
-     * 保存 {@code cardanoDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CardanoDepositScanner cardanoDepositScanner;
-    /**
-     * 保存 {@code moneroDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final MoneroDepositScanner moneroDepositScanner;
-    /**
-     * 保存 {@code nearDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final NearDepositScanner nearDepositScanner;
-    /**
-     * 保存 {@code polkadotDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final PolkadotDepositScanner polkadotDepositScanner;
-    /**
-     * 保存 {@code tronClientFactory}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final TronClientFactory tronClientFactory;
-    /**
-     * 保存 {@code tronDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final TronDepositScanner tronDepositScanner;
 
     /**
@@ -141,9 +96,6 @@ public class AccountChainDepositWorkflow {
         }
     }
 
-    /**
-     * 扫描或观察 {@code scanEvm} 对应的链上状态，并转换为业务可用结果。
-     */
     private void scanEvm(AccountChainProfile profile) throws Exception {
         ChainType chainType = ChainType.valueOf(profile.getChain());
         long latest = evmDepositScanner.getLatestBlockNumber(chainType).longValueExact();
@@ -156,9 +108,6 @@ public class AccountChainDepositWorkflow {
         }
     }
 
-    /**
-     * 扫描或观察 {@code scanTron} 对应的链上状态，并转换为业务可用结果。
-     */
     private void scanTron(AccountChainProfile profile) throws Exception {
         try (TronTridentClient client = tronClientFactory.create()) {
             long latest = client.getNowBlock().getBlockHeader().getRawData().getNumber();
@@ -175,9 +124,6 @@ public class AccountChainDepositWorkflow {
         }
     }
 
-    /**
-     * 扫描或观察 {@code scanStart} 对应的链上状态，并转换为业务可用结果。
-     */
     private long scanStart(AccountChainProfile profile, long latest, String... scannerNames) {
         long configured = profile.getScanStartHeight() == null ? 0L : profile.getScanStartHeight();
         long fallback = configured > 0
@@ -193,9 +139,6 @@ public class AccountChainDepositWorkflow {
         return Math.min(next == Long.MAX_VALUE ? fallback : next, latest);
     }
 
-    /**
-     * 扫描或观察 {@code scanBatch} 对应的链上状态，并转换为业务可用结果。
-     */
     private long scanBatch(AccountChainProfile profile) {
         long requiredConfirmations = profile.getDepositConfirmations() == null
                 ? 1L
@@ -210,9 +153,6 @@ public class AccountChainDepositWorkflow {
         return Math.max(requiredConfirmations, 20L);
     }
 
-    /**
-     * 执行 {@code tronTokens} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private Map<String, TronScanner.TokenConfig> tronTokens() {
         Map<String, TronScanner.TokenConfig> tokens = new LinkedHashMap<>();
         for (TokenDefinition token : chainProfileRepository.findAccountByChain("TRON").map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions("TRON", configuredNetworkProfile.getNetwork())).orElse(List.of())) {

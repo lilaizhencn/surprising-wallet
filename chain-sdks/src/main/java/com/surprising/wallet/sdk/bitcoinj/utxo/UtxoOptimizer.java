@@ -13,9 +13,6 @@ import java.util.Set;
  * UTXO 选择器：小规模输入使用精确搜索，超出上限后使用贪心策略，并结合手续费和粉尘阈值计算找零。
  */
 public final class UtxoOptimizer {
-    /**
-     * 定义 {@code EXACT_SEARCH_LIMIT} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final int EXACT_SEARCH_LIMIT = 18;
 
     /**
@@ -208,21 +205,12 @@ public final class UtxoOptimizer {
         return left.size() < right.size();
     }
 
-    /**
-     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
-     */
     private static final class BestHolder {
-        /**
-         * 保存 {@code selection}，用于承载当前对象的运行配置或业务数据。
-         */
         private UtxoSelection selection;
     }
 
     private record CandidateEvaluation(List<UtxoCandidate> chosen, long targetSat, long inputSat,
                                        long feeSat, long changeSat, boolean exact, boolean covered) {
-        /**
-         * 编码 {@code toSelection} 对应的数据，生成链上或接口所需的表示。
-         */
         private UtxoSelection toSelection() {
             return new UtxoSelection(chosen, targetSat, inputSat, feeSat, changeSat, exact);
         }

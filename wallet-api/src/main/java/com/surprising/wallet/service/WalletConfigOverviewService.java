@@ -407,9 +407,6 @@ public class WalletConfigOverviewService {
             boolean withdrawEnabled,
             boolean collectionEnabled,
             boolean transferEnabled) {
-        /**
-         * 执行 {@code anyEnabled} 对应的辅助逻辑，完成数据处理并维护状态边界。
-         */
         public boolean anyEnabled() {
             return scanEnabled || withdrawEnabled || collectionEnabled || transferEnabled;
         }

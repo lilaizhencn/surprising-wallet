@@ -63,9 +63,6 @@ public class SuiTransactionService {
     /** 运行时任务开关服务。 */
     private final WalletRuntimeConfigService runtimeConfigService;
 
-    /**
-     * 构造 {@code SuiTransactionService}，初始化该组件运行所需的状态和依赖。
-     */
     public SuiTransactionService(
             SuiRpcClient rpc,
             SuiTransactionSigner signer,
@@ -95,23 +92,14 @@ public class SuiTransactionService {
         this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
     }
 
-    /**
-     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountMist) {
         return sendNative(0L, 0, derivationIndex, fromAddress, toAddress, amountMist);
     }
-    /**
-     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendNative(ChainAddressRecord from, String toAddress, long amountMist) {
         return sendNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
                 from.getAddress(), toAddress, amountMist);
     }
 
-    /**
-     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
-     */
     private String sendNative(long userId, int biz, long derivationIndex,
                               String fromAddress, String toAddress, long amountMist) {
         long gasBudget = profile().getDefaultFee();
@@ -124,24 +112,15 @@ public class SuiTransactionService {
         return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
-    /**
-     * 发送或广播 {@code sendCoin} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendCoin(long derivationIndex, String fromAddress, String coinType,
                            String toAddress, long amountAtomic) {
         return sendCoin(0L, 0, derivationIndex, fromAddress, coinType, toAddress, amountAtomic);
     }
-    /**
-     * 发送或广播 {@code sendCoin} 对应的链上请求，并返回节点处理结果。
-     */
     public String sendCoin(ChainAddressRecord from, String coinType, String toAddress, long amountAtomic) {
         return sendCoin(from.getUserId(), from.getBiz(), from.getAddressIndex(),
                 from.getAddress(), coinType, toAddress, amountAtomic);
     }
 
-    /**
-     * 发送或广播 {@code sendCoin} 对应的链上请求，并返回节点处理结果。
-     */
     private String sendCoin(long userId, int biz, long derivationIndex, String fromAddress, String coinType,
                             String toAddress, long amountAtomic) {
         long gasBudget = profile().getDefaultFee();
@@ -155,9 +134,6 @@ public class SuiTransactionService {
         return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
-    /**
-     * 处理 {@code withdrawNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
@@ -205,9 +181,6 @@ public class SuiTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code withdrawCoin} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String withdrawCoin(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                String coinType, String toAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawCoin");
@@ -263,9 +236,6 @@ public class SuiTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code collectNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountMist) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "sui collectNative");
@@ -291,9 +261,6 @@ public class SuiTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code collectCoin} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public String collectCoin(java.util.UUID tenantId, String collectionNo,
                               ChainAddressRecord from, String coinType,
                               String hotAddress, BigDecimal amountAtomic) {
@@ -333,9 +300,6 @@ public class SuiTransactionService {
         }
         return false;
     }
-    /**
-     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
         String digest = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
@@ -345,9 +309,6 @@ public class SuiTransactionService {
         }
         return false;
     }
-    /**
-     * 校验 {@code requireSuccessfulConfirmation} 对应的前置条件，不满足时抛出明确异常。
-     */
     public JsonNode requireSuccessfulConfirmation(String digest, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -364,9 +325,6 @@ public class SuiTransactionService {
         }
         throw new IllegalStateException("Sui confirmation timeout for " + digest);
     }
-    /**
-     * 获取或查询 {@code selectCoins} 对应的数据，并向调用方返回当前业务状态。
-     */
     private List<SuiRpcClient.SuiCoin> selectCoins(String owner, String coinType, BigDecimal required) {
         List<SuiRpcClient.SuiCoin> selected = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
@@ -379,17 +337,11 @@ public class SuiTransactionService {
         }
         throw new IllegalStateException("insufficient on-chain " + coinType + " balance");
     }
-    /**
-     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
-     */
     private AccountChainProfile profile() {
         return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 
-    /**
-     * 记录或保存 {@code record} 对应的数据，并遵守幂等和事务约束。
-     */
     private void record(String digest, String sender, String receiver, String symbol, String coinType,
                         BigDecimal amount, long feeReserve, String status, String rawPayload) {
         suiTransactionRepository.upsert(SuiTransactionRecord.builder()
@@ -406,39 +358,24 @@ public class SuiTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-    /**
-     * 写入或更新 {@code markConfirmed} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
     private void markConfirmed(String digest, JsonNode transaction) {
         long gasUsed = totalGas(transaction.path("effects").path("gasUsed"));
         long checkpoint = transaction.path("checkpoint").asLong(0L);
         suiTransactionRepository.markConfirmed(CHAIN, digest, checkpoint, gasUsed, transaction.toString());
     }
-    /**
-     * 编码 {@code totalGas} 对应的数据，生成链上或接口所需的表示。
-     */
     private long totalGas(JsonNode gas) {
         return gas.path("computationCost").asLong(0)
                 + gas.path("storageCost").asLong(0)
                 - gas.path("storageRebate").asLong(0);
     }
-    /**
-     * 获取或查询 {@code decimals} 对应的数据，并向调用方返回当前业务状态。
-     */
     private int decimals(String symbol) {
         return chainAssetRepository.findActiveDefinition(CHAIN, symbol)
                 .map(asset -> asset.getDecimals())
                 .orElseThrow(() -> new IllegalStateException("missing Sui asset configuration: " + symbol));
     }
-    /**
-     * 编码 {@code toAtomic} 对应的数据，生成链上或接口所需的表示。
-     */
     private long toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).longValueExact();
     }
-    /**
-     * 转换或计算 {@code sleep} 对应的值，统一金额、格式和边界规则。
-     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

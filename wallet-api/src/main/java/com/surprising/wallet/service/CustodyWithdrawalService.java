@@ -44,33 +44,15 @@ public class CustodyWithdrawalService {
     private final CustodyIdempotencyRepository idempotency;
     private final CustodyWithdrawalRepository withdrawals;
     private final CustodyAuditRepository audits;
-    /**
-     * 保存 {@code executionService}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyWithdrawalExecutionService executionService;
-    /**
-     * 保存 {@code gasService}，用于保存金额、费用或链上执行状态。
-     */
     private final CustodyGasService gasService;
-    /**
-     * 保存 {@code tenantChains}，表示链、网络、资产或代币配置。
-     */
     private final CustodyTenantChainService tenantChains;
-    /**
-     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
-     */
     private final CustodyCryptoService crypto;
-    /**
-     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
-     */
     private final ObjectMapper objectMapper;
     private final CustodyEventService events;
     private final CustodyAddressRepository addresses;
     private final CustodyGasAccountRepository gasAccounts;
 
-    /**
-     * 构造 {@code CustodyWithdrawalService}，初始化该组件运行所需的状态和依赖。
-     */
     public CustodyWithdrawalService(CustodyWithdrawalExecutionService executionService,
                                     CustodyGasService gasService,
                                     CustodyTenantChainService tenantChains,
@@ -98,9 +80,6 @@ public class CustodyWithdrawalService {
         this.gasAccounts = gasAccounts;
     }
 
-    /**
-     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public WithdrawalView create(CustodyPrincipal principal, CreateWithdrawalCommand command,
                                  String source, String idempotencyKey, String sourceIp) {
@@ -211,9 +190,6 @@ public class CustodyWithdrawalService {
         return view;
     }
 
-    /**
-     * 执行 {@code replay} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
         IdempotencyRecord existing = idempotency.find(tenantId, key, CREATE_OPERATION)
                 .orElse(null);
@@ -232,9 +208,6 @@ public class CustodyWithdrawalService {
             throw new IllegalStateException("stored idempotent response is invalid", e);
         }
     }
-    /**
-     * 执行 {@code eventPayload} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     String eventPayload(UUID eventId, String eventType, WithdrawalView view) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("withdrawalId", view.id());
@@ -255,9 +228,6 @@ public class CustodyWithdrawalService {
                 "createdAt", Instant.now(),
                 "data", data));
     }
-    /**
-     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
-     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -265,9 +235,6 @@ public class CustodyWithdrawalService {
             throw new IllegalArgumentException("value cannot be serialized as JSON", e);
         }
     }
-    /**
-     * 转换或计算 {@code normalizeSource} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalizeSource(String source) {
         String value = source == null ? "" : source.trim().toUpperCase(Locale.ROOT);
         if (!"API".equals(value) && !"CONSOLE".equals(value)) {
@@ -275,9 +242,6 @@ public class CustodyWithdrawalService {
         }
         return value;
     }
-    /**
-     * 校验 {@code requireUpper} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static String requireUpper(String value, String field, int max) {
         String result = required(value, field, max).toUpperCase(Locale.ROOT);
         if (!result.matches("^[A-Z][A-Z0-9_]{1," + (max - 1) + "}$")) {
@@ -285,9 +249,6 @@ public class CustodyWithdrawalService {
         }
         return result;
     }
-    /**
-     * 校验 {@code required} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static String required(String value, String field, int max) {
         String result = value == null ? "" : value.trim();
         if (result.isBlank() || result.length() > max) {
@@ -295,9 +256,6 @@ public class CustodyWithdrawalService {
         }
         return result;
     }
-    /**
-     * 执行 {@code optional} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String optional(String value, int max) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {
@@ -305,9 +263,6 @@ public class CustodyWithdrawalService {
         }
         return result.isBlank() ? null : result;
     }
-    /**
-     * 校验 {@code requireIdempotencyKey} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static String requireIdempotencyKey(String value) {
         String key = value == null ? "" : value.trim();
         if (!key.matches("^[A-Za-z0-9._:-]{8,160}$")) {
@@ -316,9 +271,6 @@ public class CustodyWithdrawalService {
         }
         return key;
     }
-    /**
-     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
-     */
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

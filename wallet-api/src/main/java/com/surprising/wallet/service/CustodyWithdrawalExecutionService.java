@@ -19,25 +19,13 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
-/**
- * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
- */
 @Service
 public class CustodyWithdrawalExecutionService {
-    /**
-     * 定义 {@code RANDOM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final SecureRandom RANDOM = new SecureRandom();
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final WithdrawalOrderRepository withdrawalOrderRepository;
     private final CollectionPlanningService collectionPlanningService;
 
 
-    /**
-     * 保存 {@code runtimeConfig}，用于保存运行配置和策略参数。
-     */
     private final WalletRuntimeConfigService runtimeConfig;
     private final BlockchainRuntimeService runtime;
     /** chain_asset 单表仓储。 */
@@ -53,9 +41,6 @@ public class CustodyWithdrawalExecutionService {
     /** ledger_balance 单表仓储。 */
     private final LedgerBalanceRepository ledgerBalanceRepository;
 
-    /**
-     * 构造 {@code CustodyWithdrawalExecutionService}，初始化该组件运行所需的状态和依赖。
-     */
     public CustodyWithdrawalExecutionService(
             WithdrawalOrderRepository withdrawalOrderRepository,
             CollectionPlanningService collectionPlanningService,
@@ -79,9 +64,6 @@ public class CustodyWithdrawalExecutionService {
         this.ledgerBalanceRepository = ledgerBalanceRepository;
     }
 
-    /**
-     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
-     */
     public ExecutionResult execute(UUID tenantId, CustodyAddressRecord custodyAddress,
                                    String chain, String symbol, String toAddress,
                                    BigDecimal amount, String orderPrefix) {
@@ -125,9 +107,6 @@ public class CustodyWithdrawalExecutionService {
                 .orElseThrow(() -> new IllegalArgumentException("withdrawal order not found")).getId();
         return new ExecutionResult(orderId, orderNo, status, amount, asset.networkFeeReserve(), toAddress);
     }
-    /**
-     * 校验 {@code requireAsset} 对应的前置条件，不满足时抛出明确异常。
-     */
     private AssetMeta requireAsset(String chain, String symbol) {
         ChainAsset asset = chainAssetRepository.findActive(chain, symbol)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -150,9 +129,6 @@ public class CustodyWithdrawalExecutionService {
                 chain, symbol, nativeAsset, String.valueOf(profile.getNativeSymbol()), networkFee);
     }
 
-    /**
-     * 校验 {@code requireTenantSpendAccount} 对应的前置条件，不满足时抛出明确异常。
-     */
     private SpendAccount requireTenantSpendAccount(UUID tenantId, UUID custodyAddressId,
                                                    String chain, String symbol,
                                                    BigDecimal requiredAmount) {
@@ -174,9 +150,6 @@ public class CustodyWithdrawalExecutionService {
         return new SpendAccount(String.valueOf(balance.get("account_id")),
                 String.valueOf(address.get("address")));
     }
-    /**
-     * 处理 {@code withdrawalSourceAddress} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     private String withdrawalSourceAddress(UUID tenantId, AssetMeta asset, SpendAccount spend) {
         if (ChainType.valueOf(asset.chain()).isUtxo()) {
             return spend.address();
@@ -184,9 +157,6 @@ public class CustodyWithdrawalExecutionService {
         return collectionPlanningService.destination(tenantId, asset.chain())
                 .orElse(spend.address());
     }
-    /**
-     * 转换或计算 {@code normalizeOrderPrefix} 对应的值，统一金额、格式和边界规则。
-     */
     private static String normalizeOrderPrefix(String value) {
         String prefix = value == null ? "" : value.replaceAll("[^A-Za-z0-9_-]", "");
         if (prefix.isBlank() || prefix.length() > 56) {
@@ -194,9 +164,6 @@ public class CustodyWithdrawalExecutionService {
         }
         return prefix;
     }
-    /**
-     * 校验 {@code validateExternalAddress} 对应的前置条件，不满足时抛出明确异常。
-     */
     private String validateExternalAddress(String chain, String address) {
         String value = address == null ? "" : address.trim();
         if (value.isBlank() || value.length() > 160) {
@@ -207,16 +174,10 @@ public class CustodyWithdrawalExecutionService {
         }
         return value;
     }
-    /**
-     * 执行 {@code atomicToDecimal} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static BigDecimal atomicToDecimal(Object value, int decimals) {
         return value == null ? BigDecimal.ZERO
                 : new BigDecimal(String.valueOf(value)).movePointLeft(decimals);
     }
-    /**
-     * 执行 {@code randomSuffix} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     private static String randomSuffix() {
         return Integer.toUnsignedString(RANDOM.nextInt(), 36).toLowerCase(Locale.ROOT);
     }

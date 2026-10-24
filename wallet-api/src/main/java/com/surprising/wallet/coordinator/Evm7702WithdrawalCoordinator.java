@@ -664,9 +664,6 @@ public class Evm7702WithdrawalCoordinator {
             withdrawalId = withdrawalId.clone();
         }
 
-        /**
-         * 处理 {@code withdrawalId} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-         */
         @Override
         public byte[] withdrawalId() {
             return withdrawalId.clone();
@@ -745,9 +742,6 @@ public class Evm7702WithdrawalCoordinator {
             withdrawalId = withdrawalId.clone();
         }
 
-        /**
-         * 处理 {@code withdrawalId} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-         */
         @Override
         public byte[] withdrawalId() {
             return withdrawalId.clone();

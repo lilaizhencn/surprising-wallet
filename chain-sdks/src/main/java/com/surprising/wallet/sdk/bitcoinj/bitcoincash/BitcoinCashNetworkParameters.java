@@ -16,33 +16,15 @@ import java.time.Instant;
  * 最大难度目标（maxTarget）以及BIP32扩展密钥头（bip32Header）等关键网络参数。
  */
 public final class BitcoinCashNetworkParameters extends NetworkParameters {
-    /**
-     * 定义 {@code MAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final BitcoinCashNetworkParameters MAIN =
             new BitcoinCashNetworkParameters(BitcoinCashNetwork.MAINNET);
-    /**
-     * 定义 {@code TEST} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final BitcoinCashNetworkParameters TEST =
             new BitcoinCashNetworkParameters(BitcoinCashNetwork.TESTNET);
-    /**
-     * 定义 {@code REGTEST} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final BitcoinCashNetworkParameters REGTEST =
             new BitcoinCashNetworkParameters(BitcoinCashNetwork.REGTEST);
-    /**
-     * 保存 {@code bchNetwork}，表示链、网络、资产或代币配置。
-     */
     private final BitcoinCashNetwork bchNetwork;
-    /**
-     * 保存 {@code genesis}，用于承载当前对象的运行配置或业务数据。
-     */
     private final Block genesis;
 
-    /**
-     * 构造 {@code BitcoinCashNetworkParameters}，初始化该组件运行所需的状态和依赖。
-     */
     private BitcoinCashNetworkParameters(BitcoinCashNetwork network) {
         super(network);
         bchNetwork = network;
@@ -72,21 +54,9 @@ public final class BitcoinCashNetworkParameters extends NetworkParameters {
                         0x1d00ffffL,
                         network == BitcoinCashNetwork.MAINNET ? 2083236893L : 414098458L);
     }
-    /**
-     * 执行 {@code mainnet} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public static BitcoinCashNetworkParameters mainnet() { return MAIN; }
-    /**
-     * 执行 {@code testnet} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public static BitcoinCashNetworkParameters testnet() { return TEST; }
-    /**
-     * 执行 {@code regtest} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public static BitcoinCashNetworkParameters regtest() { return REGTEST; }
-    /**
-     * 执行 {@code cashPrefix} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
     public String cashPrefix() { return bchNetwork.cashPrefix(); }
     /** 返回 BCH 网络对应的支付协议标识。 */
     @Override public String getPaymentProtocolId() { return bchNetwork.id(); }

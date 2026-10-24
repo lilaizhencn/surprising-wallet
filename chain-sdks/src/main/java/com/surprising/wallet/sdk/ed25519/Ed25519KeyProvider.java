@@ -17,17 +17,8 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
-/**
- * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
- */
 public final class Ed25519KeyProvider {
-    /**
-     * 定义 {@code MASTER_KEY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final byte[] MASTER_KEY = "ed25519 seed".getBytes(StandardCharsets.US_ASCII);
-    /**
-     * 定义 {@code ED25519} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final EdDSANamedCurveSpec ED25519 =
             EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
 
@@ -36,9 +27,6 @@ public final class Ed25519KeyProvider {
      */
     private final byte[] masterSeed;
 
-    /**
-     * 构造 {@code Ed25519KeyProvider}，初始化该组件运行所需的状态和依赖。
-     */
     public Ed25519KeyProvider(byte[] masterSeed) {
         if (masterSeed == null || masterSeed.length < 16) {
             throw new IllegalArgumentException("master seed must contain at least 128 bits");
@@ -46,24 +34,15 @@ public final class Ed25519KeyProvider {
         this.masterSeed = Arrays.copyOf(masterSeed, masterSeed.length);
     }
 
-    /**
-     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
-     */
     public Ed25519DerivedKey derive(Ed25519Chain chain, long userIndex) {
         return derive(chain.pathForUser(userIndex), chain.pathString(userIndex));
     }
 
-    /**
-     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
-     */
     public Ed25519DerivedKey derive(Ed25519Chain chain, int biz, long userId, long addressIndex) {
         return derive(chain.pathForAccount(biz, userId, addressIndex),
                 chain.pathString(biz, userId, addressIndex));
     }
 
-    /**
-     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
-     */
     private Ed25519DerivedKey derive(int[] path, String pathString) {
         byte[] digest = hmacSha512(MASTER_KEY, masterSeed);
         byte[] key = Arrays.copyOfRange(digest, 0, 32);
@@ -93,25 +72,16 @@ public final class Ed25519KeyProvider {
         return result;
     }
 
-    /**
-     * 为 {@code sign} 对应的交易或消息生成签名，并保持原始数据不被改变。
-     */
     public byte[] sign(Ed25519Chain chain, long userIndex, byte[] message) {
         Ed25519DerivedKey derived = derive(chain, userIndex);
         return sign(derived, message);
     }
 
-    /**
-     * 为 {@code sign} 对应的交易或消息生成签名，并保持原始数据不被改变。
-     */
     public byte[] sign(Ed25519Chain chain, int biz, long userId, long addressIndex, byte[] message) {
         Ed25519DerivedKey derived = derive(chain, biz, userId, addressIndex);
         return sign(derived, message);
     }
 
-    /**
-     * 为 {@code sign} 对应的交易或消息生成签名，并保持原始数据不被改变。
-     */
     private byte[] sign(Ed25519DerivedKey derived, byte[] message) {
         EdDSAPrivateKey privateKey = new EdDSAPrivateKey(new EdDSAPrivateKeySpec(derived.privateSeed(), ED25519));
         EdDSAEngine signer = new EdDSAEngine();
@@ -124,9 +94,6 @@ public final class Ed25519KeyProvider {
         }
     }
 
-    /**
-     * 验证 {@code verify} 对应的签名、交易或数据证明是否有效。
-     */
     public boolean verify(byte[] publicKey, byte[] message, byte[] signature) {
         EdDSAPublicKey key = new EdDSAPublicKey(new EdDSAPublicKeySpec(publicKey, ED25519));
         EdDSAEngine verifier = new EdDSAEngine();
@@ -139,9 +106,6 @@ public final class Ed25519KeyProvider {
         }
     }
 
-    /**
-     * 解析或转换 {@code decodeMasterSeed} 对应的数据，并校验其格式和边界。
-     */
     public static byte[] decodeMasterSeed(String encoded) {
         if (encoded == null || encoded.isBlank()) {
             throw new IllegalStateException("Ed25519 master seed is required for Ed25519 chains");
@@ -157,9 +121,6 @@ public final class Ed25519KeyProvider {
         }
     }
 
-    /**
-     * 转换或计算 {@code hmacSha512} 对应的值，统一金额、格式和边界规则。
-     */
     private static byte[] hmacSha512(byte[] key, byte[] data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA512");
