@@ -148,4 +148,12 @@ public class CustodyWithdrawalRepository {
                 status, tenantId, id);
     }
 
+    /** 仅当前投影状态仍匹配时推进，防止同一状态变化被并发或过期任务重复应用。 */
+    public int transitionStatus(UUID tenantId, UUID id, String expectedStatus, String nextStatus) {
+        return jdbc.update("""
+                update custody_withdrawal set status = ?, updated_at = now()
+                 where tenant_id = ? and id = ? and status = ?
+                """, nextStatus, tenantId, id, expectedStatus);
+    }
+
 }

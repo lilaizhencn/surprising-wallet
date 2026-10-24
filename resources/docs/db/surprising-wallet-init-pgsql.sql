@@ -1388,7 +1388,7 @@ CREATE TABLE public.custody_webhook_delivery (
     event_id uuid NOT NULL,
     status character varying(24) DEFAULT 'PENDING'::character varying NOT NULL,
     attempt_count integer DEFAULT 0 NOT NULL,
-    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
+    next_attempt_at timestamp with time zone DEFAULT now(),
     locked_by character varying(160),
     locked_at timestamp with time zone,
     last_http_status integer,
@@ -1400,6 +1400,7 @@ CREATE TABLE public.custody_webhook_delivery (
     total_attempt_count integer DEFAULT 0 NOT NULL,
     manual_retry_count integer DEFAULT 0 NOT NULL,
     next_attempt_trigger character varying(24) DEFAULT 'AUTOMATIC'::character varying NOT NULL,
+    CONSTRAINT custody_webhook_delivery_schedule_check CHECK (status IN ('DELIVERED', 'FAILED') OR next_attempt_at IS NOT NULL),
     CONSTRAINT custody_webhook_delivery_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'DELIVERING'::character varying, 'DELIVERED'::character varying, 'RETRY'::character varying, 'FAILED'::character varying])::text[])))
 );
 
@@ -1440,7 +1441,6 @@ CREATE TABLE public.custody_webhook_endpoint (
     url character varying(2048) NOT NULL,
     secret_ciphertext text NOT NULL,
     status character varying(24) DEFAULT 'PENDING_VERIFICATION'::character varying NOT NULL,
-    verification_token_hash character varying(128),
     verified_at timestamp with time zone,
     last_delivery_at timestamp with time zone,
     created_by uuid,

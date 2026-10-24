@@ -15,6 +15,7 @@ import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyWebhookDispatchService;
 import com.surprising.wallet.service.CustodyWebhookService;
 import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -42,6 +43,11 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,13 +74,17 @@ class CustodyMultiChainLoadIntegrationTest {
      */
     private static final BigDecimal WITHDRAW_AMOUNT = new BigDecimal("3.000000");
 
+    @Configuration(proxyBeanMethods = false)
+    @EnableTransactionManagement
+    static class Transactions { }
+
     /**
      * 验证 {@code shouldKeepFundsAndCallbacksCorrectUnderMultiChainLoad} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
     void shouldKeepFundsAndCallbacksCorrectUnderMultiChainLoad() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("custody.load.enabled"),
-                "run scripts/regtest/run-multichain-load.sh");
+                "run resources/scripts/regtest/run-multichain-load.sh");
         int users = Integer.getInteger("custody.load.users", 1_000);
         int concurrency = Integer.getInteger("custody.load.concurrency", 32);
         int webhookWorkers = Integer.getInteger("custody.load.webhookWorkers", 12);
@@ -83,7 +93,6 @@ class CustodyMultiChainLoadIntegrationTest {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        CustodyRepository custody = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         ChainRepositoryFixture chains = com.surprising.wallet.testutil.DepositTestSupport.repository(
@@ -96,7 +105,18 @@ class CustodyMultiChainLoadIntegrationTest {
         Tenant tenant = createTenant(jdbc, tenantChains);
         List<UserAccount> accounts = createAccounts(jdbc, tenant, users);
         CustodyCryptoService crypto = crypto();
-        try (CallbackServer callback = new CallbackServer()) {
+        try (var context = new AnnotationConfigApplicationContext();
+             CallbackServer callback = new CallbackServer();
+             var http = new com.surprising.wallet.gateway.CustodyWebhookHttpClient(crypto, "dev")) {
+            context.register(Transactions.class);
+            context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(dataSource));
+            context.registerBean(CustodyRepository.class,
+                    () -> com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc));
+            context.registerBean(WithdrawalSettlementService.class,
+                    () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
+            context.refresh();
+            CustodyRepository custody = context.getBean(CustodyRepository.class);
+            WithdrawalSettlementService settlements = context.getBean(WithdrawalSettlementService.class);
             UUID endpointId = insertWebhook(jdbc, crypto, tenant.id(), callback.url());
 
             List<DepositAttempt> deposits = new ArrayList<>(users * 2);
@@ -118,7 +138,7 @@ class CustodyMultiChainLoadIntegrationTest {
 
             Instant withdrawalStarted = Instant.now();
             runConcurrently(users, concurrency,
-                    index -> createAndConfirmWithdrawal(jdbc, chains, custody, tenant.id(), accounts.get(index)));
+                    index -> createAndConfirmWithdrawal(chains, custody, settlements, tenant.id(), accounts.get(index)));
             Duration withdrawalDuration = Duration.between(withdrawalStarted, Instant.now());
 
             CustodyWithdrawalReconciliationJob reconciliation =
@@ -133,13 +153,13 @@ class CustodyMultiChainLoadIntegrationTest {
             assertEquals(0, count(jdbc,
                     "select count(*) from custody_withdrawal where status <> 'CONFIRMED'"));
 
-            CustodyWebhookService webhooks = new CustodyWebhookService(
-                    custody, crypto, objectMapper, "dev");
+            CustodyWebhookService webhooks = com.surprising.wallet.testutil.CustodyTestSupport.webhooks(
+                    jdbc, crypto, objectMapper, http);
             List<CustodyWebhookDispatcher> dispatchers = new ArrayList<>();
             for (int worker = 0; worker < webhookWorkers; worker++) {
                 dispatchers.add(new CustodyWebhookDispatcher(
                         new CustodyWebhookDispatchService(
-                                custody, crypto, webhooks, new CustodyWebhookRetryPolicy())));
+                                webhooks, crypto, http, new CustodyWebhookRetryPolicy(), Runnable::run)));
             }
             Instant webhookStarted = Instant.now();
             drainDueWebhooks(jdbc, dispatchers, concurrency);
@@ -287,8 +307,8 @@ class CustodyMultiChainLoadIntegrationTest {
     /**
      * 验证 {@code createAndConfirmWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void createAndConfirmWithdrawal(JdbcTemplate jdbc, ChainRepositoryFixture chains,
-                                                   CustodyRepository custody, UUID tenantId,
+    private static void createAndConfirmWithdrawal(ChainRepositoryFixture chains,
+                                                   CustodyRepository custody, WithdrawalSettlementService settlements, UUID tenantId,
                                                    UserAccount account) {
         String orderNo = "LOAD-" + account.chain().name() + "-" + account.index();
         int created = chains.withdrawalOrderRepository.createForTenant(
@@ -303,22 +323,25 @@ class CustodyMultiChainLoadIntegrationTest {
                 WITHDRAW_AMOUNT,
                 BigDecimal.ZERO);
         assertEquals(1, created);
-        assertTrue(chains.ledgerBalanceRepository.freeze(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, null));
-        chains.withdrawalOrderRepository.updateStatus(account.chain().name(), orderNo, "FROZEN", account.address(), null, null);
+        assertTrue(chains.ledgerBalanceRepository.freeze(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, tenantId));
+        chains.withdrawalOrderRepository.updateStatus(tenantId, account.chain().name(), orderNo, "FROZEN", account.address(), null, null);
         custody.insertCustodyWithdrawal(
                 UUID.randomUUID(), tenantId, account.custodyAddressId(), orderNo,
                 "external-" + account.index(), "load-idempotency-" + account.index(),
                 account.chain().name(), account.symbol(),
                 address(account.chain(), account.index() + 20_000), WITHDRAW_AMOUNT, BigDecimal.ZERO,
                 "FROZEN", "API_KEY", "load-test");
-        assertTrue(chains.ledgerBalanceRepository.settle(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, null));
+        String txHash = "load-withdraw-" + account.index();
         chains.withdrawalOrderRepository.updateStatus(
+                tenantId,
                 account.chain().name(),
                 orderNo,
-                "CONFIRMED",
+                "SENT",
                 account.address(),
-                "load-withdraw-" + account.index(),
+                txHash,
                 null);
+        assertTrue(settlements.confirm(
+                tenantId, account.chain().name(), orderNo, txHash, account.symbol(), account.accountId(), WITHDRAW_AMOUNT));
     }
 
     /**

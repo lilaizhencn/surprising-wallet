@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1090" viewBox="0 0 1100 1090">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1370" viewBox="0 0 1100 1370">
   <style>
     .svc   { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 10; }
     .lib   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 10; }
@@ -208,4 +208,14 @@
   <text x="50" y="1006" class="desc">服务直接写审计；租户停用撤销会话；管理员按租户 / 角色 / 状态条件解锁</text>
   <text x="50" y="1031" class="desc">单表仓储映射类型记录；安全域无总门面 / 安全门面转发；维护直接清理 nonce / 会话 / 幂等键</text>
   <text x="50" y="1056" class="desc">列表投影无密码 / 密钥；nonce 原子占用；密文自带版本，删除两张表的闲置版本列</text>
+  <rect x="30" y="1090" width="1040" height="140" class="svc"/>
+  <text x="50" y="1116" class="label">Webhook：现有业务服务直接编排单表仓储；具体 HTTP 客户端负责协议</text>
+  <text x="50" y="1142" class="desc">WebhookService → 端点 / 投递 / 尝试 / 事件 / 审计；HttpClient → URL / UTF-8 HMAC / 超时 / 有界响应</text>
+  <text x="50" y="1168" class="desc">领取与回执同事务；结果按全局代次提交；状态 / 回执 / 端点时间原子更新</text>
+  <text x="50" y="1194" class="desc">HTTP 验证后才开启短事务激活；类型投影无密文；创建记录实际操作者</text>
+  <text x="50" y="1218" class="desc">移除闲置校验哈希；终态无重试时间；手动新周期保留全局历史；投递器仅一个正常构造器</text>
+  <rect x="30" y="1250" width="1040" height="100" class="svc"/>
+  <text x="50" y="1276" class="label">提现投影：状态条件更新 + 扣款事实 + Gas 结算 + 事件同事务</text>
+  <text x="50" y="1302" class="desc">本金流水记录已结算的 amount + fee；不重复扣款，不回写链订单；租户 / 原状态约束重复投影</text>
+  <text x="50" y="1328" class="desc">Gas 结算统一记录原生币费用与 Gas 地址；投影移除重复手续费流水，失败整体回滚</text>
 </svg>

@@ -8,6 +8,8 @@ import com.surprising.wallet.model.custody.GasAccountRecord;
 import com.surprising.wallet.model.custody.IpRuleView;
 import com.surprising.wallet.model.custody.TenantRecord;
 import com.surprising.wallet.model.custody.TenantUserView;
+import com.surprising.wallet.model.custody.WebhookEndpointView;
+import com.surprising.wallet.repository.CustodyWebhookEndpointRepository;
 import com.surprising.wallet.repository.CustodyApiKeyRepository;
 import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.CustodyIpRuleRepository;
@@ -45,6 +47,8 @@ public class CustodyTenantService {
     private final CustodyApiKeyRepository apiKeys;
     private final CustodyIpRuleRepository ipRules;
     private final CustodyAuditRepository audits;
+    private final CustodyWebhookEndpointRepository webhookEndpoints;
+    private final CustodyWebhookService webhooks;
 
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord create(CustodyPrincipal actor, CreateTenantCommand command, String sourceIp) {
@@ -92,8 +96,8 @@ public class CustodyTenantService {
                 repository.listGasAccounts(tenantId),
                 apiKeys.listByTenant(tenantId),
                 ipRules.list(tenantId),
-                repository.listWebhookEndpoints(tenantId),
-                repository.listWebhookDeliveries(tenantId, null, null, 20, 0),
+                webhookEndpoints.list(tenantId),
+                webhooks.deliveriesForTenant(tenantId, null, null, 20, 0),
                 history.deposits(tenantId, "", "", "", "", 20, 0),
                 history.withdrawals(tenantId, "", "", "", "", 20, 0),
                 audits.list(tenantId, 50, 0));
@@ -261,8 +265,8 @@ public class CustodyTenantService {
             List<GasAccountRecord> gasAccounts,
             List<ApiKeyView> apiKeys,
             List<IpRuleView> ipRules,
-            List<Map<String, Object>> webhooks,
-            List<Map<String, Object>> webhookDeliveries,
+            List<WebhookEndpointView> webhooks,
+            List<CustodyWebhookService.WebhookDeliveryView> webhookDeliveries,
             List<CustodyTransactionQueryService.DepositView> recentDeposits,
             List<CustodyTransactionQueryService.WithdrawalView> recentWithdrawals,
             List<Map<String, Object>> recentAudit

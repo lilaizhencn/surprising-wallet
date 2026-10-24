@@ -4,8 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.service.CustodyCryptoService;
-import com.surprising.wallet.service.CustodyWebhookService;
-import tools.jackson.databind.ObjectMapper;
+import com.surprising.wallet.gateway.CustodyWebhookHttpClient;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.Mac;
@@ -20,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class CustodyWebhookServiceTest {
+class CustodyWebhookHttpClientTest {
 
     @Test
     void signsExactlyTheUtf8BytesReceivedByTheWebhookEndpoint() throws Exception {
@@ -31,14 +30,12 @@ class CustodyWebhookServiceTest {
         server.createContext("/webhook", exchange -> respond(exchange, receivedBody, receivedTimestamp,
                 receivedSignature));
         server.start();
-        try {
-            CustodyWebhookService service = new CustodyWebhookService(null,
-                    new CustodyCryptoService(properties()), new ObjectMapper(), "dev");
+        try (CustodyWebhookHttpClient service = new CustodyWebhookHttpClient(new CustodyCryptoService(properties()), "dev")) {
             UUID eventId = UUID.randomUUID();
             String eventType = "WITHDRAWAL.CREATED";
             String body = "{\"message\":\"中文\", \"amount\":\"1.2300\"}";
 
-            CustodyWebhookService.WebhookHttpResult result = service.send(
+            CustodyWebhookHttpClient.WebhookHttpResult result = service.send(
                     "http://127.0.0.1:" + server.getAddress().getPort() + "/webhook",
                     "webhook-secret", eventId, eventType, body);
 

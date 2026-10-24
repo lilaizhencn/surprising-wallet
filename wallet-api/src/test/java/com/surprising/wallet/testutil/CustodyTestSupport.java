@@ -34,6 +34,31 @@ public final class CustodyTestSupport {
                 new CustodySessionRepository(jdbc), new CustodyIpRuleRepository(jdbc));
     }
 
+    public static com.surprising.wallet.service.CustodyWebhookService webhooks(JdbcTemplate jdbc) {
+        var properties = new com.surprising.wallet.model.CustodySecurityProperties();
+        properties.setSecretMasterKey("22".repeat(32));
+        return webhooks(jdbc, new com.surprising.wallet.service.CustodyCryptoService(properties),
+                new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper(),
+                org.mockito.Mockito.mock(com.surprising.wallet.gateway.CustodyWebhookHttpClient.class));
+    }
+
+    public static com.surprising.wallet.service.CustodyWebhookService webhooks(JdbcTemplate jdbc,
+            com.surprising.wallet.service.CustodyCryptoService crypto, tools.jackson.databind.ObjectMapper mapper,
+            com.surprising.wallet.gateway.CustodyWebhookHttpClient http) {
+        var manager = new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource());
+        var service = new com.surprising.wallet.service.CustodyWebhookService(
+                new CustodyWebhookEndpointRepository(jdbc), new CustodyWebhookDeliveryRepository(jdbc),
+                new CustodyWebhookDeliveryAttemptRepository(jdbc), new CustodyEventRepository(jdbc),
+                new CustodyAuditRepository(jdbc), crypto, mapper, http, manager);
+        var transactions = new org.springframework.transaction.interceptor.TransactionInterceptor();
+        transactions.setTransactionManager(manager);
+        transactions.setTransactionAttributeSource(new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource());
+        transactions.afterPropertiesSet();
+        var proxy = new org.springframework.aop.framework.ProxyFactory(service);
+        proxy.addAdvice(transactions);
+        return (com.surprising.wallet.service.CustodyWebhookService) proxy.getProxy();
+    }
+
     public static CustodyEventService events(JdbcTemplate jdbc) {
         return new CustodyEventService(new CustodyEventRepository(jdbc),
                 new CustodyWebhookEndpointRepository(jdbc), new CustodyWebhookDeliveryRepository(jdbc));

@@ -98,7 +98,7 @@ class CustodyEventPublicationIntegrationTest {
 
     private UUID endpoint(boolean active) {
         UUID id = UUID.randomUUID();
-        endpoints.insert(id, TENANT, "test-" + id, "https://example.invalid/hook/" + id, "test-only", "test-only");
+        endpoints.insert(id, TENANT, "test-" + id, "https://example.invalid/hook/" + id, "test-only", UUID.fromString("00000000-0000-0000-0000-000000000002"));
         if (active) assertEquals(1, endpoints.markVerified(TENANT, id));
         return id;
     }

@@ -1,9 +1,11 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.CustodyEventPayload;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import java.util.Collection;
+import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Optional;
@@ -50,23 +52,16 @@ public class CustodyEventRepository {
                 tenantId, eventType, aggregateType, aggregateId).stream().findFirst();
     }
 
-    /** 查询事件完整字段，不限制事件发布状态。 */
-    public Optional<Map<String, Object>> find(UUID tenantId, UUID id) {
-        return jdbc.queryForList("""
-                select id, tenant_id, event_type, aggregate_type, aggregate_id, payload::text as payload,
-                       status, occurred_at, published_at, created_at
-                  from custody_event where tenant_id = ? and id = ?
-                """, tenantId, id).stream().findFirst();
-    }
-
-    /** 查询待发布领域事件。 */
-    public List<Map<String, Object>> listPending(UUID tenantId, int limit) {
-        return jdbc.queryForList("""
-                select id, tenant_id, event_type, aggregate_type, aggregate_id, payload::text as payload,
-                       status, occurred_at, published_at, created_at
-                  from custody_event where tenant_id = ? and status = 'PENDING'
-                 order by occurred_at, id limit ?
-                """, tenantId, Math.min(Math.max(limit, 1), 500));
+    public Map<UUID, CustodyEventPayload> findContents(UUID tenantId, Collection<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        String array = ids.stream().map(UUID::toString).collect(Collectors.joining(",", "{", "}"));
+        return jdbc.query("""
+                select id, event_type, aggregate_type, aggregate_id, payload::text as payload from custody_event
+                 where tenant_id = ? and id = any(cast(? as uuid[]))
+                """, (rs, rowNum) -> new CustodyEventPayload(rs.getObject("id", UUID.class),
+                rs.getString("event_type"), rs.getString("aggregate_type"), rs.getString("aggregate_id"),
+                rs.getString("payload")), tenantId, array).stream()
+                .collect(Collectors.toMap(CustodyEventPayload::id, row -> row));
     }
 
     /** 标记领域事件已发布。 */

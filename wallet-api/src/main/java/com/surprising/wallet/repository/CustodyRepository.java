@@ -1,8 +1,6 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.model.custody.WithdrawalStatusChange;
-import com.surprising.wallet.model.custody.WebhookEndpointRecord;
-import com.surprising.wallet.model.custody.WebhookDeliveryTask;
 import com.surprising.wallet.model.custody.TenantRecord;
 import com.surprising.wallet.model.custody.NetworkFee;
 import com.surprising.wallet.model.custody.IdempotencyRecord;
@@ -66,10 +64,6 @@ public class CustodyRepository {
     private final CustodyWebhookEndpointRepository webhookEndpoints;
     /** Webhook 投递单表仓储。 */
     private final CustodyWebhookDeliveryRepository webhookDeliveries;
-    /** Webhook 尝试单表仓储。 */
-    private final CustodyWebhookDeliveryAttemptRepository webhookAttempts;
-    /** 领域事件单表仓储。 */
-    private final CustodyEventRepository events;
     /** 审计单表仓储。 */
     private final CustodyAuditRepository audits;
     /** 托管提现单表仓储。 */
@@ -128,8 +122,6 @@ public class CustodyRepository {
         this.idempotencies = new CustodyIdempotencyRepository(jdbc);
         this.webhookEndpoints = new CustodyWebhookEndpointRepository(jdbc);
         this.webhookDeliveries = new CustodyWebhookDeliveryRepository(jdbc);
-        this.webhookAttempts = new CustodyWebhookDeliveryAttemptRepository(jdbc);
-        this.events = new CustodyEventRepository(jdbc);
         this.audits = new CustodyAuditRepository(jdbc);
         this.custodyWithdrawals = new CustodyWithdrawalRepository(jdbc);
         this.withdrawalOrders = new WithdrawalOrderRepository(jdbc);
@@ -235,22 +227,6 @@ public class CustodyRepository {
     public void updateTenantStatus(UUID tenantId, String status) {
         if (tenantTable.updateStatus(tenantId, status) != 1) throw new IllegalArgumentException("tenant not found");
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     /** 判断是否存在未解决的充值重组赤字。 */
     public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId, String chain,
@@ -567,7 +543,7 @@ public class CustodyRepository {
         boolean openChain = !tenantChains.listActiveChains(tenantId).isEmpty();
         boolean apiKey = apiKeys.countActive(tenantId) > 0;
         boolean webhook = webhookEndpoints.list(tenantId).stream()
-                .anyMatch(row -> "ACTIVE".equals(row.get("status")) && row.get("verified_at") != null);
+                .anyMatch(row -> "ACTIVE".equals(row.status()) && row.verifiedAt() != null);
         boolean allowlist = tenant.ipAllowlistEnabled() && !ipRules.listActive(tenantId).isEmpty();
         List<Map<String, Object>> addresses = custodyAddresses.listByTenant(tenantId);
         List<UUID> gasAddressIds = gasAccounts.listByTenant(tenantId).stream()
@@ -614,100 +590,6 @@ public class CustodyRepository {
         idempotencies.complete(tenantId, key, operation, responseStatus, responseJson);
     }
 
-    /** 创建 Webhook 端点。 */
-    public WebhookEndpointRecord insertWebhookEndpoint(UUID id, UUID tenantId, String name, String url,
-                                                       String secretCiphertext, String verificationTokenHash,
-                                                       UUID createdBy) {
-        webhookEndpoints.insert(id, tenantId, name, url, secretCiphertext, verificationTokenHash);
-        return requireWebhookEndpoint(tenantId, id);
-    }
-
-    /** 查询并校验 Webhook 端点。 */
-    public WebhookEndpointRecord requireWebhookEndpoint(UUID tenantId, UUID endpointId) {
-        return webhookEndpoints.find(tenantId, endpointId).stream().findFirst()
-                .map(CustodyRepository::mapWebhookEndpoint)
-                .orElseThrow(() -> new IllegalArgumentException("webhook endpoint not found"));
-    }
-
-    /** 查询 Webhook 端点。 */
-    public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) { return webhookEndpoints.list(tenantId); }
-
-    /** 标记 Webhook 已验证。 */
-    public void markWebhookVerified(UUID tenantId, UUID endpointId) {
-        if (webhookEndpoints.markVerified(tenantId, endpointId) != 1) throw new IllegalArgumentException("endpoint not found");
-    }
-
-    /** 更新 Webhook 状态。 */
-    public void setWebhookStatus(UUID tenantId, UUID endpointId, String status) {
-        webhookEndpoints.updateStatus(tenantId, endpointId, status);
-    }
-
-    /** 查询 Webhook 投递记录。 */
-    public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId, String status,
-                                                           int limit, int offset) {
-        return webhookDeliveries.list(tenantId, endpointId, status, limit, offset);
-    }
-
-    /** 领取 Webhook 投递任务并组合事件和端点数据。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public List<WebhookDeliveryTask> claimWebhookDeliveries(String workerId, int limit) {
-        List<WebhookDeliveryTask> result = new ArrayList<>();
-        for (Map<String, Object> row : webhookDeliveries.claim(workerId, limit)) {
-            UUID tenantId = uuid(row.get("tenant_id"));
-            UUID endpointId = uuid(row.get("endpoint_id"));
-            UUID eventId = uuid(row.get("event_id"));
-            if ("RECOVERY".equals(text(row.get("next_attempt_trigger")))) {
-                webhookAttempts.recoverStale(tenantId, uuid(row.get("id")));
-            }
-            WebhookEndpointRecord endpoint = requireWebhookEndpoint(tenantId, endpointId);
-            Map<String, Object> event = events.find(tenantId, eventId).orElse(null);
-            if (event == null) continue;
-            int attemptNumber = number(row.get("attempt_count"));
-            UUID attemptId = UUID.randomUUID();
-            webhookAttempts.insert(attemptId, tenantId, uuid(row.get("id")), attemptNumber,
-                    number(row.get("manual_retry_count")), text(row.get("next_attempt_trigger")), workerId);
-            result.add(new WebhookDeliveryTask(uuid(row.get("id")), tenantId, endpointId, eventId,
-                    attemptNumber, number(row.get("total_attempt_count")), number(row.get("manual_retry_count")),
-                    text(row.get("next_attempt_trigger")), attemptId, workerId, endpoint.url(),
-                    endpoint.secretCiphertext(), text(event.get("event_type")), text(event.get("payload"))));
-        }
-        return result;
-    }
-
-    /** 标记 Webhook 投递成功。 */
-    public void markWebhookDelivered(WebhookDeliveryTask task, int httpStatus, String response,
-                                     long durationMs) {
-        webhookDeliveries.delivered(task.tenantId(), task.id(), task.workerId(), httpStatus, response);
-        webhookAttempts.delivered(task.tenantId(), task.attemptId(), task.workerId(),
-                httpStatus, response, durationMs);
-        webhookEndpoints.touchDelivery(task.tenantId(), task.endpointId());
-    }
-
-    /** 标记 Webhook 投递失败。 */
-    public void markWebhookFailed(WebhookDeliveryTask task, Integer httpStatus, String error,
-                                  String response, Instant nextAttempt, boolean terminal, long durationMs) {
-        webhookDeliveries.failed(task.tenantId(), task.id(), task.workerId(), httpStatus, error, response,
-                terminal, nextAttempt == null ? null : java.sql.Timestamp.from(nextAttempt));
-        webhookAttempts.failed(task.tenantId(), task.attemptId(), task.workerId(), httpStatus, error, response,
-                terminal, nextAttempt == null ? null : java.sql.Timestamp.from(nextAttempt), durationMs);
-    }
-
-    /** 手动重试 Webhook 投递。 */
-    public void retryWebhookDelivery(UUID tenantId, UUID deliveryId) {
-        if (webhookDeliveries.retry(tenantId, deliveryId) != 1) throw new IllegalStateException("webhook delivery not retryable");
-    }
-
-    /** 批量重试 Webhook 投递。 */
-    public int retryFailedWebhookDeliveries(UUID tenantId, UUID endpointId) {
-        return webhookDeliveries.retryFailed(tenantId, endpointId);
-    }
-
-    /** 查询 Webhook 投递尝试。 */
-    public List<Map<String, Object>> listWebhookDeliveryAttempts(UUID tenantId, UUID deliveryId,
-                                                                  int limit, int offset) {
-        return webhookAttempts.list(tenantId, deliveryId, limit, offset);
-    }
-
     /** 创建托管提现记录。 */
     public void insertCustodyWithdrawal(UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
                                         String externalReference, String idempotencyKey, String chain,
@@ -742,31 +624,28 @@ public class CustodyRepository {
     @Transactional(rollbackFor = Throwable.class)
     public boolean applyWithdrawalStatusChange(WithdrawalStatusChange change, UUID eventId,
                                                String eventType, String payloadJson) {
-        if (!change.previousStatus().equals(change.nextStatus())) {
-            withdrawalOrders.updateStatus(change.tenantId(), change.chain(), change.orderNo(), change.nextStatus(),
-                    null, change.txHash(), change.errorMessage());
-            custodyWithdrawals.updateStatus(change.tenantId(), change.id(), change.nextStatus());
-        }
+        if (change.previousStatus().equals(change.nextStatus())
+                || custodyWithdrawals.transitionStatus(change.tenantId(), change.id(),
+                        change.previousStatus(), change.nextStatus()) != 1) return false;
         if ("CONFIRMED".equals(change.nextStatus())) {
-            // The chain workflow settles the frozen customer balance when it marks the
-            // withdrawal CONFIRMED. This reconciliation is only a custody projection;
-            // applying the principal debit here would settle the same lock twice.
-            findGasUsage(change.id()).ifPresent(usage -> {
+            // Record the debit already settled by the chain workflow; never settle its lock again.
+            ledgerEntries.insertIfAbsent(UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
+                    change.chain(), change.assetSymbol(), change.debitAccountId(), "WITHDRAWAL", "DEBIT",
+                    change.amount().add(change.fee()), "WITHDRAWAL", change.id().toString());
+            findGasUsage(change.tenantId(), "WITHDRAWAL", change.id()).ifPresent(usage -> {
                 GasPricingMetadata metadata = gasPricingMetadata(change.chain(), change.assetSymbol());
                 NetworkFee networkFee = confirmedNetworkFee(change.chain(), change.orderNo(), change.txHash(),
                                 metadata.decimals())
                         .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
-                GasAccountRecord gasAccount = requireGasAccount(change.tenantId(), usage.gasAccountId());
-                ledgerEntries.insertIfAbsent(UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
-                        change.chain(), change.assetSymbol(), gasAccount.accountId(), "NETWORK_FEE", "DEBIT",
-                        networkFee.amount(), "WITHDRAWAL", change.orderNo());
-                settleGasUsage(change.id(), networkFee.amount(), networkFee.pricingSource(), change.txHash());
+                settleGasUsage(change.tenantId(), "WITHDRAWAL", change.id(),
+                        networkFee.amount(), networkFee.pricingSource(), change.txHash());
             });
         } else if (Set.of("FAILED", "REJECTED", "CANCELLED").contains(change.nextStatus())) {
             // Failure handlers release the customer lock as part of the chain state
             // transition. Releasing it again here can strand status reconciliation and
             // repeatedly fail after the balance has already been returned.
-            findGasUsage(change.id()).ifPresent(usage -> releaseGasUsage(change.id(),
+            findGasUsage(change.tenantId(), "WITHDRAWAL", change.id()).ifPresent(usage -> releaseGasUsage(
+                    change.tenantId(), "WITHDRAWAL", change.id(),
                     "withdrawal ended as " + change.nextStatus()));
         }
         if (eventType != null) eventService.publish(eventId, change.tenantId(), eventType,
@@ -793,7 +672,6 @@ public class CustodyRepository {
     /** 统计平台审计日志。 */
     public long countPlatformAudit() { return audits.countPlatform(); }
 
-
     /** 校验 Gas 操作归属租户和链。 */
     private void requireGasOperation(UUID tenantId, String operationType, UUID operationId, String chain) {
         String type = operationType == null ? "" : operationType.trim().toUpperCase(Locale.ROOT);
@@ -808,7 +686,6 @@ public class CustodyRepository {
         };
         if (!valid) throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
     }
-
 
     /** 将数据库 Gas 字段和账本余额转换为模型。 */
     private GasAccountRecord mapGas(UUID tenantId, Map<String, Object> row) {
@@ -835,14 +712,6 @@ public class CustodyRepository {
                 (BigDecimal) row.get("actual_amount"), text(row.get("status")), text(row.get("pricing_source")),
                 text(row.get("tx_hash")), text(row.get("error_message")), instant(row.get("created_at")),
                 instant(row.get("updated_at")), instant(row.get("settled_at")));
-    }
-
-    /** 将数据库 Webhook 字段转换为模型。 */
-    private static WebhookEndpointRecord mapWebhookEndpoint(Map<String, Object> row) {
-        return new WebhookEndpointRecord(uuid(row.get("id")), uuid(row.get("tenant_id")), text(row.get("name")),
-                text(row.get("url")), text(row.get("secret_ciphertext")), text(row.get("status")),
-                text(row.get("verification_token_hash")), instant(row.get("verified_at")), instant(row.get("last_delivery_at")),
-                instant(row.get("created_at")), instant(row.get("updated_at")));
     }
 
     /** 读取文本字段。 */

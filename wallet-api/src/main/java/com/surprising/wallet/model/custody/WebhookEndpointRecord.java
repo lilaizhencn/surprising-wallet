@@ -13,7 +13,6 @@ public record WebhookEndpointRecord(
         String url,
         String secretCiphertext,
         String status,
-        String verificationTokenHash,
         Instant verifiedAt,
         Instant lastDeliveryAt,
         Instant createdAt,

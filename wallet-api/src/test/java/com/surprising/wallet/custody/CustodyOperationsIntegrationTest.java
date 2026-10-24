@@ -48,6 +48,7 @@ class CustodyOperationsIntegrationTest {
      * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
     private JdbcTemplate jdbc;
+    private com.surprising.wallet.service.CustodyWebhookService webhookLifecycle;
     private com.surprising.wallet.service.CustodyTransactionQueryService history;
     /**
      * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
@@ -63,6 +64,7 @@ class CustodyOperationsIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         CustodyIntegrationDatabase.reset(dataSource);
+        webhookLifecycle = com.surprising.wallet.testutil.CustodyTestSupport.webhooks(jdbc);
         history = new com.surprising.wallet.service.CustodyTransactionQueryService(
                 new com.surprising.wallet.repository.CustodyDepositRepository(jdbc),
                 new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc),
@@ -130,23 +132,23 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, ?)
                     """, deliveryId, tenantId, endpointId, eventId);
 
-            var automatic = repository.claimWebhookDeliveries("qa-worker", 1).getFirst();
+            var automatic = webhookLifecycle.claimWebhookDeliveries("qa-worker", 1).getFirst();
             assertEquals("AUTOMATIC", automatic.attemptTrigger());
-            repository.markWebhookFailed(
+            webhookLifecycle.markWebhookFailed(
                     automatic, 503, "unavailable", "", Instant.now().plusSeconds(60),
                     false, 25L);
-            repository.retryWebhookDelivery(tenantId, deliveryId);
-            var manual = repository.claimWebhookDeliveries("qa-worker", 1).getFirst();
+            new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc).retry(tenantId, deliveryId);
+            var manual = webhookLifecycle.claimWebhookDeliveries("qa-worker", 1).getFirst();
             assertEquals("MANUAL", manual.attemptTrigger());
-            repository.markWebhookDelivered(manual, 204, "", 12L);
+            webhookLifecycle.markWebhookDelivered(manual, 204, "", 12L);
 
-            List<Map<String, Object>> attempts =
-                    repository.listWebhookDeliveryAttempts(tenantId, deliveryId, 10, 0);
+            var attempts =
+                    new com.surprising.wallet.repository.CustodyWebhookDeliveryAttemptRepository(jdbc).list(tenantId, deliveryId, 10, 0);
             assertEquals(2, attempts.size());
-            assertEquals("MANUAL", attempts.getFirst().get("trigger"));
-            assertEquals("DELIVERED", attempts.getFirst().get("status"));
-            assertEquals("AUTOMATIC", attempts.get(1).get("trigger"));
-            assertEquals("RETRY_SCHEDULED", attempts.get(1).get("status"));
+            assertEquals("MANUAL", attempts.getFirst().trigger());
+            assertEquals("DELIVERED", attempts.getFirst().status());
+            assertEquals("AUTOMATIC", attempts.get(1).trigger());
+            assertEquals("RETRY_SCHEDULED", attempts.get(1).status());
             status.setRollbackOnly();
         });
     }
@@ -166,13 +168,13 @@ class CustodyOperationsIntegrationTest {
             insertWebhookDelivery(tenantId, endpointId, "DELIVERED");
             insertWebhookDelivery(tenantId, otherEndpointId, "FAILED");
 
-            List<Map<String, Object>> failed = repository.listWebhookDeliveries(
+            var failed = new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc).list(
                     tenantId, endpointId, "FAILED", 20, 0);
             assertEquals(1, failed.size());
-            assertEquals("FAILED", failed.getFirst().get("status"));
-            assertEquals(4, repository.listWebhookDeliveries(tenantId, null, null, 20, 0).size());
+            assertEquals("FAILED", failed.getFirst().status());
+            assertEquals(4, new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc).list(tenantId, null, null, 20, 0).size());
 
-            assertEquals(2, repository.retryFailedWebhookDeliveries(tenantId, endpointId));
+            assertEquals(2, new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc).retryFailed(tenantId, endpointId));
             assertEquals(2, jdbc.queryForObject("""
                     select count(*) from custody_webhook_delivery
                      where tenant_id = ? and endpoint_id = ? and status = 'RETRY'
@@ -221,16 +223,16 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, ?)
                     """, deliveryId, tenantId, endpointId, eventId);
 
-            var stale = repository.claimWebhookDeliveries("worker-one", 1).getFirst();
+            var stale = webhookLifecycle.claimWebhookDeliveries("worker-one", 1).getFirst();
             jdbc.update("""
                     update custody_webhook_delivery
                        set locked_at = now() - interval '6 minutes'
                      where id = ?
                     """, deliveryId);
-            var recovered = repository.claimWebhookDeliveries("worker-two", 1).getFirst();
+            var recovered = webhookLifecycle.claimWebhookDeliveries("worker-two", 1).getFirst();
             assertEquals("RECOVERY", recovered.attemptTrigger());
 
-            repository.markWebhookDelivered(stale, 200, "late success", 360_000L);
+            webhookLifecycle.markWebhookDelivered(stale, 200, "late success", 360_000L);
             assertEquals("DELIVERING", jdbc.queryForObject("""
                     select status from custody_webhook_delivery where id = ?
                     """, String.class, deliveryId));
@@ -238,17 +240,17 @@ class CustodyOperationsIntegrationTest {
                     select locked_by from custody_webhook_delivery where id = ?
                     """, String.class, deliveryId));
 
-            repository.markWebhookDelivered(recovered, 204, "", 20L);
+            webhookLifecycle.markWebhookDelivered(recovered, 204, "", 20L);
             assertEquals("DELIVERED", jdbc.queryForObject("""
                     select status from custody_webhook_delivery where id = ?
                     """, String.class, deliveryId));
-            List<Map<String, Object>> attempts =
-                    repository.listWebhookDeliveryAttempts(tenantId, deliveryId, 10, 0);
+            var attempts =
+                    new com.surprising.wallet.repository.CustodyWebhookDeliveryAttemptRepository(jdbc).list(tenantId, deliveryId, 10, 0);
             assertEquals(2, attempts.size());
-            assertEquals("RECOVERY", attempts.getFirst().get("trigger"));
-            assertEquals("DELIVERED", attempts.getFirst().get("status"));
-            assertEquals("AUTOMATIC", attempts.get(1).get("trigger"));
-            assertEquals("FAILED", attempts.get(1).get("status"));
+            assertEquals("RECOVERY", attempts.getFirst().trigger());
+            assertEquals("DELIVERED", attempts.getFirst().status());
+            assertEquals("AUTOMATIC", attempts.get(1).trigger());
+            assertEquals("FAILED", attempts.get(1).status());
             status.setRollbackOnly();
         });
     }
@@ -519,7 +521,7 @@ class CustodyOperationsIntegrationTest {
                     insert into ledger_balance(
                         tenant_id, chain, asset_symbol, account_id,
                         available_balance, locked_balance, total_balance)
-                    values (?, 'ETH', 'USDT', ?, 0, 0.25, 0.25)
+                    values (?, 'ETH', 'USDT', ?, 0.75, 0, 0.75)
                     """, tenantId, customerAccountId);
             String orderNo = "CW-QA-" + UUID.randomUUID().toString().substring(0, 8);
             String txHash = "0x" + UUID.randomUUID().toString().replace("-", "");
@@ -570,6 +572,14 @@ class CustodyOperationsIntegrationTest {
                     select account_id from custody_ledger_entry
                      where tenant_id = ? and entry_type = 'NETWORK_FEE'
                     """, String.class, tenantId));
+            assertEquals("ETH", jdbc.queryForObject("""
+                    select asset_symbol from custody_ledger_entry
+                     where tenant_id = ? and entry_type = 'NETWORK_FEE'
+                    """, String.class, tenantId));
+            assertEquals(addressId, jdbc.queryForObject("""
+                    select custody_address_id from custody_ledger_entry
+                     where tenant_id = ? and entry_type = 'NETWORK_FEE'
+                    """, UUID.class, tenantId));
             status.setRollbackOnly();
         });
     }
@@ -759,7 +769,7 @@ class CustodyOperationsIntegrationTest {
                     repository.tenantOperationsSummary(tenantId);
             assertEquals(1L, statistics.get("userCount"));
             assertEquals(1L, statistics.get("activeSessionCount"));
-            assertTrue(repository.listWebhookDeliveries(tenantId, null, null, 20, 0).isEmpty());
+            assertTrue(new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc).list(tenantId, null, null, 20, 0).isEmpty());
 
             var users = new com.surprising.wallet.repository.CustodyTenantUserRepository(jdbc);
             var administrator = users.listByTenant(tenantId).getFirst();

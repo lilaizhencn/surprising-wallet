@@ -2,7 +2,7 @@
 set -euo pipefail
 
 LOAD_ROOT=$(git rev-parse --show-toplevel)
-source "$LOAD_ROOT/scripts/regtest/local-postgres.sh"
+source "$LOAD_ROOT/resources/scripts/regtest/local-postgres.sh"
 LOAD_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-multichain-load.XXXXXX)
 LOAD_DB="surprising_wallet_test_multichain_load_$$"
 LOAD_USERS=${LOAD_USERS:-1000}
@@ -13,14 +13,14 @@ cleanup() {
   local status=$?
   trap - EXIT INT TERM
   local_pg_drop "$LOAD_DB" >/dev/null 2>&1 || true
-  if [[ "$LOAD_BUILD_ROOT" == /tmp/surprising-wallet-multichain-load.* ]]; then
-    rm -rf "$LOAD_BUILD_ROOT"
+  if [[ "$LOAD_BUILD_ROOT" == /tmp/surprising-wallet-multichain-load.* ]] && [[ -d "$LOAD_BUILD_ROOT" ]]; then
+    trash "$LOAD_BUILD_ROOT"
   fi
   exit "$status"
 }
 trap cleanup EXIT INT TERM
 
-for command in git mvn rsync; do
+for command in git mvn rsync trash; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -38,12 +38,17 @@ rsync -a \
   --exclude=node_modules \
   --exclude=/resources/infra/evm-fork/artifacts \
   --exclude=logs \
+  --exclude=keypairs \
+  --exclude='*.env' \
+  --exclude=.env \
+  --exclude='application-local.*' \
+  --exclude='application-prod.*' \
   "$LOAD_ROOT/" "$LOAD_BUILD_ROOT/"
 
 SW_TEST_CUSTODY_DB_URL="$LOAD_DB_URL" \
 SW_TEST_CUSTODY_DB_USERNAME="$REGTEST_PG_USER" \
 SW_TEST_CUSTODY_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
-mvn -f "$LOAD_BUILD_ROOT/pom.xml" \
+mvn -B -ntp -f "$LOAD_BUILD_ROOT/pom.xml" \
   -pl wallet-api -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=CustodyMultiChainLoadIntegrationTest \

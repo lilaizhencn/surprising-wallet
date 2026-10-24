@@ -88,6 +88,13 @@ class CustodySecurityIntegrationTest {
         context.registerBean(CustodyApiKeyService.class);
         context.registerBean(CustodySecurityService.class);
         context.registerBean(CustodySecurityMaintenanceService.class);
+        context.registerBean(CustodyWebhookEndpointRepository.class);
+        context.registerBean(CustodyWebhookDeliveryRepository.class);
+        context.registerBean(CustodyWebhookDeliveryAttemptRepository.class);
+        context.registerBean(CustodyEventRepository.class);
+        context.registerBean(com.surprising.wallet.gateway.CustodyWebhookHttpClient.class,
+                () -> new com.surprising.wallet.gateway.CustodyWebhookHttpClient(context.getBean(CustodyCryptoService.class), "dev"));
+        context.registerBean(CustodyWebhookService.class);
         context.registerBean(CustodyTenantService.class);
         context.refresh();
         keys = context.getBean(CustodyApiKeyService.class);

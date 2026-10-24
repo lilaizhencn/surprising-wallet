@@ -1,6 +1,8 @@
 package com.surprising.wallet.controller;
 
 import com.surprising.wallet.service.CustodyWebhookService.CreateWebhookCommand;
+import com.surprising.wallet.model.custody.WebhookEndpointView;
+import com.surprising.wallet.model.custody.WebhookDeliveryAttemptView;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -42,7 +44,7 @@ public class CustodyConsoleWebhookController {
      * 查询当前租户 webhook 端点与状态列表。
      */
     @GetMapping("/webhooks")
-    public List<Map<String, Object>> webhooks(HttpServletRequest request) {
+    public List<WebhookEndpointView> webhooks(HttpServletRequest request) {
         return webhooks.list(CustodyRequestSupport.requirePrincipal(request));
     }
 
@@ -60,7 +62,7 @@ public class CustodyConsoleWebhookController {
      * 手工触发单条 webhook 地址校验。
      */
     @PostMapping("/webhooks/{endpointId}/verify")
-    public CustodyWebhookService.WebhookEndpointView verify(
+    public WebhookEndpointView verify(
             @PathVariable UUID endpointId, HttpServletRequest request) {
         return webhooks.verify(CustodyRequestSupport.requirePrincipal(request), endpointId,
                 CustodyRequestSupport.clientIp(request));
@@ -82,7 +84,7 @@ public class CustodyConsoleWebhookController {
      * 分页查询投递记录，支持状态与 endpoint 过滤。
      */
     @GetMapping("/webhook-deliveries")
-    public List<Map<String, Object>> deliveries(
+    public List<CustodyWebhookService.WebhookDeliveryView> deliveries(
             @RequestParam(required = false) UUID endpointId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "50") int limit,
@@ -118,7 +120,7 @@ public class CustodyConsoleWebhookController {
      * 查询单次 webhook 投递尝试历史，支持分页。
      */
     @GetMapping("/webhook-deliveries/{deliveryId}/attempts")
-    public List<Map<String, Object>> attempts(
+    public List<WebhookDeliveryAttemptView> attempts(
             @PathVariable UUID deliveryId,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,

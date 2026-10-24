@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1430" viewBox="0 0 1180 1430">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1740" viewBox="0 0 1180 1740">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -268,4 +268,14 @@
   <text x="40" y="1338" class="small">API → 有效 Key / 租户 → IP → HMAC → nonce 原子占用 → 访问时间；验签失败不占用 nonce</text>
   <text x="40" y="1364" class="small">Key / IP / 管理员解锁 / 租户停用与审计同事务；重复 nonce 不破坏调用方事务</text>
   <text x="40" y="1390" class="small">维护直接清理 nonce / 会话 / 幂等键；列表无秘密；密文版本为唯一来源，移除闲置版本列</text>
+  <rect x="20" y="1440" width="1140" height="160" class="phase-bg"/>
+  <text x="40" y="1466" class="phase-label">Webhook：领取 / 回执先提交 → 事务外 HTTP → 按全局代次条件完成</text>
+  <text x="40" y="1494" class="small">公平领取 UPDATE RETURNING → 递增后计数 → 同租户端点 / 事件批量组合 → 尝试回执同事务</text>
+  <text x="40" y="1520" class="small">工作线程 + 全局代次 → 投递状态 + 尝试回执 + 端点时间原子提交；旧任务不写回</text>
+  <text x="40" y="1546" class="small">自动最多 10 次；手动重试重置本轮计数、保留全局编号；终态无下一次时间</text>
+  <text x="40" y="1572" class="small">验证 HTTP → 条件激活 + 审计短事务；类型查询无密文 / 闲置哈希，创建保存操作者</text>
+  <rect x="20" y="1620" width="1140" height="100" class="phase-bg"/>
+  <text x="40" y="1646" class="phase-label">提现对账：链已确认 → 按租户 / 原状态推进托管投影 → 已扣款事实 / Gas / 事件共同提交</text>
+  <text x="40" y="1672" class="small">WITHDRAWAL / DEBIT = amount + fee，以托管提现 UUID 幂等；客户余额保持链结算后的值</text>
+  <text x="40" y="1698" class="small">过期 / 并发重放无副作用；流水失败回滚投影 / 事件；Gas 费用只由结算路径按原生币写一次</text>
 </svg>
