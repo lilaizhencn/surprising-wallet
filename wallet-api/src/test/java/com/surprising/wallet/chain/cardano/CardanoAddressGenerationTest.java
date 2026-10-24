@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.bloxbean.cardano.client.crypto.KeyGenUtil;
 import com.bloxbean.cardano.client.crypto.SecretKey;
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
@@ -28,8 +29,8 @@ class CardanoAddressGenerationTest {
      */
     @Test
     void derivesStableShelleyEnterpriseAddresses() {
-        CardanoKeyService first = new CardanoKeyService(MASTER_SEED);
-        CardanoKeyService restarted = new CardanoKeyService(MASTER_SEED);
+        CardanoKeyService first = new CardanoKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
+        CardanoKeyService restarted = new CardanoKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         String testnet = first.address(7, 0, 3, false);
         String testnetAgain = restarted.address(7, 0, 3, false);
@@ -47,7 +48,7 @@ class CardanoAddressGenerationTest {
      */
     @Test
     void rejectsCorruptedAddresses() {
-        CardanoKeyService service = new CardanoKeyService(MASTER_SEED);
+        CardanoKeyService service = new CardanoKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         String address = service.address(1, 0, 0, false);
         String corrupted = address.substring(0, address.length() - 1)
                 + (address.endsWith("q") ? "p" : "q");
@@ -78,7 +79,7 @@ class CardanoAddressGenerationTest {
      */
     @Test
     void signingKeyMatchesAddressPublicKey() throws Exception {
-        CardanoKeyService service = new CardanoKeyService(MASTER_SEED);
+        CardanoKeyService service = new CardanoKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         Ed25519DerivedKey derived = service.derive(1, 0, 2);
         byte[] signerPublicKey = KeyGenUtil.getPublicKeyFromPrivateKey(
                 SecretKey.create(derived.privateSeed())).getBytes();
@@ -93,7 +94,7 @@ class CardanoAddressGenerationTest {
      */
     @Test
     void keepsDevnetActorAddressesStable() {
-        CardanoKeyService service = new CardanoKeyService(MASTER_SEED);
+        CardanoKeyService service = new CardanoKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         assertEquals("addr_test1vr6g5egw5ceyghrer7ms737v7tmngmnl50ttd2rmdv7n98qtx4x08",
                 service.address(0, 0, 0, false));

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import com.surprising.wallet.testutil.RuntimeTestSupport;
@@ -57,7 +58,7 @@ class TonLocalFundingIntegrationTest {
                         .authType("api_key")
                         .authHeaderName("X-API-Key")
                         .apiKey("").build()));
-        TonKeyService keys = new TonKeyService(masterSeed);
+        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(masterSeed));
         TonTransactionService transactions = new TonTransactionService(
                 rpc,
                 keys,

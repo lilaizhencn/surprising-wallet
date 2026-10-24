@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
@@ -22,7 +23,7 @@ class SuiSigningTest {
      */
     @Test
     void buildsSuiSerializedSignatureFromTxBytes() {
-        SuiKeyService keys = new SuiKeyService(MASTER_SEED);
+        SuiKeyService keys = new SuiKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
         String txBytes = Base64.getEncoder().encodeToString(new byte[]{1, 2, 3, 4, 5});
 
@@ -37,7 +38,7 @@ class SuiSigningTest {
      */
     @Test
     void signaturesCommitToTransactionBytes() {
-        SuiKeyService keys = new SuiKeyService(MASTER_SEED);
+        SuiKeyService keys = new SuiKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
 
         String first = signer.signTransactionBytes(3, Base64.getEncoder().encodeToString(new byte[]{1}));

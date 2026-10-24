@@ -24,8 +24,7 @@ import java.util.Optional;
  *
  * <p>封装了 XRPL 的常用 API（server_info、account_info、account_tx、submit 等），
  * 支持节点故障转移（{@link ChainRpcNodeService#withFailover}）。
- * 生产环境通过 {@link ChainProfileRepository} 获取节点配置，
- * 测试环境可通过构造函数直接指定固定 RPC URL。
+ * 通过 {@link ChainProfileRepository} 获取网络，再由节点服务选择配置的 RPC。
  *
  * <p>关键数据类型：
  * <ul>

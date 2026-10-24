@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,8 @@ class TonAddressGenerationTest {
      */
     @Test
     void derivesStableWalletV4R2TestnetAddressesFromUnifiedEd25519Tree() {
-        TonKeyService first = new TonKeyService(MASTER_SEED);
-        TonKeyService restarted = new TonKeyService(MASTER_SEED);
+        TonKeyService first = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
+        TonKeyService restarted = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         String user0 = friendly(first, 0);
         String user1 = friendly(first, 1);

@@ -63,6 +63,35 @@ public class AccountChainDepositWorkflow {
     private final TronClientFactory tronClientFactory;
     private final TronDepositScanner tronDepositScanner;
 
+    /** 各链独立节流；全局扫描关闭时清空，使恢复后下一轮即可执行。 */
+    private final java.util.concurrent.ConcurrentMap<String, Long> nextDepositScanAtMillis =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Monero 由独立串行任务扫描，这里只执行其余已到期的账户链。 */
+    public void scanDueDeposits() {
+        if (!runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_SCAN)) {
+            nextDepositScanAtMillis.clear();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (AccountChainProfile profile : runtimeConfigService.enabledAccountProfiles()) {
+            String chain = profile.getChain();
+            if ("XMR".equalsIgnoreCase(chain)) {
+                continue;
+            }
+            if (!Boolean.TRUE.equals(profile.getScanEnabled())) {
+                nextDepositScanAtMillis.remove(chain);
+                continue;
+            }
+            if (now < nextDepositScanAtMillis.getOrDefault(chain, 0L)) {
+                continue;
+            }
+            scan(profile);
+            nextDepositScanAtMillis.put(
+                    chain, System.currentTimeMillis() + runtimeConfigService.scanIntervalMillis(chain));
+        }
+    }
+
     /**
      * 扫描单条已启用账户链；链级开关关闭时不执行。
      */

@@ -103,7 +103,7 @@ class TronLiveFullFlowIntegrationTest {
         int userBase = Integer.getInteger("tron.live.userBase",
                 93000 + (int) (System.currentTimeMillis() % 30000));
 
-        try (TronTridentClient client = new TronTridentClient(fullNode, solidityNode, apiKey)) {
+        try (TronTridentClient client = TronTestClientSupport.create(fullNode, solidityNode, apiKey)) {
             Bip32Node sig2Root = keyMaterial.sig2Root();
             Actor source = actorFromPrivateKey("source", 91001, sourcePrivateKey);
             Actor userA = actor(sig2Root, "userA", userBase);

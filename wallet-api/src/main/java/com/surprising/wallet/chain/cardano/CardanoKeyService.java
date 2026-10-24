@@ -2,11 +2,9 @@ package com.surprising.wallet.chain.cardano;
 
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.bitcoinj.base.Bech32;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,8 +15,7 @@ import org.springframework.stereotype.Component;
  * 最后用 Bech32 编码为 addr1...（主网）或 addr_test1...（测试网）地址。</p>
  */
 @Component
-public
-class CardanoKeyService {
+public class CardanoKeyService {
 
     /** Payment Key Hash 长度：28 字节 */
     private static final int PAYMENT_KEY_HASH_LENGTH = 28;
@@ -29,29 +26,20 @@ class CardanoKeyService {
     /** 生产环境密钥材料 */
     private final WalletKeyMaterialProvider keyMaterial;
 
-    /** 测试环境密钥提供者 */
-    private final Ed25519KeyProvider testProvider;
-
-    @Autowired
     public CardanoKeyService(WalletKeyMaterialProvider keyMaterial) {
-        this.keyMaterial = keyMaterial;
-        this.testProvider = null;
-    }
-    public CardanoKeyService(String encodedMasterSeed) {
-        this.keyMaterial = null;
-        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
+        this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
     public boolean isConfigured() {
-        return testProvider != null || keyMaterial.isConfigured();
+        return keyMaterial.isConfigured();
     }
     public Ed25519DerivedKey derive(long derivationIndex) {
-        return provider().derive(Ed25519Chain.CARDANO, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.CARDANO, derivationIndex);
     }
     public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
-        return provider().derive(Ed25519Chain.CARDANO, biz, userId, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.CARDANO, biz, userId, derivationIndex);
     }
     public String address(long userId, int biz, long derivationIndex, boolean mainnet) {
         return enterpriseAddress(derive(userId, biz, derivationIndex).publicKey(), mainnet);
@@ -92,8 +80,5 @@ class CardanoKeyService {
         byte[] hash = new byte[PAYMENT_KEY_HASH_LENGTH];
         digest.doFinal(hash, 0);
         return hash;
-    }
-    private Ed25519KeyProvider provider() {
-        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }

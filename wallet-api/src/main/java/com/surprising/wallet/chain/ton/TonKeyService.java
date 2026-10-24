@@ -5,7 +5,6 @@ import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.ton.ton4j.smartcontract.wallet.v4.WalletV4R2;
 import org.ton.ton4j.utils.Utils;
@@ -24,8 +23,7 @@ import org.ton.ton4j.utils.Utils;
  * @see WalletV4R2
  */
 @Component
-public
-class TonKeyService {
+public class TonKeyService {
 
     /**
      * Wallet V4R2 标准子钱包 ID。
@@ -38,28 +36,13 @@ class TonKeyService {
     /** 主密钥材料提供者（生产环境） */
     private final WalletKeyMaterialProvider keyMaterial;
 
-    /** 测试环境密钥提供者（非 null 时优先使用） */
-    private final Ed25519KeyProvider testProvider;
-
     /**
      * 生产环境构造函数。
      *
      * @param keyMaterial 主密钥材料提供者
      */
-    @Autowired
     public TonKeyService(WalletKeyMaterialProvider keyMaterial) {
-        this.keyMaterial = keyMaterial;
-        this.testProvider = null;
-    }
-
-    /**
-     * 测试环境构造函数（使用编码的 master seed）。
-     *
-     * @param encodedMasterSeed 编码后的主种子
-     */
-    public TonKeyService(String encodedMasterSeed) {
-        this.keyMaterial = null;
-        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
+        this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
 
     /**
@@ -69,7 +52,7 @@ class TonKeyService {
      * @return 派生密钥
      */
     public Ed25519DerivedKey derive(long derivationIndex) {
-        return provider().derive(Ed25519Chain.TON, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.TON, derivationIndex);
     }
     /**
      * 派生多级索引的 Ed25519 密钥（userId=0, biz=0 回退到单索引）。
@@ -83,7 +66,7 @@ class TonKeyService {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
-        return provider().derive(Ed25519Chain.TON, biz, userId, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.TON, biz, userId, derivationIndex);
     }
     public TweetNaclFast.Signature.KeyPair keyPair(long derivationIndex) {
         return Utils.generateSignatureKeyPairFromSeed(derive(derivationIndex).privateSeed());
@@ -104,8 +87,5 @@ class TonKeyService {
                 .walletId(WALLET_V4R2_SUBWALLET_ID)
                 .wc(0)
                 .build();
-    }
-    private Ed25519KeyProvider provider() {
-        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }

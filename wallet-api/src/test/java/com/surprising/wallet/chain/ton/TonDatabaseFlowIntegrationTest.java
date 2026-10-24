@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
@@ -61,7 +62,7 @@ class TonDatabaseFlowIntegrationTest {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-            TonKeyService keys = new TonKeyService(MASTER_SEED);
+            TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
             TonAddressService addresses = new TonAddressService(keys, repository.chainAddressRepository, repository.chainProfileRepository);
             UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);
             long baseIndex = 900_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
@@ -69,7 +70,7 @@ class TonDatabaseFlowIntegrationTest {
             ChainAddressRecord userA = addresses.createNativeAddress(
                     tenantId, 3001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new TonAddressService(
-                    new TonKeyService(MASTER_SEED), repository.chainAddressRepository, repository.chainProfileRepository)
+                    new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED)), repository.chainAddressRepository, repository.chainProfileRepository)
                     .createNativeAddress(tenantId, 3001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userB = addresses.createNativeAddress(
                     tenantId, 3002, 0, baseIndex + 1, "DEPOSIT");

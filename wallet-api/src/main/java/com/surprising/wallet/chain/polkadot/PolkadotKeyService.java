@@ -2,11 +2,9 @@ package com.surprising.wallet.chain.polkadot;
 
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.bitcoinj.base.Base58;
 import org.bouncycastle.jcajce.provider.digest.Blake2b;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -21,8 +19,7 @@ import java.util.Arrays;
  * <p>支持 0-16383 范围内的 SS58 前缀值（如 Polkadot 主网为 0，测试网通用为 42）。</p>
  */
 @Component
-public
-class PolkadotKeyService {
+public class PolkadotKeyService {
 
     /** SS58 校验和计算前缀 */
     private static final byte[] SS58_PREFIX = "SS58PRE".getBytes(StandardCharsets.US_ASCII);
@@ -30,38 +27,29 @@ class PolkadotKeyService {
     /** 生产环境密钥材料 */
     private final WalletKeyMaterialProvider keyMaterial;
 
-    /** 测试环境密钥提供者 */
-    private final Ed25519KeyProvider testProvider;
-
-    @Autowired
     public PolkadotKeyService(WalletKeyMaterialProvider keyMaterial) {
-        this.keyMaterial = keyMaterial;
-        this.testProvider = null;
-    }
-    public PolkadotKeyService(String encodedMasterSeed) {
-        this.keyMaterial = null;
-        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
+        this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
     public boolean isConfigured() {
-        return testProvider != null || keyMaterial.isConfigured();
+        return keyMaterial.isConfigured();
     }
     public Ed25519DerivedKey derive(long derivationIndex) {
-        return provider().derive(Ed25519Chain.POLKADOT, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.POLKADOT, derivationIndex);
     }
     public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
-        return provider().derive(Ed25519Chain.POLKADOT, biz, userId, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.POLKADOT, biz, userId, derivationIndex);
     }
     public String address(long userId, int biz, long derivationIndex, int ss58Prefix) {
         return ss58Address(derive(userId, biz, derivationIndex).publicKey(), ss58Prefix);
     }
     public byte[] sign(long userId, int biz, long derivationIndex, byte[] message) {
         if (userId == 0 && biz == 0) {
-            return provider().sign(Ed25519Chain.POLKADOT, derivationIndex, message);
+            return keyMaterial.ed25519().sign(Ed25519Chain.POLKADOT, derivationIndex, message);
         }
-        return provider().sign(Ed25519Chain.POLKADOT, biz, userId, derivationIndex, message);
+        return keyMaterial.ed25519().sign(Ed25519Chain.POLKADOT, biz, userId, derivationIndex, message);
     }
     public static String ss58Address(byte[] publicKey, int ss58Prefix) {
         if (publicKey == null || publicKey.length != 32) {
@@ -123,8 +111,5 @@ class PolkadotKeyService {
         int first = ((ss58Prefix & 0x00FC) >> 2) | 0x40;
         int second = (ss58Prefix >> 8) | ((ss58Prefix & 0x0003) << 6);
         return new byte[]{(byte) first, (byte) second};
-    }
-    private Ed25519KeyProvider provider() {
-        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }

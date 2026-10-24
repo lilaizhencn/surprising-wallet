@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,7 @@ class AptosSigningTest {
      */
     @Test
     void buildsSignedNativeTransferJsonFromBcsRawTransaction() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
         String sender = keys.address(7);
         String recipient = keys.address(8);
@@ -46,7 +47,7 @@ class AptosSigningTest {
      */
     @Test
     void buildsFungibleAssetTransferWithMetadataObject() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
         String sender = keys.address(12);
         String metadata = keys.address(13);

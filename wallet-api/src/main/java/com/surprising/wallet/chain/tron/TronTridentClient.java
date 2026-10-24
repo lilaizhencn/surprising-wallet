@@ -12,9 +12,7 @@ import org.tron.trident.proto.Response;
 
 import java.util.List;
 
-/**
- * 负责调用外部节点或基础设施服务，并统一处理通信结果。
- */
+/** TRON 节点客户端；此处封装的 RPC 调用经过配置节点的统一限流。 */
 public class TronTridentClient implements AutoCloseable {
     private final ApiWrapper apiWrapper;
     private final ChainRpcNode fullNode;
@@ -24,30 +22,16 @@ public class TronTridentClient implements AutoCloseable {
      * 保存 {@code apiKey}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
      */
     private final String apiKey;
-    public TronTridentClient(String fullNode, String solidityNode, String apiKey) {
-        this.apiKey = apiKey == null ? "" : apiKey;
-        this.apiWrapper = new ApiWrapper(fullNode, solidityNode, "", this.apiKey);
-        this.fullNode = ChainRpcNode.builder()
-                .nodeLabel("tron-full-node")
-                .rpcUrl(fullNode)
-                .build();
-        this.solidityNode = ChainRpcNode.builder()
-                .nodeLabel("tron-solidity-node")
-                .rpcUrl(solidityNode)
-                .build();
-        this.rpcNodeService = null;
-    }
-
     public TronTridentClient(
             ChainRpcNode fullNode,
             ChainRpcNode solidityNode,
             ChainRpcNodeService rpcNodeService) {
+        this.fullNode = java.util.Objects.requireNonNull(fullNode, "fullNode");
+        this.solidityNode = java.util.Objects.requireNonNull(solidityNode, "solidityNode");
+        this.rpcNodeService = java.util.Objects.requireNonNull(rpcNodeService, "rpcNodeService");
         this.apiKey = firstNonBlank(fullNode.getApiKey(), solidityNode.getApiKey());
         this.apiWrapper = new ApiWrapper(fullNode.getRpcUrl(), solidityNode.getRpcUrl(),
                 "", this.apiKey == null ? "" : this.apiKey);
-        this.fullNode = fullNode;
-        this.solidityNode = solidityNode;
-        this.rpcNodeService = rpcNodeService;
     }
     public ApiWrapper api() {
         return apiWrapper;
@@ -115,9 +99,6 @@ public class TronTridentClient implements AutoCloseable {
         apiWrapper.close();
     }
     private <T> T call(ChainRpcNode node, ChainRpcNodeService.ProviderLimitedRequest<T> request) throws Exception {
-        if (rpcNodeService == null) {
-            return request.execute();
-        }
         return rpcNodeService.withProviderLimit(node, request);
     }
     private <T> T callUnchecked(ChainRpcNode node, ChainRpcNodeService.ProviderLimitedRequest<T> request) {

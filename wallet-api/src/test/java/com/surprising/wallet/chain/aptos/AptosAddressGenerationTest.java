@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,8 @@ class AptosAddressGenerationTest {
      */
     @Test
     void derivesStableAptosAddressesFromUnifiedEd25519Tree() {
-        AptosKeyService first = new AptosKeyService(MASTER_SEED);
-        AptosKeyService restarted = new AptosKeyService(MASTER_SEED);
+        AptosKeyService first = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
+        AptosKeyService restarted = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         String user0 = first.address(0);
         String user1 = first.address(1);

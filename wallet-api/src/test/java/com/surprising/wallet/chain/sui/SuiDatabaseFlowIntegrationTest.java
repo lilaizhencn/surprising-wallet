@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -35,7 +36,7 @@ class SuiDatabaseFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         UUID tenantId = SuiTenantIntegrationFixture.ensureTenant(jdbc);
         ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-        SuiKeyService keys = new SuiKeyService("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+        SuiKeyService keys = new SuiKeyService(WalletKeyTestFixture.provider("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"));
         SuiAddressService addresses = new SuiAddressService(keys, repository.chainAddressRepository);
 
         long derivationIndex = 1_410_000L + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 100_000L);

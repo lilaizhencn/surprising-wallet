@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.evm.EvmDepositScanner;
 import com.surprising.wallet.chain.evm.EvmLogScanner;
 import com.surprising.wallet.chain.model.HotWalletRules;
@@ -112,7 +113,7 @@ class CodexLiveUserFundingTest {
 
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl(jdbc, "SOLANA", "devnet")));
-        SolanaAddressService addresses = new SolanaAddressService(new SolanaKeyService(seed), repository.chainAddressRepository);
+        SolanaAddressService addresses = new SolanaAddressService(new SolanaKeyService(WalletKeyTestFixture.provider(seed)), repository.chainAddressRepository);
         SolanaDepositScanner solanaScanner = new SolanaDepositScanner(
                 rpc,
                 repository.chainAddressRepository,
@@ -218,7 +219,7 @@ class CodexLiveUserFundingTest {
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         String rpcUrl = rpcUrl(jdbc, "SOLANA", "devnet");
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl));
-        SolanaKeyService keys = new SolanaKeyService(seed);
+        SolanaKeyService keys = new SolanaKeyService(WalletKeyTestFixture.provider(seed));
         SolanaAddressService addresses = new SolanaAddressService(keys, repository.chainAddressRepository);
         SolanaTransactionService transactions = new SolanaTransactionService(
                 rpc,

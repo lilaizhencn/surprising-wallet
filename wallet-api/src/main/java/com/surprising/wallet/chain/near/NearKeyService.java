@@ -2,10 +2,8 @@ package com.surprising.wallet.chain.near;
 
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.bitcoinj.base.Base58;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.HexFormat;
@@ -19,34 +17,25 @@ import java.util.HexFormat;
  * <p>提供 {@link #isValidAccountId} 方法用于验证命名账户 ID 格式的合法性。</p>
  */
 @Component
-public
-class NearKeyService {
+public class NearKeyService {
 
     /** 生产环境密钥材料 */
     private final WalletKeyMaterialProvider keyMaterial;
 
-    /** 测试环境密钥提供者 */
-    private final Ed25519KeyProvider testProvider;
-    @Autowired
     public NearKeyService(WalletKeyMaterialProvider keyMaterial) {
-        this.keyMaterial = keyMaterial;
-        this.testProvider = null;
-    }
-    public NearKeyService(String encodedMasterSeed) {
-        this.keyMaterial = null;
-        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
+        this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
     public boolean isConfigured() {
-        return testProvider != null || keyMaterial.isConfigured();
+        return keyMaterial.isConfigured();
     }
     public Ed25519DerivedKey derive(long derivationIndex) {
-        return provider().derive(Ed25519Chain.NEAR, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.NEAR, derivationIndex);
     }
     public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
-        return provider().derive(Ed25519Chain.NEAR, biz, userId, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.NEAR, biz, userId, derivationIndex);
     }
     public String address(long userId, int biz, long derivationIndex) {
         return address(derive(userId, biz, derivationIndex).publicKey());
@@ -56,9 +45,9 @@ class NearKeyService {
     }
     public byte[] sign(long userId, int biz, long derivationIndex, byte[] message) {
         if (userId == 0 && biz == 0) {
-            return provider().sign(Ed25519Chain.NEAR, derivationIndex, message);
+            return keyMaterial.ed25519().sign(Ed25519Chain.NEAR, derivationIndex, message);
         }
-        return provider().sign(Ed25519Chain.NEAR, biz, userId, derivationIndex, message);
+        return keyMaterial.ed25519().sign(Ed25519Chain.NEAR, biz, userId, derivationIndex, message);
     }
     public static String address(byte[] publicKey) {
         return HexFormat.of().formatHex(publicKey);
@@ -86,8 +75,5 @@ class NearKeyService {
             }
         }
         return true;
-    }
-    private Ed25519KeyProvider provider() {
-        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }

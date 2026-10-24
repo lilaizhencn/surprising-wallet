@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.aptos.AptosKeyService;
 import com.surprising.wallet.chain.solana.SolanaKeyService;
 import com.surprising.wallet.chain.sui.SuiKeyService;
@@ -211,10 +212,10 @@ class HotWalletAddressServiceTest {
         return new HotWalletAddressService(
                 Mockito.mock(ChainAddressRepository.class),
                 null,
-                new SolanaKeyService(ED25519_SEED),
-                new SuiKeyService(ED25519_SEED),
-                new AptosKeyService(ED25519_SEED),
-                new TonKeyService(ED25519_SEED),
+                new SolanaKeyService(WalletKeyTestFixture.provider(ED25519_SEED)),
+                new SuiKeyService(WalletKeyTestFixture.provider(ED25519_SEED)),
+                new AptosKeyService(WalletKeyTestFixture.provider(ED25519_SEED)),
+                new TonKeyService(WalletKeyTestFixture.provider(ED25519_SEED)),
                 null,
                 null,
                 null,

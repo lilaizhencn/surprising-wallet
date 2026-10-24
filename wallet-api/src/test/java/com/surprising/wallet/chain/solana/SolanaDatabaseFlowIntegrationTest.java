@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
@@ -43,7 +44,7 @@ class SolanaDatabaseFlowIntegrationTest {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-            SolanaKeyService keys = new SolanaKeyService(MASTER_SEED);
+            SolanaKeyService keys = new SolanaKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
             SolanaAddressService addresses = new SolanaAddressService(keys, repository.chainAddressRepository);
             UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);
             long baseIndex = 700_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
@@ -51,7 +52,7 @@ class SolanaDatabaseFlowIntegrationTest {
             ChainAddressRecord userA = addresses.createNativeAddress(
                     tenantId, 1001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new SolanaAddressService(
-                    new SolanaKeyService(MASTER_SEED), repository.chainAddressRepository)
+                    new SolanaKeyService(WalletKeyTestFixture.provider(MASTER_SEED)), repository.chainAddressRepository)
                     .createNativeAddress(tenantId, 1001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userB = addresses.createNativeAddress(
                     tenantId, 1002, 0, baseIndex + 1, "DEPOSIT");

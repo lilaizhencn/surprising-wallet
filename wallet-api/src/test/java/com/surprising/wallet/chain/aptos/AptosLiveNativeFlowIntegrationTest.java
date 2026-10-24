@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
@@ -75,7 +76,7 @@ class AptosLiveNativeFlowIntegrationTest {
                         node("APTOS", env("APTOS_RPC_URL", "https://fullnode.devnet.aptoslabs.com/v1")),
                         "faucet",
                         node("APTOS", env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com")))));
-        AptosKeyService keys = new AptosKeyService(masterSeed);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(masterSeed));
         AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
         AptosTransactionService transactions = new AptosTransactionService(

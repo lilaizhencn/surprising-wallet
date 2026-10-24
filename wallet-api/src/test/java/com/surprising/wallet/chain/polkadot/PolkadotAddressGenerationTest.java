@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.bitcoinj.base.Base58;
@@ -27,8 +28,8 @@ class PolkadotAddressGenerationTest {
      */
     @Test
     void derivesStableSs58AddressesFromUnifiedEd25519Tree() {
-        PolkadotKeyService first = new PolkadotKeyService(MASTER_SEED);
-        PolkadotKeyService restarted = new PolkadotKeyService(MASTER_SEED);
+        PolkadotKeyService first = new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
+        PolkadotKeyService restarted = new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         String user0 = first.address(0, 0, 0, 42);
         String user1 = first.address(1, 0, 0, 42);
@@ -65,7 +66,7 @@ class PolkadotAddressGenerationTest {
      */
     @Test
     void keepsDevnetActorAddressesStable() {
-        PolkadotKeyService service = new PolkadotKeyService(MASTER_SEED);
+        PolkadotKeyService service = new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         assertEquals("5HiW9iboC5iL7eD95tMffYwwtxnunwNP7UaX5tjDWMQHW1xv",
                 service.address(0, 0, 0, 42));

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
@@ -73,7 +74,7 @@ class SuiLiveNativeFlowIntegrationTest {
         SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(),
                 profiles("SUI"),
                 nodes("SUI", env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443")));
-        SuiKeyService keys = new SuiKeyService(masterSeed);
+        SuiKeyService keys = new SuiKeyService(WalletKeyTestFixture.provider(masterSeed));
         SuiAddressService addresses = new SuiAddressService(keys, repository.chainAddressRepository);
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
         SuiTransactionService transactions = new SuiTransactionService(

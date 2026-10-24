@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
@@ -29,7 +30,7 @@ class TonTestnetConnectivityIntegrationTest {
                 "set -Dton.testnet.enabled=true for TON testnet connectivity validation");
 
         String seed = env("SW_ED25519_SEED", FALLBACK_TEST_SEED);
-        TonKeyService keys = new TonKeyService(seed);
+        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(seed));
         String address = keys.wallet(1_100_001L).getAddress().toString(true, true, false, true);
         assertFalse(address.isBlank());
         System.out.println("TON_TESTNET_FUNDING_ADDRESS=" + address);

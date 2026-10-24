@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -44,13 +45,13 @@ class AptosDatabaseFlowIntegrationTest {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-            AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+            AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
             AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
             long baseIndex = 1_200_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
             ChainAddressRecord userA = addresses.createNativeAddress(5001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new AptosAddressService(
-                    new AptosKeyService(MASTER_SEED), repository.chainAddressRepository)
+                    new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED)), repository.chainAddressRepository)
                     .createNativeAddress(5001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userB = addresses.createNativeAddress(5002, 0, baseIndex + 1, "DEPOSIT");
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());

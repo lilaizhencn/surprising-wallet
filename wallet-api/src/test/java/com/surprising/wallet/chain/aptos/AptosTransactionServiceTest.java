@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -33,7 +34,7 @@ class AptosTransactionServiceTest {
      */
     @Test
     void sendsFungibleAssetThroughPrimaryStoreTransfer() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         CapturingRpc rpc = new CapturingRpc();
         String metadata = keys.address(22);
         FakeRepository repository = new FakeRepository(token("APTOS_FA", metadata));
@@ -77,7 +78,7 @@ class AptosTransactionServiceTest {
      */
     @Test
     void recordsNativeSubmissionBeforeReturningHash() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         CapturingRpc rpc = new CapturingRpc();
         FakeRepository repository = new FakeRepository();
         AptosTransactionService service = new AptosTransactionService(
@@ -113,7 +114,7 @@ class AptosTransactionServiceTest {
      */
     @Test
     void rejectsUnknownAptosTokenStandards() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         AptosTransactionService service = new AptosTransactionService(
                 new CapturingRpc(),
                 new AptosTransactionSigner(keys),

@@ -7,6 +7,8 @@ import com.surprising.wallet.repository.WalletSystemConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -68,8 +70,34 @@ public class WalletRuntimeConfigService {
             Map.entry("BCH", 60_000L));
     private static final long DEFAULT_SCAN_INTERVAL_MILLIS = 10_000L;
 
+    /** 账户链调度顺序由扫描、提现和归集共同使用；未知链按名称排在已有顺序之后。 */
+    private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
+            "XMR",
+            "HYPERCORE",
+            "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
+            "LINEA", "SCROLL", "UNICHAIN",
+            "X_LAYER", "ROBINHOOD_CHAIN",
+            "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
+
     private final ChainProfileRepository profiles;
     private final WalletSystemConfigRepository settings;
+
+    /** 实时读取启用的账户链，并保留各业务入口原有的调度顺序。 */
+    public List<AccountChainProfile> enabledAccountProfiles() {
+        return profiles.listProfiles(true).stream()
+                .filter(profile -> !"utxo".equalsIgnoreCase(profile.getFamily()))
+                .filter(profile -> !"bitcoin-like".equalsIgnoreCase(profile.getFamily()))
+                .sorted(Comparator
+                        .comparingInt((AccountChainProfile profile) -> accountChainPriority(profile.getChain()))
+                        .thenComparing(AccountChainProfile::getChain)
+                        .thenComparing(AccountChainProfile::getNetwork))
+                .toList();
+    }
+
+    private int accountChainPriority(String chain) {
+        int index = ACCOUNT_CHAIN_PRIORITY.indexOf(chain);
+        return index < 0 ? ACCOUNT_CHAIN_PRIORITY.size() : index;
+    }
 
     /**
      * 查询指定资产的某任务是否启用。

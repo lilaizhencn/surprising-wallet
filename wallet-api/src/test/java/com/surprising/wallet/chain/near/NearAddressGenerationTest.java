@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,8 @@ class NearAddressGenerationTest {
      */
     @Test
     void derivesStableImplicitAccountsFromUnifiedEd25519Tree() {
-        NearKeyService first = new NearKeyService(MASTER_SEED);
-        NearKeyService restarted = new NearKeyService(MASTER_SEED);
+        NearKeyService first = new NearKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
+        NearKeyService restarted = new NearKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
 
         String user0 = first.address(0, 0, 0);
         String user1 = first.address(1, 0, 0);

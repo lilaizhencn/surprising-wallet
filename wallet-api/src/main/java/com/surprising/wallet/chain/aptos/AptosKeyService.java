@@ -2,9 +2,7 @@ package com.surprising.wallet.chain.aptos;
 
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.security.MessageDigest;
@@ -14,7 +12,7 @@ import java.security.NoSuchAlgorithmException;
  * Aptos 链密钥服务，负责 Ed25519 密钥派生、签名和地址生成。
  *
  * <p>Aptos 地址由公钥的 SHA3-256 哈希加上 Ed25519 scheme 字节（0x00）生成。
- * 支持生产环境密钥（通过 {@link WalletKeyMaterialProvider}）和测试环境密钥（直接使用 master seed）。</p>
+ * 密钥材料统一由 {@link WalletKeyMaterialProvider} 提供。</p>
  *
  * <p>地址生成公式：<code>SHA3-256(publicKey || 0x00)</code></p>
  */
@@ -27,28 +25,13 @@ public class AptosKeyService {
     /** 生产环境密钥材料 */
     private final WalletKeyMaterialProvider keyMaterial;
 
-    /** 测试环境密钥提供者（非 null 时使用） */
-    private final Ed25519KeyProvider testProvider;
-
     /**
      * 生产环境构造器。
      *
      * @param keyMaterial {@link WalletKeyMaterialProvider} 密钥材料提供者
      */
-    @Autowired
     public AptosKeyService(WalletKeyMaterialProvider keyMaterial) {
-        this.keyMaterial = keyMaterial;
-        this.testProvider = null;
-    }
-
-    /**
-     * 测试环境构造器，直接使用编码后的 master seed。
-     *
-     * @param encodedMasterSeed Base64 编码的 master seed
-     */
-    public AptosKeyService(String encodedMasterSeed) {
-        this.keyMaterial = null;
-        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
+        this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
 
     /**
@@ -57,7 +40,7 @@ public class AptosKeyService {
      * @return true 如果已配置可用
      */
     public boolean isConfigured() {
-        return testProvider != null || keyMaterial.isConfigured();
+        return keyMaterial.isConfigured();
     }
 
     /**
@@ -67,7 +50,7 @@ public class AptosKeyService {
      * @return 派生密钥
      */
     public Ed25519DerivedKey derive(long derivationIndex) {
-        return provider().derive(Ed25519Chain.APTOS, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.APTOS, derivationIndex);
     }
 
     /**
@@ -82,7 +65,7 @@ public class AptosKeyService {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
-        return provider().derive(Ed25519Chain.APTOS, biz, userId, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.APTOS, biz, userId, derivationIndex);
     }
 
     /**
@@ -103,7 +86,7 @@ public class AptosKeyService {
      * @return 签名（64 字节）
      */
     public byte[] sign(long derivationIndex, byte[] message) {
-        return provider().sign(Ed25519Chain.APTOS, derivationIndex, message);
+        return keyMaterial.ed25519().sign(Ed25519Chain.APTOS, derivationIndex, message);
     }
 
     /**
@@ -119,7 +102,7 @@ public class AptosKeyService {
         if (userId == 0 && biz == 0) {
             return sign(derivationIndex, message);
         }
-        return provider().sign(Ed25519Chain.APTOS, biz, userId, derivationIndex, message);
+        return keyMaterial.ed25519().sign(Ed25519Chain.APTOS, biz, userId, derivationIndex, message);
     }
 
     /**
@@ -142,12 +125,4 @@ public class AptosKeyService {
         }
     }
 
-    /**
-     * 获取当前可用的密钥提供者（测试环境优先）。
-     *
-     * @return {@link Ed25519KeyProvider}
-     */
-    private Ed25519KeyProvider provider() {
-        return testProvider != null ? testProvider : keyMaterial.ed25519();
-    }
 }

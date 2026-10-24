@@ -6,7 +6,6 @@ import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.p2p.solanaj.core.Account;
 import org.p2p.solanaj.utils.TweetNaclFast;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -18,39 +17,24 @@ import java.util.Arrays;
  * 通过 TweetNaCl 生成签名密钥对，封装为 solanaj 的 {@link org.p2p.solanaj.core.Account}。</p>
  *
  * <p>地址为 Ed25519 公钥的 Base58 编码，与 Solana CLI（solana-keygen）兼容。
- * 支持生产环境（{@link WalletKeyMaterialProvider}）和测试环境两种密钥来源。</p>
+ * 密钥材料统一由 {@link WalletKeyMaterialProvider} 提供。</p>
  */
 @Component
-public
-class SolanaKeyService {
+public class SolanaKeyService {
 
     /** 生产环境密钥材料 */
     private final WalletKeyMaterialProvider keyMaterial;
-
-    /** 测试环境密钥提供者 */
-    private final Ed25519KeyProvider testProvider;
 
     /**
      * 生产环境构造函数。
      *
      * @param keyMaterial 主密钥材料提供者
      */
-    @Autowired
     public SolanaKeyService(WalletKeyMaterialProvider keyMaterial) {
-        this.keyMaterial = keyMaterial;
-        this.testProvider = null;
-    }
-    /**
-     * 测试环境构造函数。
-     *
-     * @param encodedMasterSeed 编码后的主种子
-     */
-    public SolanaKeyService(String encodedMasterSeed) {
-        this.keyMaterial = null;
-        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
+        this.keyMaterial = java.util.Objects.requireNonNull(keyMaterial, "keyMaterial");
     }
     public boolean isConfigured() {
-        return testProvider != null || keyMaterial.isConfigured();
+        return keyMaterial.isConfigured();
     }
     /**
      * 派生单个索引的 Ed25519 密钥（用于热钱包等单索引场景）。
@@ -59,7 +43,7 @@ class SolanaKeyService {
      * @return 派生的密钥
      */
     public Ed25519DerivedKey derive(long derivationIndex) {
-        return provider().derive(Ed25519Chain.SOLANA, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.SOLANA, derivationIndex);
     }
     /**
      * 派生多级索引的 Ed25519 密钥（userId=0, biz=0 回退到单索引派生）。
@@ -73,7 +57,7 @@ class SolanaKeyService {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
-        return provider().derive(Ed25519Chain.SOLANA, biz, userId, derivationIndex);
+        return keyMaterial.ed25519().derive(Ed25519Chain.SOLANA, biz, userId, derivationIndex);
     }
     /**
      * 创建 solanaj Account（单索引）。
@@ -100,8 +84,5 @@ class SolanaKeyService {
         TweetNaclFast.Signature.KeyPair keyPair = TweetNaclFast.Signature.keyPair_fromSeed(seed);
         Arrays.fill(seed, (byte) 0);
         return new Account(keyPair.getSecretKey());
-    }
-    private Ed25519KeyProvider provider() {
-        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }

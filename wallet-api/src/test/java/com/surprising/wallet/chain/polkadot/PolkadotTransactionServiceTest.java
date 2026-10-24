@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
@@ -40,7 +41,7 @@ class PolkadotTransactionServiceTest {
         FakeRepository repository = new FakeRepository();
         ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
         PolkadotTransactionService service = new PolkadotTransactionService(runtime,
-                new PolkadotKeyService(MASTER_SEED),
+                new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED)),
                 repository.collectionRecordRepository,
                 repository.walletSystemConfigRepository, new FakeHotWalletAddressService(hot),
                 Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
@@ -76,7 +77,7 @@ class PolkadotTransactionServiceTest {
         FakeRepository repository = new FakeRepository();
         ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
         PolkadotTransactionService service = new PolkadotTransactionService(runtime,
-                new PolkadotKeyService(MASTER_SEED),
+                new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED)),
                 repository.collectionRecordRepository,
                 repository.walletSystemConfigRepository, new FakeHotWalletAddressService(hot),
                 Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());

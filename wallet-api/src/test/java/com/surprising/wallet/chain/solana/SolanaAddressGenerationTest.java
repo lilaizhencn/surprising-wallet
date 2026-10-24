@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,8 +22,8 @@ class SolanaAddressGenerationTest {
      */
     @Test
     void derivesStableBase58AddressesAndAssociatedTokenAccounts() {
-        SolanaKeyService first = new SolanaKeyService(MASTER_SEED);
-        SolanaKeyService restarted = new SolanaKeyService(MASTER_SEED);
+        SolanaKeyService first = new SolanaKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
+        SolanaKeyService restarted = new SolanaKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         String user0 = first.account(0).getPublicKeyBase58();
         String user1 = first.account(1).getPublicKeyBase58();
 

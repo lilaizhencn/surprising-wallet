@@ -32,7 +32,6 @@ class TronAccountChainService {
     private final CollectionRecordRepository collectionRecordRepository;
     private final TronTransactionRepository tronTransactionRepository;
 
-
     /**
      * 保存 {@code secp256k1KeyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
      */
@@ -48,33 +47,8 @@ class TronAccountChainService {
             WithdrawalOrderRecord order,
             ChainAddressRecord from) throws Exception {
         try (TronTridentClient client = tronClientFactory.create()) {
-            KeyPair keyPair = tronKey(profile, from);
-            if (assets.isNative(profile, order.getAssetSymbol())) {
-                long amountSun = order.getAmount()
-                        .multiply(TRX_SUN)
-                        .longValueExact();
-                TronTransactionService.SignedTronTransaction signed =
-                        tronTransactionService.signTrxTransfer(
-                                client, keyPair, order.getToAddress(), amountSun);
-                tronTransactionService.broadcast(client, signed);
-                recordSent(
-                        order.getChain(), signed.txId(), from.getAddress(),
-                        order.getToAddress(), "TRX", null, order.getAmount());
-                return signed.txId();
-            }
-            TokenDefinition token = assets.requireToken(
-                    order.getChain(), order.getAssetSymbol());
-            TronTransactionService.SignedTronTransaction signed =
-                    tronTrc20Service.signTransfer(
-                            client, keyPair, token.getContractAddress(),
-                            order.getToAddress(), order.getAmount(),
-                            token.getDecimals(), feeLimitSun(profile));
-            tronTrc20Service.broadcast(client, signed);
-            recordSent(
-                    order.getChain(), signed.txId(), from.getAddress(),
-                    order.getToAddress(), token.getSymbol(),
-                    token.getContractAddress(), order.getAmount());
-            return signed.txId();
+            return broadcastTransfer(client, profile, from, order.getChain(), order.getAssetSymbol(),
+                    order.getToAddress(), order.getAmount());
         }
     }
 
@@ -86,47 +60,35 @@ class TronAccountChainService {
             return;
         }
         try (TronTridentClient client = tronClientFactory.create()) {
-            KeyPair keyPair = tronKey(profile, from);
-            String txHash;
-            if (assets.isNative(profile, record.getAssetSymbol())) {
-                long amountSun = record.getAmount()
-                        .multiply(TRX_SUN)
-                        .longValueExact();
-                TronTransactionService.SignedTronTransaction signed =
-                        tronTransactionService.signTrxTransfer(
-                                client, keyPair, record.getToAddress(), amountSun);
-                tronTransactionService.broadcast(client, signed);
-                txHash = signed.txId();
-                recordSent(
-                        record.getChain(), txHash, from.getAddress(),
-                        record.getToAddress(), "TRX", null, record.getAmount());
-            } else {
-                TokenDefinition token = assets.requireToken(
-                        record.getChain(), record.getAssetSymbol());
-                TronTransactionService.SignedTronTransaction signed =
-                        tronTrc20Service.signTransfer(
-                                client, keyPair, token.getContractAddress(),
-                                record.getToAddress(), record.getAmount(),
-                                token.getDecimals(), feeLimitSun(profile));
-                tronTrc20Service.broadcast(client, signed);
-                txHash = signed.txId();
-                recordSent(
-                        record.getChain(), txHash, from.getAddress(),
-                        record.getToAddress(), token.getSymbol(),
-                        token.getContractAddress(), record.getAmount());
-            }
+            String txHash = broadcastTransfer(client, profile, from, record.getChain(), record.getAssetSymbol(),
+                    record.getToAddress(), record.getAmount());
             collectionRecordRepository.updateStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
         } catch (Exception error) {
             collectionRecordRepository.updateStatus(
-                    record.getTenantId(),
-                    record.getChain(),
-                    record.getCollectionNo(),
-                    "FAILED",
-                    null,
-                    error.getMessage(),
-                    null);
+                    record.getTenantId(), record.getChain(), record.getCollectionNo(), "FAILED", null, error.getMessage(), null);
             throw error;
         }
+    }
+
+    /** 共享链上发送与交易事实记录；领取和调用方的状态变更仍由各自用例控制。 */
+    private String broadcastTransfer(TronTridentClient client, AccountChainProfile profile,
+                                     ChainAddressRecord from, String chain, String symbol,
+                                     String recipient, BigDecimal amount) throws Exception {
+        KeyPair keyPair = tronKey(profile, from);
+        if (assets.isNative(profile, symbol)) {
+            long amountSun = amount.multiply(TRX_SUN).longValueExact();
+            TronTransactionService.SignedTronTransaction signed =
+                    tronTransactionService.signTrxTransfer(client, keyPair, recipient, amountSun);
+            tronTransactionService.broadcast(client, signed);
+            recordSent(chain, signed.txId(), from.getAddress(), recipient, "TRX", null, amount);
+            return signed.txId();
+        }
+        TokenDefinition token = assets.requireToken(chain, symbol);
+        TronTransactionService.SignedTronTransaction signed = tronTrc20Service.signTransfer(
+                client, keyPair, token.getContractAddress(), recipient, amount, token.getDecimals(), feeLimitSun(profile));
+        tronTrc20Service.broadcast(client, signed);
+        recordSent(chain, signed.txId(), from.getAddress(), recipient, token.getSymbol(), token.getContractAddress(), amount);
+        return signed.txId();
     }
 
     void confirmWithdrawal(

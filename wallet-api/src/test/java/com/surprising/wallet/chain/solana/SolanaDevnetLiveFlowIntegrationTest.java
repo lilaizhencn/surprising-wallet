@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
@@ -53,7 +54,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(),
                 profiles("SOLANA"),
                 nodes("SOLANA", env("SOLANA_RPC_URL", "https://api.devnet.solana.com")));
-        SolanaKeyService keys = new SolanaKeyService(masterSeed);
+        SolanaKeyService keys = new SolanaKeyService(WalletKeyTestFixture.provider(masterSeed));
         SolanaAddressService addresses = new SolanaAddressService(keys, repository.chainAddressRepository);
         SolanaTransactionService transactions = new SolanaTransactionService(
                 rpc,

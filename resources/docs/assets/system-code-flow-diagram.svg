@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2630" viewBox="0 0 1180 2630">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2840" viewBox="0 0 1180 2840">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -302,4 +302,10 @@
   <text x="50" y="2487" style="font:13px sans-serif;fill:#1e293b">开发补币：恢复 / 对账 → 批量候选与排重 → 唯一创建 / 条件领取 → 发送状态 / 审计</text>
   <text x="50" y="2521" style="font:13px sans-serif;fill:#1e293b">HyperCore 扫描 → 快照业务事务 → 初始行锁 / 观察余额 → 正差额充值 / 账本 / 租户投影</text>
   <text x="50" y="2555" style="font:13px sans-serif;fill:#1e293b">并发首次扫描只入账一次；投影失败连同快照回滚；元数据 / 操作直达各自单表仓储</text>
+  <rect x="30" y="2610" width="1040" height="190" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="2640" style="font:13px sans-serif;fill:#1e293b">账户扫描：Job → DepositWorkflow → 运行时 profile → 各链到期 / 开关 → 具体扫描器</text>
+  <text x="50" y="2676" style="font:13px sans-serif;fill:#1e293b">全局关闭清空节流；链关闭移除本链节流；XMR 保持独立串行任务</text>
+  <text x="50" y="2712" style="font:13px sans-serif;fill:#1e293b">TRON 归集：领取 → 客户端 → 共用发送 / 交易记录 → SENT → 关闭；异常保留已知哈希</text>
+  <text x="50" y="2748" style="font:13px sans-serif;fill:#1e293b">七链密钥：必需材料提供者 → 角色校验 → 原链 / 租户派生 → 地址或签名；无测试来源分支</text>
+  <text x="50" y="2784" style="font:13px sans-serif;fill:#1e293b">测试 fixture 保存旧向量；真实材料验证七链；不改变资金状态或数据库结构</text>
 </svg>

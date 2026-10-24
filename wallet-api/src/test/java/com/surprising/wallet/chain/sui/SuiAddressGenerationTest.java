@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
 import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class SuiAddressGenerationTest {
      */
     @Test
     void derivesStableSuiAddressesFromSuiPath() {
-        SuiKeyService keys = new SuiKeyService(MASTER_SEED);
+        SuiKeyService keys = new SuiKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         String first = keys.address(7);
         String second = keys.address(7);
         String other = keys.address(8);

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.repository.UtxoRepository;
@@ -63,7 +64,7 @@ class TonMessageEncodingTest {
      */
     @Test
     void buildsNativeAndJettonWalletV4R2BocsWithoutBroadcasting() {
-        TonKeyService keys = new TonKeyService(MASTER_SEED);
+        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         FakeTonCenterClient rpc = new FakeTonCenterClient();
         FakeRepository repository = new FakeRepository();
         TonTransactionService service = new TonTransactionService(
@@ -101,7 +102,7 @@ class TonMessageEncodingTest {
      */
     @Test
     void parsesTep74JettonTransferNotificationBody() {
-        TonKeyService keys = new TonKeyService(MASTER_SEED);
+        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         String sender = keys.wallet(9).getAddress().toString(true, true, false, true);
         Cell body = CellBuilder.beginCell()
                 .storeUint(JETTON_TRANSFER_NOTIFICATION, 32)
@@ -124,7 +125,7 @@ class TonMessageEncodingTest {
      */
     @Test
     void parsesTep74JettonInternalTransferBodyWhenScanningJettonWallet() {
-        TonKeyService keys = new TonKeyService(MASTER_SEED);
+        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
         String sender = keys.wallet(10).getAddress().toString(true, true, false, true);
         String response = keys.wallet(11).getAddress().toString(true, true, false, true);
         Cell body = CellBuilder.beginCell()
@@ -152,7 +153,7 @@ class TonMessageEncodingTest {
     void duplicatePendingBocIsAStillPendingConfirmation() {
         TonTransactionService service = new TonTransactionService(
                 new DuplicateTonCenterClient(),
-                new TonKeyService(MASTER_SEED),
+                new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED)),
                 new PendingRepository().accountSequenceRepository,
                 new PendingRepository().tonTransactionRepository,
                 new PendingRepository().withdrawalOrderRepository,

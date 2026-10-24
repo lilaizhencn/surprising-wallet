@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -122,7 +123,7 @@ class NearTransactionSignerTest {
      */
     @Test
     void signsAndEncodesSignedTransaction() {
-        NearKeyService keyService = new NearKeyService("000102030405060708090a0b0c0d0e0f");
+        NearKeyService keyService = new NearKeyService(WalletKeyTestFixture.provider("000102030405060708090a0b0c0d0e0f"));
         NearTransactionSigner signer = new NearTransactionSigner(keyService);
 
         NearTransactionSigner.SignedTransaction signed = signer.transfer(

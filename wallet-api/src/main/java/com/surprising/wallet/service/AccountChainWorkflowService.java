@@ -29,7 +29,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,21 +40,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 账户链工作流服务，编排多链的充值扫描、提现签名/确认、归集与归集确认的完整流程。
- *
- * <p>支持的链族：EVM（ETH、BASE、BNB、POLYGON、ARBITRUM、OPTIMISM、AVAX_C 等）、
- * Solana、Aptos、Sui、TON、XRP、Cardano、Polkadot、Monero、NEAR、HyperCore、TRON。</p>
- *
- * <p>核心调度方法：</p>
- * <ul>
- *   <li>{@link #scanDeposits()} — 批量扫描所有已启用账户链的充值</li>
- *   <li>{@link #processWithdrawals()} — 批量处理待签名的提现单</li>
- *   <li>{@link #confirmWithdrawals()} — 批量确认已发送的提现交易</li>
- *   <li>{@link #processCollections()} — 批量创建并签名归集交易</li>
- *   <li>{@link #confirmCollections()} — 批量确认归集交易</li>
- * </ul>
- *
- * @see WalletRuntimeConfigService
+ * 账户链提现、归集与确认用例；Monero 在同一串行任务内先执行扫描。
+ * 各链的发送、领取和确认规则不同，入口显式委托对应交易服务。
  */
 @Slf4j
 @Service
@@ -69,14 +55,6 @@ public class AccountChainWorkflowService {
     private static final int COLLECTION_LIMIT = 20;
     /** 签名状态过期时间 10 分钟 */
     private static final Duration SIGNING_STALE_TIMEOUT = Duration.ofMinutes(10);
-    /** 账户链调度优先级列表：XMR 和 HYPERCORE 最优先，其余链按列表顺序 */
-    private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
-            "XMR",
-            "HYPERCORE",
-            "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
-            "LINEA", "SCROLL", "UNICHAIN",
-            "X_LAYER", "ROBINHOOD_CHAIN",
-            "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     private final ChainProfileRepository chainProfileRepository;
     private final Evm7702ConfigRepository evm7702ConfigRepository;
@@ -92,9 +70,6 @@ public class AccountChainWorkflowService {
     private final AccountChainDepositWorkflow depositWorkflow;
     private final AccountChainAssetService assets;
     private final TronAccountChainService tronWorkflow;
-    /** 各账户链下次允许扫描的时间，避免快速链和慢速链共用同一 RPC 轮询周期。 */
-    private final java.util.concurrent.ConcurrentMap<String, Long> nextDepositScanAtMillis =
-            new java.util.concurrent.ConcurrentHashMap<>();
 
     /** EVM 链交易服务 */
     private final EvmAccountTransactionService evmTransactionService;
@@ -133,65 +108,30 @@ public class AccountChainWorkflowService {
         processSingleAccountChain(profile);
     }
 
-    /** 批量扫描所有已启用账户链的充值。 */
-    public void scanDeposits() {
-        for (AccountChainProfile profile : enabledAccountProfiles()) {
-            depositWorkflow.scan(profile);
-        }
-    }
-
-    /**
-     * 仅扫描已到期的账户链。全局扫描开关关闭时清空节流状态，重新开启后下一轮立即生效。
-     * XMR 有独立串行任务，避免与通用账户链任务重复扫描同一钱包。
-     */
-    public void scanDueDeposits() {
-        if (!runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_SCAN)) {
-            nextDepositScanAtMillis.clear();
-            return;
-        }
-        long now = System.currentTimeMillis();
-        for (AccountChainProfile profile : enabledAccountProfiles()) {
-            String chain = profile.getChain();
-            if ("XMR".equalsIgnoreCase(chain)) {
-                continue;
-            }
-            if (!Boolean.TRUE.equals(profile.getScanEnabled())) {
-                nextDepositScanAtMillis.remove(chain);
-                continue;
-            }
-            if (now < nextDepositScanAtMillis.getOrDefault(chain, 0L)) {
-                continue;
-            }
-            depositWorkflow.scan(profile);
-            nextDepositScanAtMillis.put(
-                    chain, System.currentTimeMillis() + runtimeConfigService.scanIntervalMillis(chain));
-        }
-    }
-
     /** 批量处理所有已启用账户链的待签名提现。 */
     public void processWithdrawals() {
-        for (AccountChainProfile profile : enabledAccountProfiles()) {
+        for (AccountChainProfile profile : runtimeConfigService.enabledAccountProfiles()) {
             processWithdrawals(profile);
         }
     }
 
     /** 批量确认所有已启用账户链的已发送提现。 */
     public void confirmWithdrawals() {
-        for (AccountChainProfile profile : enabledAccountProfiles()) {
+        for (AccountChainProfile profile : runtimeConfigService.enabledAccountProfiles()) {
             confirmWithdrawals(profile);
         }
     }
 
     /** 批量创建并签名所有已启用账户链的归集交易。 */
     public void processCollections() {
-        for (AccountChainProfile profile : enabledAccountProfiles()) {
+        for (AccountChainProfile profile : runtimeConfigService.enabledAccountProfiles()) {
             processCollections(profile);
         }
     }
 
     /** 批量确认所有已启用账户链的归集交易。 */
     public void confirmCollections() {
-        for (AccountChainProfile profile : enabledAccountProfiles()) {
+        for (AccountChainProfile profile : runtimeConfigService.enabledAccountProfiles()) {
             confirmCollections(profile);
         }
     }
@@ -647,20 +587,6 @@ public class AccountChainWorkflowService {
                 ? address.getAddress() : address.getOwnerAddress();
     }
 
-    private List<AccountChainProfile> enabledAccountProfiles() {
-        return chainProfileRepository.listProfiles(true).stream()
-                .filter(profile -> !"utxo".equalsIgnoreCase(profile.getFamily()))
-                .filter(profile -> !"bitcoin-like".equalsIgnoreCase(profile.getFamily()))
-                .sorted(Comparator
-                        .comparingInt((AccountChainProfile profile) -> accountChainPriority(profile.getChain()))
-                        .thenComparing(AccountChainProfile::getChain)
-                        .thenComparing(AccountChainProfile::getNetwork))
-                .toList();
-    }
-    private int accountChainPriority(String chain) {
-        int index = ACCOUNT_CHAIN_PRIORITY.indexOf(chain);
-        return index < 0 ? ACCOUNT_CHAIN_PRIORITY.size() : index;
-    }
     private String collectionNo(CollectionCandidateRecord candidate, BigDecimal amount) {
         String basis = candidate.getChain() + "|" + candidate.getAssetSymbol() + "|"
                 + candidate.getAccountId() + "|" + candidate.getAddress() + "|"

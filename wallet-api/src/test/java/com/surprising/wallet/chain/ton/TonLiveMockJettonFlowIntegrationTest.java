@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
@@ -78,7 +79,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                         .authType("api_key")
                         .authHeaderName("X-API-Key")
                         .apiKey(env("TONCENTER_API_KEY", "")).build()));
-        TonKeyService keys = new TonKeyService(masterSeed);
+        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(masterSeed));
         TonAddressService addresses = new TonAddressService(keys, repository.chainAddressRepository, repository.chainProfileRepository);
         TonTransactionService transactions = new TonTransactionService(
                 rpc,

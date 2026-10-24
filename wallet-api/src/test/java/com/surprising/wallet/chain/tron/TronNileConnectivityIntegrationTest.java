@@ -20,7 +20,7 @@ class TronNileConnectivityIntegrationTest {
         String fullNode = System.getProperty("tron.fullnode", "grpc.nile.trongrid.io:50051");
         String solidityNode = System.getProperty("tron.soliditynode", "grpc.nile.trongrid.io:50061");
         String apiKey = System.getProperty("tron.apiKey", "");
-        try (TronTridentClient client = new TronTridentClient(fullNode, solidityNode, apiKey)) {
+        try (TronTridentClient client = TronTestClientSupport.create(fullNode, solidityNode, apiKey)) {
             Chain.Block block = client.getNowBlock();
             assertTrue(block.getBlockHeader().getRawData().getNumber() > 0);
         }
