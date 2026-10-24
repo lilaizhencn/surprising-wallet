@@ -6,7 +6,7 @@ import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
-import com.surprising.wallet.gateway.CustodyAssetRecoveryChainGateway;
+import com.surprising.wallet.gateway.EvmAssetRecoveryChainGateway;
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
 import tools.jackson.core.JacksonException;
@@ -29,7 +29,7 @@ import java.util.UUID;
  * <p>支持 EVM 链的原生币和 ERC20 代币找回。流程：
  * <ol>
  *   <li>管理员创建找回请求（指定源地址、资产、目标地址）</li>
- *   <li>签名服务对找回交易进行双重签名</li>
+ *   <li>按原始派生参数构造签名交易</li>
  *   <li>广播上链并记录结果</li>
  * </ol>
  */
@@ -42,7 +42,7 @@ public class CustodyAssetRecoveryService {
     private final ChainAddressRepository chainAddressRepository;
     /** deposit_record 单表仓储。 */
     private final DepositRecordRepository depositRecordRepository;
-    private final List<CustodyAssetRecoveryChainGateway> gateways;
+    private final EvmAssetRecoveryChainGateway gateway;
     private final ObjectMapper objectMapper;
     private final CustodyEventService events;
     public CustodyAssetRecoveryService(CustodyAssetRecoveryRepository repository,
@@ -50,7 +50,7 @@ public class CustodyAssetRecoveryService {
                                        CustodyAddressRepository custodyAddressRepository,
                                        ChainAddressRepository chainAddressRepository,
                                        DepositRecordRepository depositRecordRepository,
-                                       List<CustodyAssetRecoveryChainGateway> gateways,
+                                       EvmAssetRecoveryChainGateway gateway,
                                        ObjectMapper objectMapper,
                                        CustodyEventService events) {
         this.repository = repository;
@@ -58,7 +58,7 @@ public class CustodyAssetRecoveryService {
         this.custodyAddressRepository = custodyAddressRepository;
         this.chainAddressRepository = chainAddressRepository;
         this.depositRecordRepository = depositRecordRepository;
-        this.gateways = List.copyOf(gateways);
+        this.gateway = gateway;
         this.objectMapper = objectMapper;
         this.events = events;
     }
@@ -107,7 +107,7 @@ public class CustodyAssetRecoveryService {
         audits.insert(UUID.randomUUID(), principal.tenantId(), principal.actorType().name(),
                 principal.actorId().toString(), "ASSET_RECOVERY.SUBMIT", "ASSET_RECOVERY",
                 recovery.id().toString(), sourceIp,
-                "{\"actualChain\":\"" + actualChain + "\",\"txHash\":\"" + txHash + "\"}");
+                json(Map.of("actualChain", actualChain, "txHash", txHash)));
         return toView(verifyInternal(recovery, ownership, command.logIndex()));
     }
     private static RecoveryRecord requireSameTenant(UUID tenantId, RecoveryRecord recovery) {
@@ -152,7 +152,7 @@ public class CustodyAssetRecoveryService {
                 recovery, ownership, recovery.requestedLogIndex());
         audits.insert(UUID.randomUUID(), recovery.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.VERIFY", "ASSET_RECOVERY", id.toString(), sourceIp,
-                "{\"status\":\"" + result.status() + "\"}");
+                json(Map.of("status", result.status())));
         return toView(result);
     }
 
@@ -172,7 +172,7 @@ public class CustodyAssetRecoveryService {
         RecoveryRecord result = repository.approve(id, recoveryAddress, principal.actorId());
         audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.APPROVE", "ASSET_RECOVERY", id.toString(), sourceIp,
-                "{\"recoveryAddress\":\"" + recoveryAddress + "\"}");
+                json(Map.of("recoveryAddress", recoveryAddress)));
         return toView(result);
     }
     public RecoveryView execute(CustodyPrincipal principal, UUID id, String sourceIp) {
@@ -182,20 +182,19 @@ public class CustodyAssetRecoveryService {
             throw new IllegalStateException("only an approved recovery case can be executed");
         }
         try {
-            CustodyAssetRecoveryChainGateway gateway = gateway(existing.actualChain());
             Ownership ownership = requireOwnership(
                     existing.tenantId(), existing.destinationAddress(),
                     existing.expectedChain() == null ? existing.actualChain() : existing.expectedChain());
             ChainAddressRecord source = sourceAddress(
                     existing.tenantId(), existing.actualChain(), ownership);
-            String recoveryTxHash = gateway.execute(new CustodyAssetRecoveryChainGateway.ExecutionRequest(
+            String recoveryTxHash = gateway.execute(new EvmAssetRecoveryChainGateway.ExecutionRequest(
                     existing.actualChain(), existing.assetSymbol(), existing.tokenContract(),
                     existing.tokenDecimals() == null ? 18 : existing.tokenDecimals(),
                     existing.verifiedAmount(), source, existing.recoveryAddress()));
             RecoveryRecord result = repository.broadcasted(id, recoveryTxHash, principal.actorId());
             audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                     "ASSET_RECOVERY.EXECUTE", "ASSET_RECOVERY", id.toString(), sourceIp,
-                    "{\"recoveryTxHash\":\"" + recoveryTxHash + "\"}");
+                    json(Map.of("recoveryTxHash", recoveryTxHash)));
             return toView(result);
         } catch (RuntimeException e) {
             return toView(repository.executionFailed(id, friendly(e)));
@@ -207,7 +206,7 @@ public class CustodyAssetRecoveryService {
         if ("RECOVERED".equals(result.status())) {
             audits.insert(UUID.randomUUID(), result.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                     "ASSET_RECOVERY.CONFIRM", "ASSET_RECOVERY", id.toString(), sourceIp,
-                    "{\"recoveryTxHash\":\"" + result.recoveryTxHash() + "\"}");
+                    json(Map.of("recoveryTxHash", result.recoveryTxHash())));
         }
         return toView(result);
     }
@@ -218,7 +217,7 @@ public class CustodyAssetRecoveryService {
                 if ("RECOVERED".equals(result.status())) {
                     audits.insert(UUID.randomUUID(), result.tenantId(), "SYSTEM", "asset-recovery-finality",
                             "ASSET_RECOVERY.CONFIRM", "ASSET_RECOVERY", result.id().toString(), null,
-                            "{\"recoveryTxHash\":\"" + result.recoveryTxHash() + "\"}");
+                            json(Map.of("recoveryTxHash", result.recoveryTxHash())));
                 }
             } catch (RuntimeException ignored) {
                 // The case remains visible in BROADCAST with its tx hash for the next run/manual review.
@@ -230,11 +229,11 @@ public class CustodyAssetRecoveryService {
             throw new IllegalStateException("only a broadcast recovery can be confirmed");
         }
         try {
-            if (!gateway(recovery.actualChain()).confirmed(
+            if (!gateway.confirmed(
                     recovery.actualChain(), recovery.recoveryTxHash())) {
                 return recovery;
             }
-        } catch (CustodyAssetRecoveryChainGateway.PermanentlyFailedTransactionException e) {
+        } catch (EvmAssetRecoveryChainGateway.PermanentlyFailedTransactionException e) {
             return repository.broadcastFailed(recovery.id(), friendly(e));
         }
         RecoveryRecord confirmed = repository.confirmed(recovery.id());
@@ -280,7 +279,7 @@ public class CustodyAssetRecoveryService {
         RecoveryRecord result = repository.reject(id, reason, principal.actorId());
         audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.REJECT", "ASSET_RECOVERY", id.toString(), sourceIp,
-                "{\"reason\":\"" + reason.replace("\"", "'") + "\"}");
+                json(Map.of("reason", reason)));
         return toView(result);
     }
 
@@ -296,9 +295,8 @@ public class CustodyAssetRecoveryService {
     private RecoveryRecord verifyInternal(RecoveryRecord recovery, Ownership ownership,
                                           Long requestedLogIndex) {
         try {
-            CustodyAssetRecoveryChainGateway gateway = gateway(recovery.actualChain());
-            CustodyAssetRecoveryChainGateway.Verification verification = gateway.verify(
-                    new CustodyAssetRecoveryChainGateway.VerificationRequest(
+            EvmAssetRecoveryChainGateway.Verification verification = gateway.verify(
+                    new EvmAssetRecoveryChainGateway.VerificationRequest(
                             recovery.actualChain(), recovery.assetSymbol(), recovery.tokenContract(),
                             recovery.txHash(), requestedLogIndex, recovery.destinationAddress(),
                             recovery.claimedAmount()));
@@ -320,12 +318,7 @@ public class CustodyAssetRecoveryService {
                 tenantId, destinationAddress, preferredChain)) {
             long chainAddressId = custodyRow.chainAddressId();
             chainAddressRepository.findOwned(tenantId, chainAddressId).ifPresent(address ->
-                    owners.add(new Ownership(
-                            custodyRow.id(), string(address.getAccountId()),
-                            address.getUserId().longValue(), address.getBiz(),
-                            address.getAddressIndex().longValue(), string(address.getAddress()),
-                            nullable(address.getOwnerAddress()), string(address.getDerivationPath()),
-                            string(address.getWalletRole()))));
+                    owners.add(new Ownership(custodyRow.id(), address)));
         }
         if (owners.isEmpty()) {
             throw new IllegalArgumentException(
@@ -333,37 +326,26 @@ public class CustodyAssetRecoveryService {
         }
         Ownership selected = owners.getFirst();
         boolean ambiguous = owners.stream().skip(1).anyMatch(owner ->
-                owner.userId() != selected.userId()
-                        || owner.biz() != selected.biz()
-                        || owner.addressIndex() != selected.addressIndex()
+                !java.util.Objects.equals(owner.address().getUserId(), selected.address().getUserId())
+                        || !java.util.Objects.equals(owner.address().getBiz(), selected.address().getBiz())
+                        || !java.util.Objects.equals(owner.address().getAddressIndex(), selected.address().getAddressIndex())
                         || !java.util.Objects.equals(
-                                owner.derivationPath(), selected.derivationPath()));
+                                owner.address().getDerivationPath(), selected.address().getDerivationPath()));
         if (ambiguous) {
             throw new IllegalStateException("destination address has ambiguous ownership");
         }
         return selected;
     }
     private ChainAddressRecord sourceAddress(UUID tenantId, String actualChain, Ownership ownership) {
-        return ChainAddressRecord.builder()
+        return ownership.address().toBuilder()
+                .id(null)
                 .tenantId(tenantId)
                 .chain(actualChain)
                 .assetSymbol(actualChain)
-                .accountId(ownership.accountId())
-                .userId(ownership.userId())
-                .biz(ownership.biz())
-                .addressIndex(ownership.addressIndex())
-                .address(ownership.address())
-                .ownerAddress(ownership.ownerAddress())
-                .derivationPath(ownership.derivationPath())
-                .walletRole(ownership.walletRole())
                 .enabled(true)
                 .build();
     }
-    private CustodyAssetRecoveryChainGateway gateway(String chain) {
-        return gateways.stream().filter(candidate -> candidate.supports(chain)).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "automatic recovery is not available for chain " + chain));
-    }
+
     private static String friendly(Throwable error) {
         Throwable value = error;
         while (value.getCause() != null && value.getMessage() == null) {
@@ -393,25 +375,6 @@ public class CustodyAssetRecoveryService {
         return status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
     }
 
-    /** 将数据库对象转换为可空字符串。 */
-    private static String nullable(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    /** 将数据库对象转换为字符串。 */
-    private static String string(Object value) {
-        return value == null ? "" : String.valueOf(value);
-    }
-
-    /** 将数据库数值转换为长整型。 */
-    private static long longValue(Object value) {
-        return value == null ? 0L : ((Number) value).longValue();
-    }
-
-    /** 将数据库数值转换为整型。 */
-    private static int intValue(Object value) {
-        return value == null ? 0 : ((Number) value).intValue();
-    }
     private static String upper(String value, String field, int max) {
         return required(value, field, max).toUpperCase(Locale.ROOT);
     }
@@ -470,8 +433,6 @@ public class CustodyAssetRecoveryService {
     public record RejectCommand(String reason) {
     }
 
-    private record Ownership(UUID custodyAddressId, String accountId, long userId, int biz,
-                             long addressIndex, String address, String ownerAddress,
-                             String derivationPath, String walletRole) {
+    private record Ownership(UUID custodyAddressId, ChainAddressRecord address) {
     }
 }

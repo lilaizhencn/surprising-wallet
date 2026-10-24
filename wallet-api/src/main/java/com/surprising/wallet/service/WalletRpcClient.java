@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.chain.ChainRpcNode;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -9,10 +10,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -23,38 +24,39 @@ import java.util.concurrent.TimeUnit;
 class WalletRpcClient {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final ChainRpcNodeService rpcNodes;
 
-    WalletRpcClient(ObjectMapper objectMapper) {
+    WalletRpcClient(ObjectMapper objectMapper, ChainRpcNodeService rpcNodes) {
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         this.objectMapper = objectMapper;
+        this.rpcNodes = rpcNodes;
     }
 
-    ProbeResult probe(String rpcUrl, String connectionType, String authType,
-                      String authHeaderName, String apiKey, String username, String password) {
+    ProbeResult probe(ChainRpcNode node) {
         long started = System.nanoTime();
         try {
-            URI uri = URI.create(rpcUrl);
+            URI uri = URI.create(node.getRpcUrl());
             if ("ws".equalsIgnoreCase(uri.getScheme()) || "wss".equalsIgnoreCase(uri.getScheme())) {
                 WebSocket.Builder builder = httpClient.newWebSocketBuilder()
                         .connectTimeout(Duration.ofSeconds(8));
-                applyAuth(builder, authType, authHeaderName, apiKey, username, password);
-                WebSocket socket = builder.buildAsync(uri, new WebSocket.Listener() { })
-                        .get(8, TimeUnit.SECONDS);
+                rpcNodes.authHeaders(node).forEach(builder::header);
+                WebSocket socket = rpcNodes.withProviderLimit(node, () ->
+                        builder.buildAsync(uri, new WebSocket.Listener() { }).get(8, TimeUnit.SECONDS));
                 socket.abort();
                 return new ProbeResult(true, null, elapsedMillis(started), null, Instant.now());
             }
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(Duration.ofSeconds(8));
-            applyAuth(builder, connectionType, authType, authHeaderName, apiKey, username, password);
-            if (connectionType.toUpperCase(Locale.ROOT).contains("JSON_RPC")) {
+            rpcNodes.authHeaders(node).forEach(builder::header);
+            if (node.getConnectionType().toUpperCase(Locale.ROOT).contains("JSON_RPC")) {
                 builder.header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(
                                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"web3_clientVersion\",\"params\":[]}"));
             } else {
                 builder.GET();
             }
-            HttpResponse<Void> response = httpClient.send(
-                    builder.build(), HttpResponse.BodyHandlers.discarding());
+            HttpResponse<Void> response = rpcNodes.withProviderLimit(node, () -> httpClient.send(
+                    builder.build(), HttpResponse.BodyHandlers.discarding()));
             long latency = elapsedMillis(started);
             boolean success = response.statusCode() >= 200 && response.statusCode() < 400;
             return new ProbeResult(success, response.statusCode(), latency,
@@ -69,19 +71,17 @@ class WalletRpcClient {
         }
     }
 
-    JsonNode jsonRpc(String rpcUrl, String connectionType, String authType,
-                     String authHeaderName, String apiKey, String username, String password,
-                     String method, String params) {
+    JsonNode jsonRpc(ChainRpcNode node, String method, List<?> params) {
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(rpcUrl))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(node.getRpcUrl()))
                     .timeout(Duration.ofSeconds(8))
                     .header("Content-Type", "application/json");
-            applyAuth(builder, connectionType, authType, authHeaderName, apiKey, username, password);
-            String requestBody = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":"
-                    + objectMapper.writeValueAsString(method) + ",\"params\":" + params + "}";
-            HttpResponse<String> response = httpClient.send(
+            rpcNodes.authHeaders(node).forEach(builder::header);
+            String requestBody = objectMapper.writeValueAsString(Map.of(
+                    "jsonrpc", "2.0", "id", 1, "method", method, "params", params));
+            HttpResponse<String> response = rpcNodes.withProviderLimit(node, () -> httpClient.send(
                     builder.POST(HttpRequest.BodyPublishers.ofString(requestBody)).build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    HttpResponse.BodyHandlers.ofString()));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new IllegalStateException(
                         "token contract validation RPC returned HTTP " + response.statusCode());
@@ -105,53 +105,6 @@ class WalletRpcClient {
         } catch (Exception e) {
             throw new IllegalStateException("token contract validation failed: " + safeError(e), e);
         }
-    }
-
-    private static void applyAuth(
-            HttpRequest.Builder builder, String connectionType, String authType,
-            String authHeaderName, String apiKey, String username, String password) {
-        String auth = upper(authType);
-        if ("BLOCKFROST".equalsIgnoreCase(connectionType) && !blank(apiKey)) {
-            builder.header("project_id", apiKey);
-        } else if ("BEARER".equals(auth) && !blank(apiKey)) {
-            builder.header("Authorization", "Bearer " + apiKey);
-        } else if (apiKeyAuth(auth) && !blank(apiKey)) {
-            builder.header(blank(authHeaderName) ? "X-API-Key" : authHeaderName, apiKey);
-        } else if (("BASIC".equals(auth) || "DIGEST".equals(auth)) && !blank(username)) {
-            builder.header("Authorization", basic(username, password));
-        }
-    }
-
-    private static void applyAuth(
-            WebSocket.Builder builder, String authType, String authHeaderName,
-            String apiKey, String username, String password) {
-        String auth = upper(authType);
-        if ("BEARER".equals(auth) && !blank(apiKey)) {
-            builder.header("Authorization", "Bearer " + apiKey);
-        } else if (apiKeyAuth(auth) && !blank(apiKey)) {
-            builder.header(blank(authHeaderName) ? "X-API-Key" : authHeaderName, apiKey);
-        } else if ("BASIC".equals(auth) && !blank(username)) {
-            builder.header("Authorization", basic(username, password));
-        }
-    }
-
-    private static boolean apiKeyAuth(String auth) {
-        return "API_KEY".equals(auth) || "PROJECT_ID".equals(auth)
-                || "TOKEN".equals(auth) || "API_KEY_OPTIONAL".equals(auth);
-    }
-
-    private static String basic(String username, String password) {
-        String value = Base64.getEncoder().encodeToString(
-                (username + ":" + password).getBytes(StandardCharsets.UTF_8));
-        return "Basic " + value;
-    }
-
-    private static String upper(String value) {
-        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private static boolean blank(String value) {
-        return value == null || value.isBlank();
     }
 
     private static long elapsedMillis(long started) {

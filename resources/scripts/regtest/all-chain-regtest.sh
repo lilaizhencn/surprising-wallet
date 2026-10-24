@@ -1,34 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+cd "$ROOT_DIR"
 
 DB_TESTS=(
-  "com.surprising.wallet.service.chain.solana.SolanaDatabaseFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.ton.TonDatabaseFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.aptos.AptosDatabaseFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.sui.SuiDatabaseFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.doge.DogecoinDatabaseFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.BitcoinLikeUnifiedUtxoRuntimeMigrationTest"
+  "com.surprising.wallet.chain.solana.SolanaDatabaseFlowIntegrationTest"
+  "com.surprising.wallet.chain.ton.TonDatabaseFlowIntegrationTest"
+  "com.surprising.wallet.chain.aptos.AptosDatabaseFlowIntegrationTest"
+  "com.surprising.wallet.chain.sui.SuiDatabaseFlowIntegrationTest"
+  "com.surprising.wallet.chain.doge.DogecoinDatabaseFlowIntegrationTest"
+  "com.surprising.wallet.chain.BitcoinLikeUnifiedUtxoRuntimeMigrationTest"
 )
 LIVE_CONNECTIVITY_TESTS=(
-  "com.surprising.wallet.service.chain.tron.TronNileConnectivityIntegrationTest"
-  "com.surprising.wallet.service.chain.ton.TonTestnetConnectivityIntegrationTest"
-  "com.surprising.wallet.service.chain.evm.EvmSepoliaLiveScanTest"
-  "com.surprising.wallet.service.chain.near.NearTestnetConnectivityIntegrationTest"
-  "com.surprising.wallet.service.chain.cardano.CardanoPreprodConnectivityIntegrationTest"
-  "com.surprising.wallet.service.chain.polkadot.PolkadotRuntimeConnectivityIntegrationTest"
+  "com.surprising.wallet.chain.tron.TronNileConnectivityIntegrationTest"
+  "com.surprising.wallet.chain.ton.TonTestnetConnectivityIntegrationTest"
+  "com.surprising.wallet.chain.evm.EvmSepoliaLiveScanTest"
+  "com.surprising.wallet.chain.near.NearTestnetConnectivityIntegrationTest"
+  "com.surprising.wallet.chain.cardano.CardanoPreprodConnectivityIntegrationTest"
+  "com.surprising.wallet.chain.polkadot.PolkadotRuntimeConnectivityIntegrationTest"
 )
 LIVE_SPENDING_TESTS=(
-  "com.surprising.wallet.service.chain.solana.SolanaDevnetLiveFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.ton.TonLiveMockJettonFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.aptos.AptosLiveNativeFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.sui.SuiLiveNativeFlowIntegrationTest"
+  "com.surprising.wallet.chain.solana.SolanaDevnetLiveFlowIntegrationTest"
+  "com.surprising.wallet.chain.ton.TonLiveMockJettonFlowIntegrationTest"
+  "com.surprising.wallet.chain.aptos.AptosLiveNativeFlowIntegrationTest"
+  "com.surprising.wallet.chain.sui.SuiLiveNativeFlowIntegrationTest"
 )
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/regtest/all-chain-regtest.sh <command>
+usage: resources/scripts/regtest/all-chain-regtest.sh <command>
 
 commands:
   matrix        Show local/fork/live coverage for every supported chain family
@@ -78,10 +79,6 @@ join_by_comma() {
   echo "$*"
 }
 
-mvn_wallet_test() {
-  (cd "${ROOT_DIR}" && mvn -pl wallet-api -am "$@")
-}
-
 matrix() {
   cat <<'MATRIX'
 chain/family                         environment in repo
@@ -104,8 +101,8 @@ MATRIX
 }
 
 init_local_nodes() {
-  "${ROOT_DIR}/scripts/regtest/bitcoinlike-regtest.sh" init
-  "${ROOT_DIR}/scripts/regtest/monero-regtest.sh" init
+  "${ROOT_DIR}/resources/scripts/regtest/bitcoinlike-regtest.sh" init
+  "${ROOT_DIR}/resources/scripts/regtest/monero-regtest.sh" init
 }
 
 status() {
@@ -113,9 +110,9 @@ status() {
   if [[ -n "${POLKADOT_RUNTIME_API_KEY:-}" ]]; then
     dot_runtime_headers=(-H "Authorization: Bearer ${POLKADOT_RUNTIME_API_KEY}")
   fi
-  "${ROOT_DIR}/scripts/regtest/bitcoinlike-regtest.sh" status
+  "${ROOT_DIR}/resources/scripts/regtest/bitcoinlike-regtest.sh" status
   echo "==> xmr:"
-  "${ROOT_DIR}/scripts/regtest/monero-regtest.sh" status
+  "${ROOT_DIR}/resources/scripts/regtest/monero-regtest.sh" status
   if curl -fsS -m 2 \
       -H 'content-type: application/json' \
       --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
@@ -140,15 +137,15 @@ status() {
 
 dot_runtime_up() {
   : "${POLKADOT_RUNTIME_API_KEY:?set POLKADOT_RUNTIME_API_KEY before starting DOT runtime service}"
-  "${ROOT_DIR}/scripts/regtest/polkadot-runtime-service.sh" up
+  "${ROOT_DIR}/resources/scripts/regtest/polkadot-runtime-service.sh" up
 }
 
 dot_runtime_down() {
-  "${ROOT_DIR}/scripts/regtest/polkadot-runtime-service.sh" stop
+  "${ROOT_DIR}/resources/scripts/regtest/polkadot-runtime-service.sh" stop
 }
 
 test_utxo() {
-  "${ROOT_DIR}/scripts/regtest/run-bitcoinlike-matrix.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-bitcoinlike-matrix.sh"
 }
 
 test_evm() {
@@ -156,68 +153,62 @@ test_evm() {
 }
 
 test_xmr() {
-  "${ROOT_DIR}/scripts/regtest/run-monero-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-monero-flow.sh"
 }
 
 test_sui() {
-  "${ROOT_DIR}/scripts/regtest/run-sui-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-sui-flow.sh"
 }
 
 test_solana() {
-  "${ROOT_DIR}/scripts/regtest/run-solana-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-solana-flow.sh"
 }
 
 test_ton() {
-  "${ROOT_DIR}/scripts/regtest/run-ton-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-ton-flow.sh"
 }
 
 test_xrp() {
-  "${ROOT_DIR}/scripts/regtest/run-xrp-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-xrp-flow.sh"
 }
 
 test_hypercore() {
-  "${ROOT_DIR}/scripts/regtest/run-hypercore-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-hypercore-flow.sh"
 }
 
 test_near() {
-  "${ROOT_DIR}/scripts/regtest/run-near-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-near-flow.sh"
 }
 
 test_cardano() {
-  "${ROOT_DIR}/scripts/regtest/run-cardano-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-cardano-flow.sh"
 }
 
 test_dot() {
-  "${ROOT_DIR}/scripts/regtest/run-polkadot-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-polkadot-flow.sh"
 }
 
 test_tron() {
-  "${ROOT_DIR}/scripts/regtest/run-tron-flow.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-tron-flow.sh"
 }
 
 test_aptos() {
-  "${ROOT_DIR}/infra/aptos/run-fa-flow.sh"
+  "${ROOT_DIR}/resources/infra/aptos/run-fa-flow.sh"
 }
 
 test_load() {
-  "${ROOT_DIR}/scripts/regtest/run-multichain-load.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-multichain-load.sh"
 }
 
 test_system() {
-  "${ROOT_DIR}/scripts/regtest/run-multichain-system-test.sh"
+  "${ROOT_DIR}/resources/scripts/regtest/run-multichain-system-test.sh"
 }
 
 test_db() {
-  mvn_wallet_test \
-    -Dsurefire.failIfNoSpecifiedTests=false \
-    -Dsolana.db.enabled=true \
-    -Dton.db.enabled=true \
-    -Daptos.db.enabled=true \
-    -Dsui.db.enabled=true \
-    -Ddoge.db.enabled=true \
-    -Dutxo.migration.db.enabled=true \
-    -Dtest="$(join_by_comma "${DB_TESTS[@]}")" \
-    test
+  CUSTODY_DB_TESTS="$(join_by_comma "${DB_TESTS[@]}")" \
+    "${ROOT_DIR}/resources/scripts/regtest/run-custody-db-tests.sh" \
+    -Dsolana.db.enabled=true -Dton.db.enabled=true -Ddoge.db.enabled=true \
+    -Dutxo.migration.db.enabled=true
 }
 
 test_live() {
@@ -233,27 +224,25 @@ test_live() {
   if curl -fsS -m 2 "${dot_runtime_headers[@]}" http://127.0.0.1:8787/health >/dev/null 2>&1; then
     polkadot_runtime_enabled=true
   fi
-  mvn_wallet_test \
-    -Dsurefire.failIfNoSpecifiedTests=false \
+  CUSTODY_DB_TESTS="$(join_by_comma "${LIVE_CONNECTIVITY_TESTS[@]}")" \
+    "${ROOT_DIR}/resources/scripts/regtest/run-custody-db-tests.sh" \
     -Dtron.live.enabled=true \
     -Dton.testnet.enabled=true \
     -Devm.live.enabled=true \
     -Dnear.testnet.enabled=true \
     -Dcardano.preprod.enabled="${cardano_preprod_enabled}" \
     -Dpolkadot.runtime.live.enabled="${polkadot_runtime_enabled}" \
-    -Dtest="$(join_by_comma "${LIVE_CONNECTIVITY_TESTS[@]}")" \
-    test
+    -DskipTests=false
 
   if [[ "${RUN_LIVE_SPENDING:-false}" == "true" ]]; then
-    mvn_wallet_test \
-      -Dsurefire.failIfNoSpecifiedTests=false \
+    CUSTODY_DB_TESTS="$(join_by_comma "${LIVE_SPENDING_TESTS[@]}")" \
+      "${ROOT_DIR}/resources/scripts/regtest/run-custody-db-tests.sh" \
       -Dtron.live.flow.enabled=true \
       -Dsolana.live.enabled=true \
       -Dton.live.enabled=true \
       -Daptos.live.enabled=true \
       -Dsui.live.enabled=true \
-      -Dtest="$(join_by_comma "${LIVE_SPENDING_TESTS[@]}")" \
-      test
+      -DskipTests=false
   else
     echo "live spending tests skipped; set RUN_LIVE_SPENDING=true to run funded testnet/devnet spend flows"
   fi
@@ -270,12 +259,12 @@ case "${1:-matrix}" in
     status
     ;;
   stop)
-    "${ROOT_DIR}/scripts/regtest/bitcoinlike-regtest.sh" stop
-    "${ROOT_DIR}/scripts/regtest/monero-regtest.sh" stop
+    "${ROOT_DIR}/resources/scripts/regtest/bitcoinlike-regtest.sh" stop
+    "${ROOT_DIR}/resources/scripts/regtest/monero-regtest.sh" stop
     ;;
   reset)
-    "${ROOT_DIR}/scripts/regtest/bitcoinlike-regtest.sh" reset
-    "${ROOT_DIR}/scripts/regtest/monero-regtest.sh" reset
+    "${ROOT_DIR}/resources/scripts/regtest/bitcoinlike-regtest.sh" reset
+    "${ROOT_DIR}/resources/scripts/regtest/monero-regtest.sh" reset
     ;;
   test-utxo)
     test_utxo

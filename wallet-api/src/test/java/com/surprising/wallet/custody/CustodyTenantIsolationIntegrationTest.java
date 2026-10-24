@@ -191,9 +191,7 @@ class CustodyTenantIsolationIntegrationTest {
                     available_balance, locked_balance, total_balance)
                 values (?, 'ETH', 'ETH', ?, 0, ?, ?)
                 """, ownerTenant, accountId, debit, debit);
-        assertEquals(
-                1,
-                repository.withdrawalOrderRepository.createForTenant(
+        assertTrue(repository.withdrawalOrderRepository.createForTenant(
                         ownerTenant,
                         orderNo,
                         1L,
@@ -203,7 +201,7 @@ class CustodyTenantIsolationIntegrationTest {
                         accountId,
                         "0x0000000000000000000000000000000000000002",
                         BigDecimal.ONE,
-                        new BigDecimal("0.25")));
+                        new BigDecimal("0.25")) > 0L);
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(ownerTenant, "ETH", orderNo, "SENT", accountId, txHash, null));
 
         assertThrows(IllegalStateException.class, () -> settlements.confirm(otherTenant, "ETH", orderNo, txHash));
@@ -242,9 +240,7 @@ class CustodyTenantIsolationIntegrationTest {
         createChainAddress(secondTenant, "BTC", secondAddress);
         ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
-        assertEquals(
-                1,
-                repository.withdrawalOrderRepository.createForTenant(
+        assertTrue(repository.withdrawalOrderRepository.createForTenant(
                         firstTenant,
                         "btc-first-order",
                         11L,
@@ -254,7 +250,7 @@ class CustodyTenantIsolationIntegrationTest {
                         firstAddress,
                         "btc-first-recipient",
                         new BigDecimal("0.10"),
-                        new BigDecimal("0.001")));
+                        new BigDecimal("0.001")) > 0L);
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(
                 firstTenant,
                 "BTC",
@@ -263,9 +259,7 @@ class CustodyTenantIsolationIntegrationTest {
                 firstAddress,
                 null,
                 null));
-        assertEquals(
-                1,
-                repository.withdrawalOrderRepository.createForTenant(
+        assertTrue(repository.withdrawalOrderRepository.createForTenant(
                         secondTenant,
                         "btc-second-order",
                         12L,
@@ -275,7 +269,7 @@ class CustodyTenantIsolationIntegrationTest {
                         secondAddress,
                         "btc-second-recipient",
                         new BigDecimal("0.20"),
-                        new BigDecimal("0.001")));
+                        new BigDecimal("0.001")) > 0L);
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(
                 secondTenant,
                 "BTC",

@@ -239,50 +239,50 @@ public class AccountChainWorkflowService {
             if (assets.isNative(profile, order.getAssetSymbol())) {
                 return evmTransactionService.sendNative(chain, from, order.getToAddress(), order.getAmount());
             }
-            TokenDefinition token = assets.requireToken(chain, order.getAssetSymbol());
+            TokenDefinition token = assets.requireToken(profile, order.getAssetSymbol());
             return evmTransactionService.sendToken(chain, from, token, order.getToAddress(), order.getAmount());
         }
         return switch (chain) {
             case "SOLANA" -> {
                 if (assets.isNative(profile, order.getAssetSymbol())) {
                     yield solanaTransactionService.sendNative(
-                            from, order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())));
+                            from, order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
                 }
-                TokenDefinition token = assets.requireToken(chain, order.getAssetSymbol());
+                TokenDefinition token = assets.requireToken(profile, order.getAssetSymbol());
                 yield solanaTransactionService.sendTokenAmount(
                         from, token.getContractAddress(), order.getToAddress(), order.getAmount(), token.getDecimals());
             }
             case "APTOS" -> assets.isNative(profile, order.getAssetSymbol())
                     ? aptosTransactionService.sendNative(from, order.getToAddress(),
-                    assets.toAtomicLong(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())))
-                    : aptosTransactionService.sendToken(from, assets.requireToken(chain, order.getAssetSymbol()),
-                    order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())));
+                    assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())))
+                    : aptosTransactionService.sendToken(from, assets.requireToken(profile, order.getAssetSymbol()),
+                    order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
             case "SUI" -> assets.isNative(profile, order.getAssetSymbol())
                     ? suiTransactionService.sendNative(from, order.getToAddress(),
-                    assets.toAtomicLong(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())))
-                    : suiTransactionService.sendCoin(from, assets.requireToken(chain, order.getAssetSymbol()).getContractAddress(),
-                    order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())));
+                    assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())))
+                    : suiTransactionService.sendCoin(from, assets.requireToken(profile, order.getAssetSymbol()).getContractAddress(),
+                    order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
             case "TON" -> assets.isNative(profile, order.getAssetSymbol())
-                    ? broadcastTonNative(order, from)
-                    : broadcastTonJetton(order, from, assets.requireToken(chain, order.getAssetSymbol()));
+                    ? broadcastTonNative(profile, order, from)
+                    : broadcastTonJetton(order, from, assets.requireToken(profile, order.getAssetSymbol()));
             case "XRP" -> assets.isNative(profile, order.getAssetSymbol())
                     ? xrpTransactionService.sendNative(from, order.getToAddress(), order.getAmount())
                     : xrpTransactionService.sendIssuedCurrency(
-                    from, assets.requireToken(chain, order.getAssetSymbol()), order.getToAddress(), order.getAmount());
+                    from, assets.requireToken(profile, order.getAssetSymbol()), order.getToAddress(), order.getAmount());
             case "ADA" -> {
                 if (assets.isNative(profile, order.getAssetSymbol())) {
                     yield cardanoTransactionService.sendNative(from, order.getToAddress(),
-                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())));
+                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
                 }
-                yield cardanoTransactionService.sendToken(from, assets.requireToken(chain, order.getAssetSymbol()),
+                yield cardanoTransactionService.sendToken(from, assets.requireToken(profile, order.getAssetSymbol()),
                         order.getToAddress(), order.getAmount());
             }
             case "DOT" -> {
                 if (assets.isNative(profile, order.getAssetSymbol())) {
                     yield polkadotTransactionService.sendNative(from, order.getToAddress(),
-                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())));
+                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
                 }
-                yield polkadotTransactionService.sendAsset(from, assets.requireToken(chain, order.getAssetSymbol()),
+                yield polkadotTransactionService.sendAsset(from, assets.requireToken(profile, order.getAssetSymbol()),
                         order.getToAddress(), order.getAmount());
             }
             case "XMR" -> {
@@ -294,16 +294,16 @@ public class AccountChainWorkflowService {
             case "NEAR" -> {
                 if (assets.isNative(profile, order.getAssetSymbol())) {
                     yield nearTransactionService.sendNative(from, order.getToAddress(),
-                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())));
+                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
                 }
-                yield nearTransactionService.sendToken(from, assets.requireToken(chain, order.getAssetSymbol()),
+                yield nearTransactionService.sendToken(from, assets.requireToken(profile, order.getAssetSymbol()),
                         order.getToAddress(), order.getAmount());
             }
             case "HYPERCORE" -> {
                 if (assets.isNative(profile, order.getAssetSymbol())) {
                     yield hyperCoreTransactionService.sendUsd(profile, from, order.getToAddress(), order.getAmount());
                 }
-                yield hyperCoreTransactionService.sendSpot(profile, from, assets.requireToken(chain, order.getAssetSymbol()),
+                yield hyperCoreTransactionService.sendSpot(profile, from, assets.requireToken(profile, order.getAssetSymbol()),
                         order.getToAddress(), order.getAmount());
             }
             case "TRON" -> tronWorkflow.broadcast(profile, order, from);
@@ -347,15 +347,15 @@ public class AccountChainWorkflowService {
             return;
         }
         BigDecimal evmFeeReserve = "evm".equalsIgnoreCase(profile.getFamily())
-                ? evmTransactionService.estimateCollectionFeeReserve(
-
-                        profile.getChain(),
-                        chainProfileRepository.findAccountByChain(profile.getChain()).map(configuredNetworkProfile -> tokenConfigRepository.listDefinitions(profile.getChain(), configuredNetworkProfile.getNetwork())).orElse(List.of()).size())
+                ? evmTransactionService.estimateCollectionFeeReserve(profile.getChain(),
+                        tokenConfigRepository.listDefinitions(profile.getChain(), profile.getNetwork()).size())
                 : BigDecimal.ZERO;
+        BigDecimal nativeReserve = candidates.stream().anyMatch(candidate -> assets.isNative(profile, candidate.getAssetSymbol()))
+                ? assets.collectionFeeReserve(profile, evmFeeReserve) : BigDecimal.ZERO;
         record TenantChainKey(UUID tenantId, String chain) { }
         Map<TenantChainKey, Optional<String>> collectionAddresses = new HashMap<>();
         for (CollectionCandidateRecord candidate : candidates) {
-            BigDecimal amount = assets.collectionAmount(profile, candidate, evmFeeReserve);
+            BigDecimal amount = assets.collectionAmount(profile, candidate, nativeReserve);
             if (amount.signum() <= 0) {
                 continue;
             }
@@ -393,7 +393,7 @@ public class AccountChainWorkflowService {
                     : evmTransactionService.sendToken(
                             record.getChain(),
                             from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()),
+                            assets.requireToken(profile, record.getAssetSymbol()),
                             record.getToAddress(),
                             record.getAmount());
             collectionRecordRepository.updateStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
@@ -403,9 +403,9 @@ public class AccountChainWorkflowService {
             case "SOLANA" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     solanaTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 } else {
-                    TokenDefinition token = assets.requireToken(record.getChain(), record.getAssetSymbol());
+                    TokenDefinition token = assets.requireToken(profile, record.getAssetSymbol());
                     solanaTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
                             token.getContractAddress(), record.getToAddress(), record.getAmount());
                 }
@@ -413,21 +413,21 @@ public class AccountChainWorkflowService {
             case "APTOS" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     aptosTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 } else {
                     aptosTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            assets.requireToken(profile, record.getAssetSymbol()).getContractAddress(),
+                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 }
             }
             case "SUI" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     suiTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 } else {
                     suiTransactionService.collectCoin(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            assets.requireToken(profile, record.getAssetSymbol()).getContractAddress(),
+                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 }
             }
             case "TON" -> {
@@ -436,7 +436,7 @@ public class AccountChainWorkflowService {
                             record.getToAddress(), record.getAmount(),
                             "collection:" + record.getCollectionNo());
                 } else {
-                    TokenDefinition token = assets.requireToken(record.getChain(), record.getAssetSymbol());
+                    TokenDefinition token = assets.requireToken(profile, record.getAssetSymbol());
                     tonTransactionService.collectJetton(record.getTenantId(), record.getCollectionNo(), from,
                             token.getContractAddress(), record.getToAddress(), record.getAmount(),
                             "collection:" + record.getCollectionNo());
@@ -449,27 +449,27 @@ public class AccountChainWorkflowService {
                 } else {
                     xrpTransactionService.collectIssuedCurrency(
                             record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()),
+                            assets.requireToken(profile, record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
             case "ADA" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     cardanoTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 } else {
                     cardanoTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()),
+                            assets.requireToken(profile, record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
             case "DOT" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     polkadotTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 } else {
                     polkadotTransactionService.collectAsset(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()),
+                            assets.requireToken(profile, record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
@@ -479,10 +479,10 @@ public class AccountChainWorkflowService {
             case "NEAR" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     nearTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(record.getChain(), record.getAssetSymbol())));
+                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
                 } else {
                     nearTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(record.getChain(), record.getAssetSymbol()),
+                            assets.requireToken(profile, record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
@@ -493,7 +493,7 @@ public class AccountChainWorkflowService {
                 String actionId = assets.isNative(profile, record.getAssetSymbol())
                         ? hyperCoreTransactionService.sendUsd(profile, from, record.getToAddress(), record.getAmount())
                         : hyperCoreTransactionService.sendSpot(profile, from,
-                        assets.requireToken(record.getChain(), record.getAssetSymbol()),
+                        assets.requireToken(profile, record.getAssetSymbol()),
                         record.getToAddress(), record.getAmount());
                 collectionRecordRepository.updateStatus(
                         record.getTenantId(),
@@ -547,9 +547,9 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    private String broadcastTonNative(WithdrawalOrderRecord order, ChainAddressRecord from) {
+    private String broadcastTonNative(AccountChainProfile profile, WithdrawalOrderRecord order, ChainAddressRecord from) {
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareNative(
-                from, order.getToAddress(), assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(order.getChain(), order.getAssetSymbol())),
+                from, order.getToAddress(), assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())),
                 "withdraw:" + order.getOrderNo());
         return tonTransactionService.broadcastAndRecord(prepared, from.getAddress(), order.getToAddress(),
                 order.getAssetSymbol(), null, order.getAmount());

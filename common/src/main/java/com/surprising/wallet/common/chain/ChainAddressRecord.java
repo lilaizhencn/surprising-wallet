@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.UUID;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 /**
  * 链上地址记录，保存每个用户在各个链上生成的地址信息及其派生路径。

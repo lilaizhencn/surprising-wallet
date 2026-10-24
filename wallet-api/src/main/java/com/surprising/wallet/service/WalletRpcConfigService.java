@@ -5,12 +5,14 @@ import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.config.WalletRpcPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 
 import com.surprising.wallet.model.CustodyPrincipal;
@@ -27,19 +29,21 @@ public class WalletRpcConfigService {
     private final ChainRpcNodeRepository rpcNodeRepository;
     private final TokenConfigRepository tokenConfigRepository;
     private final CustodyAuditRepository audits;
+    private final ObjectMapper mapper;
     private final String environment;
     private final WalletRpcClient rpcClient;
 
     public WalletRpcConfigService(ChainProfileRepository chainProfileRepository,
                                  ChainRpcNodeRepository rpcNodeRepository,
                                  TokenConfigRepository tokenConfigRepository,
-                                 CustodyAuditRepository audits,
+                                 CustodyAuditRepository audits, ObjectMapper mapper,
                                  @Value("${sw.app.env.name:dev}") String environment,
                                  WalletRpcClient rpcClient) {
         this.chainProfileRepository = chainProfileRepository;
         this.rpcNodeRepository = rpcNodeRepository;
         this.tokenConfigRepository = tokenConfigRepository;
         this.audits = audits;
+        this.mapper = mapper;
         this.environment = normalizeLower(environment);
         this.rpcClient = rpcClient;
     }
@@ -100,16 +104,14 @@ public class WalletRpcConfigService {
         }
         rpcNodeRepository.delete(nodeId, chain.getChain(), chain.getNetwork());
         audit(actor, "WALLET_RPC.DELETE", "CHAIN_RPC_NODE", String.valueOf(nodeId), sourceIp,
-                "{\"chain\":" + json(chain.getChain()) + ",\"network\":" + json(chain.getNetwork()) + "}");
+                Map.of("chain", chain.getChain(), "network", chain.getNetwork()));
     }
 
     public RpcTestView testRpcNode(CustodyPrincipal actor, long chainId, long nodeId) {
         requirePlatformAdmin(actor);
         AccountChainProfile chain = requireChain(chainId);
         ChainRpcNode node = requireRpcNode(chain, nodeId);
-        WalletRpcClient.ProbeResult result = rpcClient.probe(
-                node.getRpcUrl(), node.getConnectionType(), node.getAuthType(), node.getAuthHeaderName(),
-                node.getApiKey(), node.getUsername(), node.getPassword());
+        WalletRpcClient.ProbeResult result = rpcClient.probe(node);
         rpcNodeRepository.updateProbe(nodeId, result.checkedAt(), result.latencyMs(),
                 result.statusCode(), result.error());
         return new RpcTestView(result.success(), result.statusCode(), result.latencyMs(),
@@ -220,16 +222,15 @@ public class WalletRpcConfigService {
     }
 
     private void audit(CustodyPrincipal actor, String action, String resourceType,
-                       String resourceId, String sourceIp, String details) {
+                       String resourceId, String sourceIp, Map<String, ?> details) {
         audits.insert(UUID.randomUUID(), null, "PLATFORM_USER", actor.actorId().toString(), action,
-                resourceType, resourceId, sourceIp, details);
+                resourceType, resourceId, sourceIp, mapper.writeValueAsString(details));
     }
 
-    private static String rpcAudit(ChainRpcNode value) {
-        return "{\"environment\":" + json(value.getEnvironment()) + ",\"purpose\":"
-                + json(value.getPurpose()) + ",\"enabled\":" + value.getEnabled()
-                + ",\"credentialsConfigured\":"
-                + (!blank(value.getApiKey()) || !blank(value.getUsername()) || !blank(value.getPassword())) + "}";
+    private static Map<String, Object> rpcAudit(ChainRpcNode value) {
+        return Map.of("environment", value.getEnvironment(), "purpose", value.getPurpose(),
+                "enabled", value.getEnabled(), "credentialsConfigured",
+                !blank(value.getApiKey()) || !blank(value.getUsername()) || !blank(value.getPassword()));
     }
 
     private static String secret(String requested, String current) {

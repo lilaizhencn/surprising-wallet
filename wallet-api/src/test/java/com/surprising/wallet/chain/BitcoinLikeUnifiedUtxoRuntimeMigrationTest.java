@@ -29,10 +29,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
         Assumptions.assumeTrue(Boolean.getBoolean("utxo.migration.db.enabled"),
                 "set -Dutxo.migration.db.enabled=true for PostgreSQL-backed UTXO migration validation");
 
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                env("UTXO_MIGRATION_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
-                env("UTXO_MIGRATION_DB_USER", "wallet"),
-                env("UTXO_MIGRATION_DB_PASSWORD", ""));
+        DriverManagerDataSource dataSource = com.surprising.wallet.custody.CustodyIntegrationDatabase.dataSource();
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
@@ -41,8 +38,13 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
 
             try {
                 ensureBitcoinLikeProfiles(jdbc);
+                UUID tenant = UUID.randomUUID();
+                jdbc.update("insert into custody_tenant(id, slug, name, derivation_namespace) values (?, ?, 'UTXO DB flow', nextval('custody_derivation_namespace_seq'))",
+                        tenant, "utxo-db-" + tenant);
                 for (ChainType chainType : List.of(ChainType.BTC, ChainType.LTC, ChainType.DOGE, ChainType.BCH)) {
                     String chain = chainType.name();
+                    var profile = repository.chainProfileRepository.findAccountByChain(chain).orElseThrow();
+                    int coinType = profile.getBip44CoinType();
                     String txHash = "migration" + UUID.randomUUID().toString().replace("-", "");
                     String address = "migration-address-" + chain.toLowerCase();
                     String accountId = "migration-account-" + chain.toLowerCase() + "-" + UUID.randomUUID();
@@ -56,7 +58,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             1,
                             10,
                             0,
-                            repository.chainProfileRepository.findAccountByChain(chain).orElseThrow(() -> new IllegalStateException("missing enabled chain profile for unified UTXO chain")).getRuntimeCurrencyId());
+                            profile.getRuntimeCurrencyId());
                     UtxoTransaction selected = spendable.stream()
                             .filter(utxo -> txHash.equals(utxo.getTxId()) && utxo.getSeq() == 0)
                             .findFirst()
@@ -73,6 +75,12 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                     assertEquals(0, repository.utxoRepository.release(chain, lockRef));
 
                     String depositTx = "deposit" + UUID.randomUUID().toString().replace("-", "");
+                    repository.chainAddressRepository.upsert(ChainAddressRecord.builder()
+                            .tenantId(tenant).chain(chain).assetSymbol(chain).accountId(accountId)
+                            .userId(60000L + chainType.ordinal()).biz(1).addressIndex(0L).address(address)
+                            .derivationPath("m/44/" + coinType + "/1/" + (60000L + chainType.ordinal()) + "/0")
+                            .walletRole("DEPOSIT").enabled(true).build());
+                    com.surprising.wallet.testutil.DepositTestSupport.attachCustodyAddress(jdbc, tenant, chain, chain, address);
                     DepositEvent event = new DepositEvent(
                             chainType, chain, depositTx, null, address,
                             amount, 101L, depositTx, 6, null, "{}");
@@ -98,7 +106,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             .biz(1)
                             .addressIndex(0L)
                             .address("migration-address-" + chain.toLowerCase() + "-0")
-                            .derivationPath("m/44/" + bip44CoinType(chain) + "/1/" + userId + "/0")
+                            .derivationPath("m/44/" + coinType + "/1/" + userId + "/0")
                             .walletRole("DEPOSIT")
                             .enabled(true)
                             .build());
@@ -110,7 +118,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             .biz(1)
                             .addressIndex(1L)
                             .address("migration-address-" + chain.toLowerCase() + "-1")
-                            .derivationPath("m/44/" + bip44CoinType(chain) + "/1/" + userId + "/1")
+                            .derivationPath("m/44/" + coinType + "/1/" + userId + "/1")
                             .walletRole("DEPOSIT")
                             .enabled(true)
                             .build());
@@ -124,13 +132,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
         }
     }
 
-    /**
-     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value;
-    }
+
 
     /**
      * 验证 {@code runtimeCurrencyId} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -149,53 +151,14 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
      * 验证 {@code ensureBitcoinLikeProfiles} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {
-        jdbc.update("""
-                insert into chain_profile(chain, network, family, runtime_currency_id, bip44_coin_type,
-                                          native_symbol, deposit_confirmations, withdraw_confirmations,
-                                          default_fee_rate, dust_threshold, enabled)
-                values
-                    ('BTC', 'testnet3', 'bitcoin-like', 1, 0, 'BTC', 1, 6, 2, 546, true),
-                    ('LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC', 1, 6, 2, 1000, true),
-                    ('DOGE', 'regtest', 'bitcoin-like', 41, 3, 'DOGE', 6, 6, 1000, 1000000, true),
-                    ('BCH', 'regtest', 'bitcoin-like', 42, 145, 'BCH', 6, 6, 1, 546, true)
-                on conflict (chain, network) do update set
-                    runtime_currency_id = excluded.runtime_currency_id,
-                    bip44_coin_type = excluded.bip44_coin_type,
-                    native_symbol = excluded.native_symbol,
-                    deposit_confirmations = excluded.deposit_confirmations,
-                    withdraw_confirmations = excluded.withdraw_confirmations,
-                    default_fee_rate = excluded.default_fee_rate,
-                    dust_threshold = excluded.dust_threshold,
-                    enabled = excluded.enabled,
-                    updated_at = now()
-                """);
-        jdbc.update("""
-                insert into chain_asset(chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw)
-                values
-                    ('BTC', 'BTC', 'NATIVE', 8, true, true, 546, 546),
-                    ('LTC', 'LTC', 'NATIVE', 8, true, true, 100000, 100000),
-                    ('DOGE', 'DOGE', 'NATIVE', 8, true, true, 1000000, 1000000),
-                    ('BCH', 'BCH', 'NATIVE', 8, true, true, 546, 546)
-                on conflict (chain, symbol) do update set
-                    decimals = excluded.decimals,
-                    native_asset = excluded.native_asset,
-                    active = excluded.active,
-                    min_transfer = excluded.min_transfer,
-                    min_withdraw = excluded.min_withdraw,
-                    updated_at = now()
-                """);
+        var profiles = new com.surprising.wallet.repository.ChainProfileRepository(jdbc);
+        for (ChainType type : List.of(ChainType.BTC, ChainType.LTC, ChainType.DOGE, ChainType.BCH)) {
+            var profile = profiles.findAccountByChain(type.name()).orElseThrow();
+            jdbc.update("update chain_profile set enabled=false where chain=? and id<>?", type.name(), profile.getId());
+            jdbc.update("update chain_profile set enabled=true where id=?", profile.getId());
+            jdbc.update("update chain_asset set active=true where chain=? and symbol=? and native_asset=true",
+                    type.name(), profile.getNativeSymbol());
+        }
     }
 
-    /**
-     * 验证 {@code bip44CoinType} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static int bip44CoinType(String chain) {
-        return switch (chain) {
-            case "BTC" -> 0;
-            case "LTC" -> 2;
-            case "DOGE" -> 3;
-            case "BCH" -> 145;
-            default -> throw new IllegalArgumentException(chain);
-        };
-    }
 }

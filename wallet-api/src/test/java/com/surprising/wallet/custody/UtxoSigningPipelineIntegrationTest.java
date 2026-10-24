@@ -286,7 +286,7 @@ class UtxoSigningPipelineIntegrationTest {
                 null, List.of(new UtxoSigningRequest.Input(INPUT, 0, "source", input, new UtxoSigningRequest.Key(100, 0, 0, null))),
                 List.of(new UtxoSigningRequest.Payment("WD-PIPELINE", 100, recipient, amount, fee)), recipient,
                 chain.equals("DOGE") ? DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE : 10, 546);
-        assertEquals(1, orders.createForTenant(TENANT, "WD-PIPELINE", 100, chain, chain, "source", account(chain), recipient, amount, fee));
+        assertTrue(orders.createForTenant(TENANT, "WD-PIPELINE", 100, chain, chain, "source", account(chain), recipient, amount, fee) > 0L);
         assertEquals(1, orders.updateStatus(TENANT, chain, "WD-PIPELINE", "SIGNING", "source", null, null));
         jdbc.update("insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance, total_balance) values (?, ?, ?, ?, ?, ?)",
                 TENANT, chain, chain, account(chain), input, input);

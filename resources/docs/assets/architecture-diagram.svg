@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="2440" viewBox="0 0 1100 2440">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="2615" viewBox="0 0 1100 2615">
   <style>
     .svc   { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 10; }
     .lib   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 10; }
@@ -247,4 +247,9 @@
   <text x="50" y="2302" class="desc">提现 / 归集 / 确认保留各自业务规则；TRON 只共享发送，SENT 仍先于客户端关闭</text>
   <text x="50" y="2336" class="desc">托管地址：一次 profile → 正式运行时 → 持久化记录；归集类型聚合；删除 Aptos / Sui 重复服务</text>
   <text x="50" y="2370" class="desc">TRON SDK 私有；参考块分别限流后本地构建；密钥状态按实际材料判断；开关统一读取</text>
+  <rect x="30" y="2420" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="2448" style="font:13px sans-serif;fill:#1e293b">节点认证：ChainRpcNodeService → Console / HTTP / WebSocket / EVM 找回；JSON 使用 Jackson</text>
+  <text x="50" y="2482" style="font:13px sans-serif;fill:#1e293b">Token：事务外链上验证 → profile / Token 行锁复核 → 配置 / 资产 / 审计短事务</text>
+  <text x="50" y="2516" style="font:13px sans-serif;fill:#1e293b">找回：直接 EVM Gateway；保留原始地址与派生参数；删除接口列表与选择器</text>
+  <text x="50" y="2550" style="font:13px sans-serif;fill:#1e293b">提现：本次地址记录 → INSERT 返回 ID → 条件冻结；归集规划复用本次配置</text>
 </svg>

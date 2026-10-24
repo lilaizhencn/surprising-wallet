@@ -232,8 +232,6 @@ class Evm7702ProductionFlowIntegrationTest {
                         new ChainAssetRepository(jdbc),
                         new ChainProfileRepository(jdbc),
                         new TokenConfigRepository(jdbc),
-                        new CustodyAddressRepository(jdbc),
-                        new ChainAddressRepository(jdbc),
                         new LedgerBalanceRepository(jdbc));
         withdrawalService = new CustodyWithdrawalService(
 

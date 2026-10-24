@@ -75,18 +75,19 @@ public class WithdrawalOrderRepository {
                 """, orderNo, userId, chain, assetSymbol, fromAddress, debitAccountId, toAddress, amount, fee, now, now);
     }
 
-    /** 创建租户提现订单。 */
-    public int createForTenant(UUID tenantId, String orderNo, long userId, String chain, String assetSymbol,
+    /** 创建租户提现订单，返回新订单 ID；业务键冲突时返回 0。 */
+    public long createForTenant(UUID tenantId, String orderNo, long userId, String chain, String assetSymbol,
                                String fromAddress, String debitAccountId, String toAddress,
                                BigDecimal amount, BigDecimal fee) {
         Timestamp now = Timestamp.from(Instant.now());
-        return jdbc.update("""
+        List<Long> ids = jdbc.query("""
                 insert into withdrawal_order(tenant_id, order_no, user_id, chain, asset_symbol, from_address,
                     debit_account_id, to_address, amount, fee, status, created_at, updated_at)
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
-                on conflict (chain, order_no) do nothing
-                """, tenantId, orderNo, userId, chain, assetSymbol, fromAddress, debitAccountId,
+                on conflict (chain, order_no) do nothing returning id
+                """, (rs, rowNum) -> rs.getLong("id"), tenantId, orderNo, userId, chain, assetSymbol, fromAddress, debitAccountId,
                 toAddress, amount, fee, now, now);
+        return ids.isEmpty() ? 0L : ids.getFirst();
     }
 
     /** 查询租户下一批待签名提现。 */

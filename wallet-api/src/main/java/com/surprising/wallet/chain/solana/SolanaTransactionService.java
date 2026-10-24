@@ -255,7 +255,7 @@ public class SolanaTransactionService {
         long amountLamports = toAtomicAmount(amount, 9);
         long feeLamports = profile().getDefaultFee();
         BigDecimal fee = BigDecimal.valueOf(feeLamports).movePointLeft(9);
-        int inserted = withdrawalOrderRepository.createForTenant(
+        long inserted = withdrawalOrderRepository.createForTenant(
                 tenantId,
                 orderNo,
                 userId,
@@ -324,7 +324,7 @@ public class SolanaTransactionService {
                 configuredNetworkProfile.getNetwork(),
                 mintAddress))
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
-        int inserted = withdrawalOrderRepository.createForTenant(
+        long inserted = withdrawalOrderRepository.createForTenant(
                 tenantId,
                 orderNo,
                 userId,

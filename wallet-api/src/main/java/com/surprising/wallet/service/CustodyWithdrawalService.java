@@ -140,8 +140,7 @@ public class CustodyWithdrawalService {
         String orderPrefix = "CW-" + tenantOrderSlug + "-"
                 + address.id().toString().substring(0, 8);
         CustodyWithdrawalExecutionService.ExecutionResult result = executionService.execute(
-                tenant.id(), address, chain, symbol, toAddress,
-                new BigDecimal(amount), orderPrefix);
+                address, account, symbol, toAddress, new BigDecimal(amount), orderPrefix);
         UUID withdrawalId = UUID.randomUUID();
         String orderNo = result.orderNo();
         String status = result.status();

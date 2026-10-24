@@ -36,10 +36,7 @@ class SolanaDatabaseFlowIntegrationTest {
     void addressRestartDepositReplayAndLedgerLocksAreSafe() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("solana.db.enabled"),
                 "set -Dsolana.db.enabled=true for PostgreSQL-backed Solana validation");
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                env("SOLANA_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
-                env("SOLANA_DB_USER", "wallet"),
-                env("SOLANA_DB_PASSWORD", ""));
+        DriverManagerDataSource dataSource = com.surprising.wallet.custody.CustodyIntegrationDatabase.dataSource();
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
@@ -59,6 +56,8 @@ class SolanaDatabaseFlowIntegrationTest {
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());
             assertNotEquals(userA.getAddress(), userB.getAddress());
 
+            SolanaTenantIntegrationFixture.attachDepositAddress(jdbc, userA);
+            SolanaTenantIntegrationFixture.attachDepositAddress(jdbc, userB);
             String signature = UUID.randomUUID().toString().replace("-", "");
             DepositEvent deposit = new DepositEvent(ChainType.SOLANA, "SOL", signature,
                     "external", userA.getAddress(), new BigDecimal("10000000"),
@@ -87,11 +86,5 @@ class SolanaDatabaseFlowIntegrationTest {
         }
     }
 
-    /**
-     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value;
-    }
+
 }

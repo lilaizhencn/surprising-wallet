@@ -56,18 +56,20 @@ class CustodyWithdrawalAddressValidationTest {
         when(assets.findActive(chain, chain)).thenReturn(Optional.of(com.surprising.wallet.chain.model.ChainAsset.builder().nativeAsset(true).decimals(18).build()));
         when(profiles.listEnabledForWithdrawal(chain)).thenReturn(List.of(AccountChainProfile.builder().nativeSymbol(chain).build()));
         var chains = ChainRepositoryFixture.mocked();
-        var custodyAddresses = mock(CustodyAddressRepository.class);
-        var chainAddresses = mock(ChainAddressRepository.class);
         var balances = mock(LedgerBalanceRepository.class);
         var service = new CustodyWithdrawalExecutionService(chains.withdrawalOrderRepository, chains.collectionPlanningService, mock(WalletRuntimeConfigService.class),
-                runtime, assets, profiles, mock(TokenConfigRepository.class), custodyAddresses, chainAddresses, balances);
+                runtime, assets, profiles, mock(TokenConfigRepository.class), balances);
 
+        var custody = mock(com.surprising.wallet.chain.model.CustodyAddressRecord.class);
+        when(custody.tenantId()).thenReturn(UUID.randomUUID());
+        when(custody.chain()).thenReturn(chain);
         var error = assertThrows(IllegalArgumentException.class, () -> service.execute(
-                UUID.randomUUID(), null, chain, chain, "not-an-address", BigDecimal.ONE, "WITHDRAW"));
+                custody, mock(com.surprising.wallet.common.chain.ChainAddressRecord.class),
+                chain, "not-an-address", BigDecimal.ONE, "WITHDRAW"));
 
         assertEquals("invalid " + chain + " address", error.getMessage());
         verifyNoInteractions(chains.dependencies());
-        verifyNoInteractions(custodyAddresses, chainAddresses, balances);
+        verifyNoInteractions(balances);
     }
 
     @ParameterizedTest

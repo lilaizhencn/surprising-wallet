@@ -311,7 +311,7 @@ class CustodyMultiChainLoadIntegrationTest {
     CustodyWithdrawalRepository custody, WithdrawalSettlementService settlements, UUID tenantId,
                                                    UserAccount account) {
         String orderNo = "LOAD-" + account.chain().name() + "-" + account.index();
-        int created = chains.withdrawalOrderRepository.createForTenant(
+        long orderId = chains.withdrawalOrderRepository.createForTenant(
                 tenantId,
                 orderNo,
                 Integer.toUnsignedLong(account.derivationSubject()),
@@ -322,11 +322,11 @@ class CustodyMultiChainLoadIntegrationTest {
                 address(account.chain(), account.index() + 20_000),
                 WITHDRAW_AMOUNT,
                 BigDecimal.ZERO);
-        assertEquals(1, created);
+        assertTrue(orderId > 0);
         assertTrue(chains.ledgerBalanceRepository.freeze(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, tenantId));
         chains.withdrawalOrderRepository.updateStatus(tenantId, account.chain().name(), orderNo, "FROZEN", account.address(), null, null);
         custody.insert(
-                UUID.randomUUID(), tenantId, account.custodyAddressId(), chains.withdrawalOrderRepository.find(account.chain().name(), orderNo, tenantId).orElseThrow().getId().longValue(), orderNo,
+                UUID.randomUUID(), tenantId, account.custodyAddressId(), orderId, orderNo,
                 "external-" + account.index(), "load-idempotency-" + account.index(),
                 account.chain().name(), account.symbol(),
                 address(account.chain(), account.index() + 20_000), WITHDRAW_AMOUNT, BigDecimal.ZERO,

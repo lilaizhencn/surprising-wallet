@@ -172,8 +172,9 @@ class EvmForkTransactionServiceIntegrationTest {
                 insert into ledger_balance(tenant_id, chain, asset_symbol, account_id,
                     available_balance, locked_balance, total_balance) values (?, ?, ?, ?, ?, 0, ?)
                 """, TENANT, profile.getChain(), symbol, account, debit.add(BigDecimal.ONE), debit.add(BigDecimal.ONE));
-        assertEquals(1, repository.withdrawalOrderRepository.createForTenant(TENANT, orderNo, from.getUserId(),
-                profile.getChain(), symbol, from.getAddress(), account, recipient, amount, customerFee));
+        long orderId = repository.withdrawalOrderRepository.createForTenant(TENANT, orderNo, from.getUserId(),
+                profile.getChain(), symbol, from.getAddress(), account, recipient, amount, customerFee);
+        assertTrue(orderId > 0);
         assertTrue(repository.ledgerBalanceRepository.freeze(profile.getChain(), symbol, account, debit, TENANT));
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(TENANT, profile.getChain(), orderNo,
                 "SENT", from.getAddress(), hash, null));

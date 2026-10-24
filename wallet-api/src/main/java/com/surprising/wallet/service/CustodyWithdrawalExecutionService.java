@@ -3,10 +3,10 @@ package com.surprising.wallet.service;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import java.util.Objects;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
-import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
@@ -32,10 +32,6 @@ public class CustodyWithdrawalExecutionService {
     private final ChainProfileRepository chainProfileRepository;
     /** token_config 单表仓储。 */
     private final TokenConfigRepository tokenConfigRepository;
-    /** custody_address 单表仓储。 */
-    private final CustodyAddressRepository custodyAddressRepository;
-    /** chain_address 单表仓储。 */
-    private final ChainAddressRepository chainAddressRepository;
     /** ledger_balance 单表仓储。 */
     private final LedgerBalanceRepository ledgerBalanceRepository;
 
@@ -47,8 +43,6 @@ public class CustodyWithdrawalExecutionService {
             ChainAssetRepository chainAssetRepository,
             ChainProfileRepository chainProfileRepository,
             TokenConfigRepository tokenConfigRepository,
-            CustodyAddressRepository custodyAddressRepository,
-            ChainAddressRepository chainAddressRepository,
             LedgerBalanceRepository ledgerBalanceRepository) {
         this.withdrawalOrderRepository = withdrawalOrderRepository;
         this.collectionPlanningService = collectionPlanningService;
@@ -57,26 +51,25 @@ public class CustodyWithdrawalExecutionService {
         this.chainAssetRepository = chainAssetRepository;
         this.chainProfileRepository = chainProfileRepository;
         this.tokenConfigRepository = tokenConfigRepository;
-        this.custodyAddressRepository = custodyAddressRepository;
-        this.chainAddressRepository = chainAddressRepository;
         this.ledgerBalanceRepository = ledgerBalanceRepository;
     }
 
-    public ExecutionResult execute(UUID tenantId, CustodyAddressRecord custodyAddress,
-                                   String chain, String symbol, String toAddress,
-                                   BigDecimal amount, String orderPrefix) {
+    public ExecutionResult execute(CustodyAddressRecord custodyAddress, ChainAddressRecord account,
+                                   String symbol, String toAddress, BigDecimal amount, String orderPrefix) {
+        UUID tenantId = custodyAddress.tenantId();
+        String chain = custodyAddress.chain();
         runtimeConfig.requireTaskEnabled(
                 chain, WalletRuntimeConfigService.TASK_WITHDRAW, "custody withdrawal create");
-        AssetMeta asset = requireAsset(chain, symbol);
+        BigDecimal feeReserve = requireFeeReserve(chain, symbol);
         toAddress = validateExternalAddress(chain, toAddress);
-        BigDecimal frozenAmount = amount.add(asset.networkFeeReserve());
+        BigDecimal frozenAmount = amount.add(feeReserve);
         SpendAccount spend = requireTenantSpendAccount(
-                tenantId, custodyAddress.id(), chain, symbol, frozenAmount);
-        String sourceAddress = withdrawalSourceAddress(tenantId, asset, spend);
+                custodyAddress, account, symbol, frozenAmount);
+        String sourceAddress = withdrawalSourceAddress(tenantId, chain, spend);
         String orderNo = normalizeOrderPrefix(orderPrefix) + "-" + System.currentTimeMillis()
                 + "-" + randomSuffix();
 
-        int created = withdrawalOrderRepository.createForTenant(
+        long orderId = withdrawalOrderRepository.createForTenant(
                 tenantId,
                 orderNo,
                 Integer.toUnsignedLong(custodyAddress.derivationSubject()),
@@ -86,8 +79,8 @@ public class CustodyWithdrawalExecutionService {
                 spend.accountId(),
                 toAddress,
                 amount,
-                asset.networkFeeReserve());
-        if (created != 1) {
+                feeReserve);
+        if (orderId == 0) {
             throw new IllegalStateException("duplicate withdrawal order");
         }
         if (!ledgerBalanceRepository.freeze(chain, symbol, spend.accountId(), frozenAmount, tenantId)) {
@@ -101,11 +94,9 @@ public class CustodyWithdrawalExecutionService {
                 ? "waiting for platform withdrawal approval before broadcast"
                 : null;
         withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
-        long orderId = withdrawalOrderRepository.find(chain, orderNo, tenantId)
-                .orElseThrow(() -> new IllegalArgumentException("withdrawal order not found")).getId();
-        return new ExecutionResult(orderId, orderNo, status, amount, asset.networkFeeReserve(), toAddress);
+        return new ExecutionResult(orderId, orderNo, status, amount, feeReserve, toAddress);
     }
-    private AssetMeta requireAsset(String chain, String symbol) {
+    private BigDecimal requireFeeReserve(String chain, String symbol) {
         ChainAsset asset = chainAssetRepository.findActive(chain, symbol)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "asset withdrawal is not enabled: " + chain + "/" + symbol));
@@ -123,35 +114,30 @@ public class CustodyWithdrawalExecutionService {
                     .max(atomicToDecimal(profile.getDustThreshold(), decimals))
                     .max(new BigDecimal("0.0001")).stripTrailingZeros()
                 : BigDecimal.ZERO;
-        return new AssetMeta(
-                chain, symbol, nativeAsset, String.valueOf(profile.getNativeSymbol()), networkFee);
+        return networkFee;
     }
 
-    private SpendAccount requireTenantSpendAccount(UUID tenantId, UUID custodyAddressId,
-                                                   String chain, String symbol,
-                                                   BigDecimal requiredAmount) {
-        var custody = custodyAddressRepository.findFullByTenantAndId(
-                        tenantId, custodyAddressId)
-                .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
-        if (!chain.equalsIgnoreCase(String.valueOf(custody.chain()))
-                || !"ACTIVE".equalsIgnoreCase(String.valueOf(custody.status()))) {
+    private SpendAccount requireTenantSpendAccount(CustodyAddressRecord custody, ChainAddressRecord address,
+                                                   String symbol, BigDecimal requiredAmount) {
+        UUID tenantId = Objects.requireNonNull(custody.tenantId(), "withdrawal tenantId is required");
+        String chain = custody.chain();
+        if (!"ACTIVE".equalsIgnoreCase(custody.status())
+                || !tenantId.equals(address.getTenantId())
+                || !Objects.equals(custody.chainAddressId(), address.getId())
+                || !Boolean.TRUE.equals(address.getEnabled())) {
             throw new IllegalArgumentException("insufficient available balance");
         }
-        long chainAddressId = custody.chainAddressId();
-        var address = chainAddressRepository.findOwned(tenantId, chainAddressId)
-                .filter(row -> Boolean.TRUE.equals(row.getEnabled()))
-                .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
         String accountId = String.valueOf(address.getAccountId());
         String availableAccount = ledgerBalanceRepository.findAvailableAccount(
                         tenantId, chain, symbol, accountId, requiredAmount)
                 .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
         return new SpendAccount(availableAccount, address.getAddress());
     }
-    private String withdrawalSourceAddress(UUID tenantId, AssetMeta asset, SpendAccount spend) {
-        if (ChainType.valueOf(asset.chain()).isUtxo()) {
+    private String withdrawalSourceAddress(UUID tenantId, String chain, SpendAccount spend) {
+        if (ChainType.valueOf(chain).isUtxo()) {
             return spend.address();
         }
-        return collectionPlanningService.destination(tenantId, asset.chain())
+        return collectionPlanningService.destination(tenantId, chain)
                 .orElse(spend.address());
     }
     private static String normalizeOrderPrefix(String value) {
@@ -179,9 +165,6 @@ public class CustodyWithdrawalExecutionService {
         return Integer.toUnsignedString(RANDOM.nextInt(), 36).toLowerCase(Locale.ROOT);
     }
 
-    private record AssetMeta(String chain, String symbol, boolean nativeAsset,
-                             String nativeSymbol, BigDecimal networkFeeReserve) {
-    }
     private record SpendAccount(String accountId, String address) {
     }
 

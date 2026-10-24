@@ -83,7 +83,7 @@ class TronAccountChainService {
             recordSent(chain, signed.txId(), from.getAddress(), recipient, "TRX", null, amount);
             return signed.txId();
         }
-        TokenDefinition token = assets.requireToken(chain, symbol);
+        TokenDefinition token = assets.requireToken(profile, symbol);
         TronTransactionService.SignedTronTransaction signed = tronTrc20Service.signTransfer(
                 client, keyPair, token.getContractAddress(), recipient, amount, token.getDecimals(), feeLimitSun(profile));
         client.broadcast(signed.transaction());

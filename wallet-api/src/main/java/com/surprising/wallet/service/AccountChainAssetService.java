@@ -8,7 +8,6 @@ import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.Evm7702ConfigRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import java.math.BigDecimal;
@@ -29,7 +28,6 @@ import org.springframework.stereotype.Service;
 class AccountChainAssetService {
     private final Evm7702ConfigRepository evm7702ConfigRepository;
     private final ChainAddressRepository chainAddressRepository;
-    private final ChainProfileRepository chainProfileRepository;
     private final TokenConfigRepository tokenConfigRepository;
     private final ChainAssetRepository chainAssetRepository;
 
@@ -37,24 +35,18 @@ class AccountChainAssetService {
 
     BigDecimal collectionAmount(AccountChainProfile profile,
                                 CollectionCandidateRecord candidate,
-                                BigDecimal evmFeeReserve) {
+                                BigDecimal feeReserve) {
         BigDecimal amount = candidate.getAmount() == null
                 ? BigDecimal.ZERO
                 : candidate.getAmount();
         if (!isNative(profile, candidate.getAssetSymbol())) {
             return amount;
         }
-        if ("evm".equalsIgnoreCase(profile.getFamily())
-                && evm7702ConfigRepository.existsManaged(profile.getChain(), profile.getNetwork())) {
-            return amount;
-        }
         if ("XRP".equals(profile.getChain())) {
             return xrpTransactionService.collectableNativeAmount(
                     candidate.getAddress(), amount);
         }
-        BigDecimal reserve = nativeCollectionFeeReserve(
-                profile, candidate, evmFeeReserve);
-        return amount.subtract(reserve).max(BigDecimal.ZERO);
+        return amount.subtract(feeReserve).max(BigDecimal.ZERO);
     }
 
     ChainAddressRecord requireAddress(String chain, String symbol, String address) {
@@ -80,19 +72,16 @@ class AccountChainAssetService {
                                 + chain + "/" + symbol + " " + address));
     }
 
-    TokenDefinition requireToken(String chain, String symbol) {
-        return chainProfileRepository.findAccountByChain(chain).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinition(
-                chain,
-                configuredNetworkProfile.getNetwork(),
-                symbol))
+    TokenDefinition requireToken(AccountChainProfile profile, String symbol) {
+        return tokenConfigRepository.findDefinition(profile.getChain(), profile.getNetwork(), symbol)
                 .orElseThrow(() -> new IllegalStateException(
-                        "missing token_config for " + chain + "/" + symbol));
+                        "missing token_config for " + profile.getChain() + "/" + symbol));
     }
 
-    int assetDecimals(String chain, String symbol) {
-        return chainAssetRepository.findActiveDefinition(chain, symbol)
+    int assetDecimals(AccountChainProfile profile, String symbol) {
+        return chainAssetRepository.findActiveDefinition(profile.getChain(), symbol)
                 .map(ChainAsset::getDecimals)
-                .orElseGet(() -> requireToken(chain, symbol).getDecimals());
+                .orElseGet(() -> requireToken(profile, symbol).getDecimals());
     }
 
     BigDecimal toAtomicDecimal(BigDecimal amount, int decimals) {
@@ -114,12 +103,13 @@ class AccountChainAssetService {
                 && symbol.equalsIgnoreCase(profile.getNativeSymbol());
     }
 
-    private BigDecimal nativeCollectionFeeReserve(
-            AccountChainProfile profile,
-            CollectionCandidateRecord candidate,
-            BigDecimal evmFeeReserve) {
-        int decimals = assetDecimals(
-                candidate.getChain(), candidate.getAssetSymbol());
+    BigDecimal collectionFeeReserve(AccountChainProfile profile, BigDecimal evmFeeReserve) {
+        if ("XRP".equals(profile.getChain())
+                || ("evm".equalsIgnoreCase(profile.getFamily())
+                    && evm7702ConfigRepository.existsManaged(profile.getChain(), profile.getNetwork()))) {
+            return BigDecimal.ZERO;
+        }
+        int decimals = assetDecimals(profile, profile.getNativeSymbol());
         BigDecimal configured = profile.getDefaultFee() == null
                 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(profile.getDefaultFee())

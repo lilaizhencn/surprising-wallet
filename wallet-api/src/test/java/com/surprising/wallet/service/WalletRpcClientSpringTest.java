@@ -18,6 +18,7 @@ class WalletRpcClientSpringTest {
     void springInjectsTheObjectMapperConstructor() {
         try (var context = new AnnotationConfigApplicationContext()) {
             context.getBeanFactory().registerSingleton("objectMapper", new ObjectMapper());
+            context.getBeanFactory().registerSingleton("rpcNodes", org.mockito.Mockito.mock(ChainRpcNodeService.class));
             context.register(WalletRpcClient.class);
             context.refresh();
 

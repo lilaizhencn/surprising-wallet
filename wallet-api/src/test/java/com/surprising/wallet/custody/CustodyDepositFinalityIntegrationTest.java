@@ -91,9 +91,7 @@ class CustodyDepositFinalityIntegrationTest {
                     .listOpen(fixture.tenantId());
             assertEquals(1, dashboardDeficits.size());
             assertAmount("7", dashboardDeficits.getFirst().outstandingAmount());
-            assertEquals(
-                    1,
-                    chains.withdrawalOrderRepository.createForTenant(
+            assertTrue(chains.withdrawalOrderRepository.createForTenant(
                             fixture.tenantId(),
                             "reorg-blocked-withdrawal",
                             1L,
@@ -103,7 +101,7 @@ class CustodyDepositFinalityIntegrationTest {
                             fixture.accountId(),
                             "0x2222222222222222222222222222222222222222",
                             BigDecimal.ONE,
-                            BigDecimal.ZERO));
+                            BigDecimal.ZERO) > 0L);
             chains.withdrawalOrderRepository.updateStatus(
                     fixture.tenantId(),
                     "ETH",

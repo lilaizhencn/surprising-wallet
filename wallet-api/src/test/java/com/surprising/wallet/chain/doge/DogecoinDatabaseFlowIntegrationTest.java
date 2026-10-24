@@ -26,20 +26,26 @@ class DogecoinDatabaseFlowIntegrationTest {
     void syntheticFlowMustRemainIdempotentAndNonNegative() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("doge.db.enabled"),
                 "set -Ddoge.db.enabled=true for PostgreSQL-backed DOGE flow validation");
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                env("DOGE_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
-                env("DOGE_DB_USER", "wallet"),
-                env("DOGE_DB_PASSWORD", ""));
-        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
+        DriverManagerDataSource dataSource = com.surprising.wallet.custody.CustodyIntegrationDatabase.dataSource();
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            UUID tenant = UUID.randomUUID();
+            jdbc.update("insert into custody_tenant(id, slug, name, derivation_namespace) values (?, ?, 'DB flow', nextval('custody_derivation_namespace_seq'))",
+                    tenant, "doge-db-" + tenant);
+
             for (ChainType chainType : List.of(ChainType.DOGE, ChainType.BCH)) {
                 String chain = chainType.name();
                 String txid = UUID.randomUUID().toString().replace("-", "") + "00";
                 String account = chain.toLowerCase() + "-test-" + UUID.randomUUID();
+                repository.chainAddressRepository.upsert(com.surprising.wallet.common.chain.ChainAddressRecord.builder()
+                        .tenantId(tenant).chain(chain).assetSymbol(chain).accountId(account)
+                        .userId(60000L + chainType.ordinal()).biz(1).addressIndex(0L).address("synthetic")
+                        .derivationPath("m/44/" + (chainType == ChainType.DOGE ? 3 : 145) + "/1/" + (60000L + chainType.ordinal()) + "/0")
+                        .walletRole("DEPOSIT").enabled(true).build());
+                com.surprising.wallet.testutil.DepositTestSupport.attachCustodyAddress(jdbc, tenant, chain, chain, "synthetic");
                 DepositEvent event = new DepositEvent(
                         chainType, chain, txid, null, "synthetic",
                         new BigDecimal("25.00000000"), 1L, txid, 6, null, "{}");
@@ -84,11 +90,5 @@ class DogecoinDatabaseFlowIntegrationTest {
         }
     }
 
-    /**
-     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value;
-    }
+
 }

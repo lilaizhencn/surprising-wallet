@@ -61,8 +61,8 @@ class WithdrawalSettlementIntegrationTest {
                     values (?, 'ETH', 'ETH', ?, 0, 3.75, 3.75)
                     """, tenant, tenant.equals(TENANT) ? ACCOUNT : ACCOUNT + "-foreign");
         }
-        assertEquals(1, orders.createForTenant(TENANT, ORDER, 1, "ETH", "ETH", ACCOUNT, ACCOUNT,
-                "destination", BigDecimal.ONE, new BigDecimal("0.25")));
+        assertTrue(orders.createForTenant(TENANT, ORDER, 1, "ETH", "ETH", ACCOUNT, ACCOUNT,
+                "destination", BigDecimal.ONE, new BigDecimal("0.25")) > 0L);
         assertEquals(1, orders.updateStatus(TENANT, "ETH", ORDER, "SENT", ACCOUNT, HASH, null));
     }
 

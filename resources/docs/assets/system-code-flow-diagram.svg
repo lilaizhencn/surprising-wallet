@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2840" viewBox="0 0 1180 2840">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="3015" viewBox="0 0 1180 2840">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -308,4 +308,9 @@
   <text x="50" y="2712" style="font:13px sans-serif;fill:#1e293b">TRON 归集：领取 → 客户端 → 共用发送 / 交易记录 → SENT → 关闭；异常保留已知哈希</text>
   <text x="50" y="2748" style="font:13px sans-serif;fill:#1e293b">托管地址：一次 profile → 正式引擎 / 持久化记录 → 租户绑定 / 投影；归集使用类型结果</text>
   <text x="50" y="2784" style="font:13px sans-serif;fill:#1e293b">TRON：参考块按节点限流 → 本地构建 / 签名 → 统一广播；密钥状态按实际材料判断</text>
+  <rect x="30" y="2820" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="2848" style="font:13px sans-serif;fill:#1e293b">Console / 找回 → 节点模型 → 共用认证头 → 实际 HTTP / WebSocket / RPC</text>
+  <text x="50" y="2882" style="font:13px sans-serif;fill:#1e293b">Token：读取配置 → 事务外 RPC / ABI 验证 → 行锁复核快照 → Token / 资产 / 审计</text>
+  <text x="50" y="2916" style="font:13px sans-serif;fill:#1e293b">提现：归属 / 赤字 → 幂等 → 复用地址 / 订单返回 ID → 条件冻结 / Gas / 事件 / 审计</text>
+  <text x="50" y="2950" style="font:13px sans-serif;fill:#1e293b">找回：托管 ID + 原始地址 → 检查歧义 → 调整实际链 → EVM 执行 / 确认</text>
 </svg>

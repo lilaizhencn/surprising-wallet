@@ -7,6 +7,7 @@ import com.surprising.wallet.common.chain.EvmFeeModel;
 import com.surprising.wallet.common.chain.EvmGasPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -37,6 +38,7 @@ public class WalletChainConfigService {
     private final TokenConfigRepository tokenConfigRepository;
     private final WalletConfigIdentityGuard identityGuard;
     private final CustodyAuditRepository audits;
+    private final ObjectMapper mapper;
     private final String environment;
     private final WalletRpcConfigService rpcConfig;
     private final WalletTokenConfigService tokenConfig;
@@ -46,7 +48,7 @@ public class WalletChainConfigService {
                                    ChainAssetRepository chainAssetRepository,
                                    TokenConfigRepository tokenConfigRepository,
                                    WalletConfigIdentityGuard identityGuard,
-                                   CustodyAuditRepository audits,
+                                   CustodyAuditRepository audits, ObjectMapper mapper,
                                    @Value("${sw.app.env.name:dev}") String environment,
                                    WalletRpcConfigService rpcConfig,
                                    WalletTokenConfigService tokenConfig) {
@@ -56,6 +58,7 @@ public class WalletChainConfigService {
         this.tokenConfigRepository = tokenConfigRepository;
         this.identityGuard = identityGuard;
         this.audits = audits;
+        this.mapper = mapper;
         this.environment = normalizeLower(environment);
         this.rpcConfig = rpcConfig;
         this.tokenConfig = tokenConfig;
@@ -117,7 +120,7 @@ public class WalletChainConfigService {
                 values.collectionEnabled(), values.transferEnabled(), values.scanStartHeight(),
                 values.scanMaxBlocksPerRun());
         audit(actor, "WALLET_CHAIN.CREATE", "CHAIN_PROFILE", String.valueOf(id), sourceIp,
-                "{\"chain\":" + json(values.chain()) + ",\"network\":" + json(values.network()) + "}");
+                Map.of("chain", values.chain(), "network", values.network()));
         return getChain(actor, id);
     }
 
@@ -153,7 +156,7 @@ public class WalletChainConfigService {
             }
         }
         audit(actor, "WALLET_CHAIN.UPDATE", "CHAIN_PROFILE", String.valueOf(id), sourceIp,
-                "{\"chain\":" + json(values.chain()) + ",\"network\":" + json(values.network()) + "}");
+                Map.of("chain", values.chain(), "network", values.network()));
         return getChain(actor, id);
     }
 
@@ -173,7 +176,7 @@ public class WalletChainConfigService {
         chainProfileRepository.updateSwitches(id, command.enabled(), command.scanEnabled(),
                 command.withdrawEnabled(), command.collectionEnabled(), command.transferEnabled());
         audit(actor, "WALLET_CHAIN.SWITCHES_UPDATE", "CHAIN_PROFILE", String.valueOf(id), sourceIp,
-                "{\"enabled\":" + command.enabled() + "}");
+                Map.of("enabled", command.enabled()));
         return getChain(actor, id);
     }
 
@@ -292,9 +295,9 @@ public class WalletChainConfigService {
     }
 
     private void audit(CustodyPrincipal actor, String action, String resourceType,
-                       String resourceId, String sourceIp, String details) {
+                       String resourceId, String sourceIp, Map<String, ?> details) {
         audits.insert(UUID.randomUUID(), null, "PLATFORM_USER", actor.actorId().toString(), action,
-                resourceType, resourceId, sourceIp, details);
+                resourceType, resourceId, sourceIp, mapper.writeValueAsString(details));
     }
 
     public record ChainCommand(String chain, String network, String family, Integer runtimeCurrencyId,

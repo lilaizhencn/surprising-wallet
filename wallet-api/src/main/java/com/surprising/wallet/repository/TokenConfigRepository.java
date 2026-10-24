@@ -45,6 +45,10 @@ public class TokenConfigRepository {
         return query("where " + NETWORK + " and enabled = true order by symbol", chain, network);
     }
 
+    public Optional<TokenConfiguration> lockById(long id) {
+        return query("where id = ? for update", id).stream().findFirst();
+    }
+
     public Optional<TokenConfiguration> findById(long id) {
         return query("where id = ?", id).stream().findFirst();
     }

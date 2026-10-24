@@ -8,6 +8,7 @@ import tools.jackson.databind.JsonNode;
 import com.surprising.wallet.config.WalletRpcPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -16,12 +17,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 
 import org.web3j.utils.Numeric;
+import org.web3j.abi.FunctionReturnDecoder;
+import org.web3j.abi.TypeReference;
+import org.web3j.abi.datatypes.Utf8String;
+import org.web3j.abi.datatypes.generated.Bytes32;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.ChainAssetRepository;
@@ -33,7 +42,7 @@ import com.surprising.wallet.service.WalletRuntimeConfigService.GlobalSwitches;
 import static com.surprising.wallet.service.WalletRuntimeConfigService.*;
 import static com.surprising.wallet.service.WalletConfigSupport.*;
 
-/** Token 配置、链上合约校验及资产配置的同事务更新。 */
+/** 链上验证在事务外完成；配置、资产和审计在复核版本后的短事务内更新。 */
 @Service
 public class WalletTokenConfigService {
     private final WalletRuntimeConfigService runtimeConfig;
@@ -43,8 +52,10 @@ public class WalletTokenConfigService {
     private final TokenConfigRepository tokenConfigRepository;
     private final WalletConfigIdentityGuard identityGuard;
     private final CustodyAuditRepository audits;
+    private final ObjectMapper mapper;
     private final String environment;
     private final WalletRpcClient rpcClient;
+    private final TransactionTemplate transactions;
 
     public WalletTokenConfigService(WalletRuntimeConfigService runtimeConfig,
                                    ChainProfileRepository chainProfileRepository,
@@ -52,9 +63,9 @@ public class WalletTokenConfigService {
                                    ChainAssetRepository chainAssetRepository,
                                    TokenConfigRepository tokenConfigRepository,
                                    WalletConfigIdentityGuard identityGuard,
-                                   CustodyAuditRepository audits,
+                                   CustodyAuditRepository audits, ObjectMapper mapper,
                                    @Value("${sw.app.env.name:dev}") String environment,
-                                   WalletRpcClient rpcClient) {
+                                   WalletRpcClient rpcClient, PlatformTransactionManager manager) {
         this.runtimeConfig = runtimeConfig;
         this.chainProfileRepository = chainProfileRepository;
         this.rpcNodeRepository = rpcNodeRepository;
@@ -62,8 +73,10 @@ public class WalletTokenConfigService {
         this.tokenConfigRepository = tokenConfigRepository;
         this.identityGuard = identityGuard;
         this.audits = audits;
+        this.mapper = mapper;
         this.environment = normalizeLower(environment);
         this.rpcClient = rpcClient;
+        this.transactions = new TransactionTemplate(manager);
     }
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
@@ -96,58 +109,65 @@ public class WalletTokenConfigService {
                 .filter(row -> effectiveEnabled == null || row.effectiveEnabled() == effectiveEnabled).toList();
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TokenView createToken(CustodyPrincipal actor, TokenCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
         TokenValues values = mergeToken(null, command);
-        validateToken(values);
-        long id = tokenConfigRepository.insert(
-                values.chain(), values.network(), values.symbol(), values.standard(),
-                values.contractAddress(), values.contractAddressBase58(), values.contractAddressHex(),
-                values.decimals(), values.enabled(), values.minDeposit(), values.minWithdraw(),
-                values.collectEnabled(), values.collectThreshold(), values.gasStrategy(),
-                values.confirmationRequired());
-        if (values.enabled()) {
-            upsertAsset(values);
-        }
-        audit(actor, "WALLET_TOKEN.CREATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
-                tokenAudit(values));
-        return tokenView(id);
+        AccountChainProfile profile = validateToken(values);
+        return transactions.execute(status -> {
+            requireUnchangedProfile(profile);
+            long id = tokenConfigRepository.insert(
+                    values.chain(), values.network(), values.symbol(), values.standard(),
+                    values.contractAddress(), values.contractAddressBase58(), values.contractAddressHex(),
+                    values.decimals(), values.enabled(), values.minDeposit(), values.minWithdraw(),
+                    values.collectEnabled(), values.collectThreshold(), values.gasStrategy(),
+                    values.confirmationRequired());
+            if (values.enabled()) {
+                upsertAsset(values);
+            }
+            audit(actor, "WALLET_TOKEN.CREATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
+                    tokenAudit(values));
+            return tokenView(id);
+        });
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TokenView updateToken(CustodyPrincipal actor, long id,
                                  TokenCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
         TokenConfiguration current = requireToken(id);
         TokenValues values = mergeToken(current, command);
-        validateToken(values);
-        if (!current.chain().equalsIgnoreCase(values.chain())
-                || !current.network().equalsIgnoreCase(values.network())
-                || !current.symbol().equalsIgnoreCase(values.symbol())
-                || !current.contractAddress().equalsIgnoreCase(values.contractAddress())
-                || current.decimals() != values.decimals()) {
-            identityGuard.requireUnusedToken(current.chain(), current.symbol());
-        }
-        tokenConfigRepository.update(id, values.chain(), values.network(), values.symbol(), values.standard(),
-                values.contractAddress(), values.contractAddressBase58(), values.contractAddressHex(),
-                values.decimals(), values.enabled(), values.minDeposit(), values.minWithdraw(),
-                values.collectEnabled(), values.collectThreshold(), values.gasStrategy(),
-                values.confirmationRequired());
-        if (!current.chain().equalsIgnoreCase(values.chain()) || !current.symbol().equalsIgnoreCase(values.symbol())) {
-            chainAssetRepository.deleteNonNative(current.chain(), current.symbol());
-        }
-        if (values.enabled()) {
-            upsertAsset(values);
-        } else if (current.enabled()) {
-            chainAssetRepository.updateActive(current.chain(), current.symbol(), false);
-        }
-        audit(actor, "WALLET_TOKEN.UPDATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
-                tokenAudit(values));
-        return tokenView(id);
+        AccountChainProfile profile = validateToken(values);
+        return transactions.execute(status -> {
+            requireUnchangedProfile(profile);
+            requireUnchangedToken(current);
+            if (!current.chain().equalsIgnoreCase(values.chain())
+                    || !current.network().equalsIgnoreCase(values.network())
+                    || !current.symbol().equalsIgnoreCase(values.symbol())
+                    || !current.contractAddress().equalsIgnoreCase(values.contractAddress())
+                    || current.decimals() != values.decimals()) {
+                identityGuard.requireUnusedToken(current.chain(), current.symbol());
+            }
+            tokenConfigRepository.update(id, values.chain(), values.network(), values.symbol(), values.standard(),
+                    values.contractAddress(), values.contractAddressBase58(), values.contractAddressHex(),
+                    values.decimals(), values.enabled(), values.minDeposit(), values.minWithdraw(),
+                    values.collectEnabled(), values.collectThreshold(), values.gasStrategy(),
+                    values.confirmationRequired());
+            if (!current.chain().equalsIgnoreCase(values.chain()) || !current.symbol().equalsIgnoreCase(values.symbol())) {
+                chainAssetRepository.deleteNonNative(current.chain(), current.symbol());
+            }
+            if (values.enabled()) {
+                upsertAsset(values);
+            } else if (current.enabled()) {
+                chainAssetRepository.updateActive(current.chain(), current.symbol(), false);
+            }
+            audit(actor, "WALLET_TOKEN.UPDATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
+                    tokenAudit(values));
+            return tokenView(id);
+        });
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TokenView updateTokenStatus(CustodyPrincipal actor, long id,
                                        TokenStatusCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
@@ -161,18 +181,34 @@ public class WalletTokenConfigService {
                 current.contractAddressHex(), current.decimals(), command.enabled(), collectEnabled,
                 current.minDeposit(), current.minWithdraw(), current.collectThreshold(),
                 current.gasStrategy(), current.confirmationRequired());
-        if (values.enabled()) {
-            validateToken(values);
+        AccountChainProfile profile = values.enabled() ? validateToken(values) : null;
+        return transactions.execute(status -> {
+            if (profile != null) requireUnchangedProfile(profile);
+            requireUnchangedToken(current);
+            tokenConfigRepository.updateEnabled(id, values.enabled(), values.collectEnabled());
+            if (values.enabled()) {
+                upsertAsset(values);
+            } else {
+                chainAssetRepository.updateActive(current.chain(), current.symbol(), false);
+            }
+            audit(actor, "WALLET_TOKEN.STATUS_UPDATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
+                    Map.of("enabled", command.enabled()));
+            return tokenView(id);
+        });
+    }
+
+    private void requireUnchangedProfile(AccountChainProfile observed) {
+        AccountChainProfile current = chainProfileRepository.lockById(observed.getId())
+                .orElseThrow(() -> new IllegalStateException("chain configuration changed during token validation"));
+        if (!observed.equals(current)) {
+            throw new IllegalStateException("chain configuration changed during token validation; retry the request");
         }
-        tokenConfigRepository.updateEnabled(id, values.enabled(), values.collectEnabled());
-        if (values.enabled()) {
-            upsertAsset(values);
-        } else {
-            chainAssetRepository.updateActive(current.chain(), current.symbol(), false);
+    }
+
+    private void requireUnchangedToken(TokenConfiguration observed) {
+        if (!Objects.equals(observed, tokenConfigRepository.lockById(observed.id()).orElse(null))) {
+            throw new IllegalStateException("token configuration changed during validation; retry the request");
         }
-        audit(actor, "WALLET_TOKEN.STATUS_UPDATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
-                "{\"enabled\":" + command.enabled() + "}");
-        return tokenView(id);
     }
 
     private TokenConfiguration requireToken(long id) {
@@ -187,7 +223,7 @@ public class WalletTokenConfigService {
                 chainProfileRepository.findByChainAndNetwork(row.chain(), row.network()).orElse(null));
     }
 
-    private void validateToken(TokenValues value) {
+    private AccountChainProfile validateToken(TokenValues value) {
         required(value.chain(), "chain");
         required(value.network(), "network");
         required(value.symbol(), "symbol");
@@ -232,6 +268,7 @@ public class WalletTokenConfigService {
                 validateEvmTokenContract(value, profile);
             }
         }
+        return profile;
     }
 
     private AccountChainProfile requireTokenChainProfile(TokenValues value) {
@@ -247,24 +284,21 @@ public class WalletTokenConfigService {
         }
         ChainRpcNode rpc = requireTokenValidationRpc(value.chain(), value.network());
         if (profile.getChainId() != null) {
-            BigInteger observedChainId = quantity(evmRpc(rpc, "eth_chainId", "[]"), "chain id");
+            BigInteger observedChainId = quantity(rpcClient.jsonRpc(rpc, "eth_chainId", List.of()), "chain id");
             if (!observedChainId.equals(BigInteger.valueOf(profile.getChainId()))) {
                 throw new IllegalStateException("token validation RPC chain id does not match chain profile");
             }
         }
-        String code = textResult(evmRpc(rpc, "eth_getCode",
-                "[" + json(address) + ",\"latest\"]"), "contract code");
+        String code = textResult(rpcClient.jsonRpc(rpc, "eth_getCode", List.of(address, "latest")), "contract code");
         if (!code.matches("(?i)^0x[0-9a-f]+$") || code.matches("(?i)^0x0*$")) {
             throw new IllegalArgumentException("contractAddress has no deployed bytecode on the configured network");
         }
-        int onChainDecimals = quantity(evmRpc(rpc, "eth_call",
-                "[{\"to\":" + json(address) + ",\"data\":\"0x313ce567\"},\"latest\"]"),
+        int onChainDecimals = quantity(rpcClient.jsonRpc(rpc, "eth_call", List.of(Map.of("to", address, "data", "0x313ce567"), "latest")),
                 "token decimals").intValueExact();
         if (onChainDecimals != value.decimals()) {
             throw new IllegalArgumentException("configured decimals do not match the token contract");
         }
-        String onChainSymbol = abiString(textResult(evmRpc(rpc, "eth_call",
-                "[{\"to\":" + json(address) + ",\"data\":\"0x95d89b41\"},\"latest\"]"),
+        String onChainSymbol = abiString(textResult(rpcClient.jsonRpc(rpc, "eth_call", List.of(Map.of("to", address, "data", "0x95d89b41"), "latest")),
                 "token symbol"));
         if (!value.symbol().equalsIgnoreCase(onChainSymbol)) {
             throw new IllegalArgumentException("configured symbol does not match the token contract");
@@ -275,12 +309,6 @@ public class WalletTokenConfigService {
         return rpcNodeRepository.listTokenValidationNodes(chain, network, environment).stream().findFirst()
                 .orElseThrow(() -> new IllegalStateException(
                         "an enabled HTTP JSON-RPC node is required to validate an EVM token"));
-    }
-
-    private JsonNode evmRpc(ChainRpcNode node, String method, String params) {
-        return rpcClient.jsonRpc(
-                node.getRpcUrl(), node.getConnectionType(), node.getAuthType(), node.getAuthHeaderName(),
-                node.getApiKey(), node.getUsername(), node.getPassword(), method, params);
     }
 
     private static BigInteger quantity(JsonNode result, String field) {
@@ -302,28 +330,22 @@ public class WalletTokenConfigService {
         if (!encoded.matches("(?i)^0x[0-9a-f]*$")) {
             throw new IllegalStateException("token symbol returned invalid ABI data");
         }
-        byte[] bytes = Numeric.hexStringToByteArray(encoded);
-        int start;
-        int length;
-        if (bytes.length == 32) {
-            start = 0;
-            length = 32;
-            while (length > 0 && bytes[length - 1] == 0) length--;
-        } else if (bytes.length >= 64) {
-            start = new BigInteger(1, Arrays.copyOfRange(bytes, 0, 32)).intValueExact() + 32;
-            if (start < 32 || start > bytes.length) {
-                throw new IllegalStateException("token symbol returned an invalid ABI offset");
+        String symbol;
+        try {
+            if (Numeric.cleanHexPrefix(encoded).length() == 64) {
+                byte[] bytes = ((Bytes32) FunctionReturnDecoder.decode(encoded,
+                        org.web3j.abi.Utils.convert(List.of(new TypeReference<Bytes32>() { }))).getFirst()).getValue();
+                int length = bytes.length;
+                while (length > 0 && bytes[length - 1] == 0) length--;
+                symbol = new String(bytes, 0, length, StandardCharsets.UTF_8).trim();
+            } else {
+                var decoded = FunctionReturnDecoder.decode(encoded,
+                        org.web3j.abi.Utils.convert(List.of(new TypeReference<Utf8String>() { })));
+                symbol = ((Utf8String) decoded.getFirst()).getValue().trim();
             }
-            int lengthOffset = start - 32;
-            length = new BigInteger(1,
-                    Arrays.copyOfRange(bytes, lengthOffset, lengthOffset + 32)).intValueExact();
-            if (length < 1 || start + length > bytes.length) {
-                throw new IllegalStateException("token symbol returned an invalid ABI length");
-            }
-        } else {
-            throw new IllegalStateException("token symbol returned incomplete ABI data");
+        } catch (RuntimeException error) {
+            throw new IllegalStateException("token symbol returned invalid ABI data", error);
         }
-        String symbol = new String(bytes, start, length, StandardCharsets.UTF_8).trim();
         if (symbol.isEmpty()) {
             throw new IllegalStateException("token symbol returned an empty value");
         }
@@ -390,14 +412,14 @@ public class WalletTokenConfigService {
     }
 
     private void audit(CustodyPrincipal actor, String action, String resourceType,
-                       String resourceId, String sourceIp, String details) {
+                       String resourceId, String sourceIp, Map<String, ?> details) {
         audits.insert(UUID.randomUUID(), null, "PLATFORM_USER", actor.actorId().toString(), action,
-                resourceType, resourceId, sourceIp, details);
+                resourceType, resourceId, sourceIp, mapper.writeValueAsString(details));
     }
 
-    private static String tokenAudit(TokenValues value) {
-        return "{\"chain\":" + json(value.chain()) + ",\"network\":" + json(value.network())
-                + ",\"symbol\":" + json(value.symbol()) + ",\"enabled\":" + value.enabled() + "}";
+    private static Map<String, Object> tokenAudit(TokenValues value) {
+        return Map.of("chain", value.chain(), "network", value.network(),
+                "symbol", value.symbol(), "enabled", value.enabled());
     }
 
     public record TokenCommand(String chain, String network, String symbol, String standard,

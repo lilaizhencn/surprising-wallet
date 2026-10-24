@@ -339,3 +339,14 @@ TRON SDK 不再向调用方公开：原生币与部署先分别限流读取 Soli
 
 
 托管固定索引地址创建只读取一次启用 profile，经现有运行时和对应引擎直接返回持久化的 ChainAddressRecord；调用方继续在原事务内绑定租户、写托管地址及 EVM 投影，不再转成简化 Address 后重查。Bitcoin-like 保留多签脚本、网络、精度配置校验及索引限制。删除仅供测试调用的 Aptos / Sui 地址服务，测试改为装配正式运行时与密钥派生组件。归集余额使用单表类型化聚合，链地址复用现有模型，托管地址查询统一映射；删除无消费者的 Map 查询。筛选、聚合、状态、租户条件及初始化 SQL 不变。
+
+
+## 第三轮收敛：认证、配置事务与资金模型
+
+- `ChainRpcNodeService.authHeaders` 是节点认证解释的唯一入口。Console 的 HTTP / WebSocket 探测及 Token JSON-RPC 直接接收 `ChainRpcNode`；EVM 找回也通过带认证头的共享 HTTP 工厂创建连接。API Key 缺省头为 `X-API-Key`，Bearer 为 `Authorization`，Blockfrost 为 `project_id`；显式认证头继续生效。
+- `WalletTokenConfigService` 在无数据库事务时完成链上验证；随后以短事务按 profile → Token 的顺序锁定并复核原始配置，再原子写入 Token、资产与审计。校验期间配置变化会拒绝写入，调用方重新发起请求。ABI 解码沿用 Web3j，保留 bytes32 与动态字符串符号。
+- 资产找回直接依赖具体 `EvmAssetRecoveryChainGateway`，不维护接口列表和实现选择器。归属保留托管 ID 与原始链地址；歧义检查继续生效，跨链执行复制原记录并调整实际链身份，派生路径与钱包角色不重新组装。
+- 提现创建在同一事务中复用本次托管 / 链地址记录；仍在幂等重放前检查租户与重组赤字，执行时检查 ACTIVE、链地址归属和启用状态。订单 INSERT 返回 ID，条件冻结、订单状态、Gas、事件与审计事务保持原规则。
+- 归集规划复用本次 profile、原生币精度和费用预留；每个实际资金发送动作仍检查运行时开关。业务审计和 RPC 参数交由 Jackson 序列化。
+
+本次不新增表、字段、状态或初始化配置，唯一数据库基线无需变更。SQL 调整仅包括配置行锁与提现插入返回 ID。

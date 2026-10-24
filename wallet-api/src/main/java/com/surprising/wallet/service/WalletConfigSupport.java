@@ -13,12 +13,6 @@ final class WalletConfigSupport {
         }
     }
 
-    static String json(String value) {
-        if (value == null) return "null";
-        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
-    }
-
     static void required(String value, String field) {
         if (blank(value)) throw new IllegalArgumentException(field + " is required");
     }

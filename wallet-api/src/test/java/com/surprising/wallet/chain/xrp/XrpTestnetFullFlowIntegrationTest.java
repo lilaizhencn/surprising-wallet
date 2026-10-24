@@ -256,9 +256,7 @@ class XrpTestnetFullFlowIntegrationTest {
     private static void createAndFreeze(UUID tenantId, ChainRepositoryFixture repository, String orderNo,
                                         ChainAddressRecord from, ChainAddressRecord to,
                                         String symbol, BigDecimal amount) {
-        assertEquals(
-                1,
-                repository.withdrawalOrderRepository.createForTenant(
+        assertTrue(repository.withdrawalOrderRepository.createForTenant(
                         tenantId,
                         orderNo,
                         from.getUserId(),
@@ -268,7 +266,7 @@ class XrpTestnetFullFlowIntegrationTest {
                         from.getAccountId(),
                         to.getAddress(),
                         amount,
-                        BigDecimal.ZERO));
+                        BigDecimal.ZERO) > 0L);
         assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, symbol, from.getAccountId(), amount, tenantId));
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null));
         assertEquals(1, repository.withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getAddress()));

@@ -37,6 +37,10 @@ public class ChainProfileRepository {
         return queryAccount("where upper(chain)=upper(?) order by network", chain);
     }
 
+    public Optional<AccountChainProfile> lockById(long id) {
+        return queryAccount("where id = ? for update", id).stream().findFirst();
+    }
+
     public Optional<AccountChainProfile> findById(long id) {
         return queryAccount("where id = ?", id).stream().findFirst();
     }

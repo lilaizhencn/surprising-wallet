@@ -145,6 +145,13 @@ class AccountChainWorkflowServiceTest {
 
         assertEquals(1, repository.collectionAddressLookups);
         assertEquals(2, repository.createdCount);
+        Mockito.verify(repository.chainAssetRepository, Mockito.times(1)).findActiveDefinition("APTOS", "APT");
+        Mockito.verify(repository.chainProfileRepository, Mockito.never()).findAccountByChain(Mockito.anyString());
+        profile.setDefaultFee(20_000_000L);
+        createCollectionCandidates(service, profile);
+        assertEquals(0, new BigDecimal("0.8").compareTo(repository.collectionAmount));
+        Mockito.verify(repository.chainAssetRepository, Mockito.times(2)).findActiveDefinition("APTOS", "APT");
+
     }
 
     /**
@@ -366,107 +373,25 @@ class AccountChainWorkflowServiceTest {
      */
     private static AccountChainWorkflowService service(ChainRepositoryFixture repository,
                                                        EvmAccountTransactionService evmService) {
-        return createService(
-                repository,
-                null,
-                null,
-                null,
-                evmService,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+        return createService(repository, evmService, Mockito.mock(AptosTransactionService.class),
+                Mockito.mock(TonTransactionService.class));
     }
 
-    /**
-     * 验证 {@code service} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
     private static AccountChainWorkflowService service(ChainRepositoryFixture repository,
                                                        AptosTransactionService aptosService) {
-        return createService(
-                repository,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                aptosService,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+        return createService(repository, Mockito.mock(EvmAccountTransactionService.class), aptosService,
+                Mockito.mock(TonTransactionService.class));
     }
 
-    /**
-     * 验证 {@code service} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
     private static AccountChainWorkflowService service(ChainRepositoryFixture repository,
                                                        TonTransactionService tonService) {
-        return createService(
-                repository,
-                null, null, null, null, null, null, null, null,
-                null, null, null, null, null, tonService, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null);
+        return createService(repository, Mockito.mock(EvmAccountTransactionService.class),
+                Mockito.mock(AptosTransactionService.class), tonService);
     }
 
-    /**
-     * 验证 {@code createService} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static AccountChainWorkflowService createService(
-            ChainRepositoryFixture repository, Object... dependencies) {
-        EvmAccountTransactionService evmService = null;
-        AptosTransactionService aptosService = null;
-        TonTransactionService tonService = null;
-        for (Object dependency : dependencies) {
-            if (dependency instanceof EvmAccountTransactionService value) {
-                evmService = value;
-            } else if (dependency instanceof AptosTransactionService value) {
-                aptosService = value;
-            } else if (dependency instanceof TonTransactionService value) {
-                tonService = value;
-            }
-        }
+    private static AccountChainWorkflowService createService(ChainRepositoryFixture repository,
+            EvmAccountTransactionService evmService, AptosTransactionService aptosService,
+            TonTransactionService tonService) {
         var settlements = Mockito.mock(WithdrawalSettlementService.class);
         Mockito.when(settlements.confirm(any(), anyString(), anyString(), anyString())).thenAnswer(invocation -> {
             if (!(repository instanceof FakeRepository fake)) {
@@ -476,37 +401,23 @@ class AccountChainWorkflowServiceTest {
             return true;
         });
         return new AccountChainWorkflowService(
-                repository.chainProfileRepository,
-                repository.evm7702ConfigRepository,
-                repository.withdrawalOrderRepository,
-                repository.collectionRecordRepository,
-                repository.withdrawalClaimService,
-                repository.evmBatchOwnershipService,
-                repository.collectionPlanningService,
-                repository.tokenConfigRepository,
-                repository.chainAddressRepository,
-                null,
-                null,
-                new AccountChainAssetService(
-                        repository.evm7702ConfigRepository,
-                        repository.chainAddressRepository,
-                        repository.chainProfileRepository,
-                        repository.tokenConfigRepository,
-                        repository.chainAssetRepository,
-                        null),
-                null,
-                evmService,
-                null,
-                null,
-                aptosService,
-                null,
-                tonService,
-                null,
-                null,
-                null,
-                null,
-                null,
-                settlements);
+                repository.chainProfileRepository, repository.evm7702ConfigRepository,
+                repository.withdrawalOrderRepository, repository.collectionRecordRepository,
+                repository.withdrawalClaimService, repository.evmBatchOwnershipService,
+                repository.collectionPlanningService, repository.tokenConfigRepository, repository.chainAddressRepository,
+                Mockito.mock(WalletRuntimeConfigService.class), Mockito.mock(AccountChainDepositWorkflow.class),
+                new AccountChainAssetService(repository.evm7702ConfigRepository, repository.chainAddressRepository,
+                        repository.tokenConfigRepository, repository.chainAssetRepository,
+                        Mockito.mock(com.surprising.wallet.chain.xrp.XrpTransactionService.class)),
+                Mockito.mock(TronAccountChainService.class), evmService,
+                Mockito.mock(com.surprising.wallet.chain.hypercore.HyperCoreTransactionService.class),
+                Mockito.mock(com.surprising.wallet.chain.solana.SolanaTransactionService.class), aptosService,
+                Mockito.mock(com.surprising.wallet.chain.sui.SuiTransactionService.class), tonService,
+                Mockito.mock(com.surprising.wallet.chain.xrp.XrpTransactionService.class),
+                Mockito.mock(com.surprising.wallet.chain.cardano.CardanoTransactionService.class),
+                Mockito.mock(com.surprising.wallet.chain.monero.MoneroTransactionService.class),
+                Mockito.mock(com.surprising.wallet.chain.near.NearTransactionService.class),
+                Mockito.mock(com.surprising.wallet.chain.polkadot.PolkadotTransactionService.class), settlements);
     }
 
     /**

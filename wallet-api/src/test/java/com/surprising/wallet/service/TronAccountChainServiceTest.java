@@ -158,7 +158,7 @@ class TronAccountChainServiceTest {
             when(factory.create()).thenReturn(client);
             when(keys.key(profile, from)).thenReturn(KEY);
             when(assets.isNative(same(profile), anyString())).thenAnswer(invocation -> "TRX".equals(invocation.getArgument(1)));
-            when(assets.requireToken("TRON", "USDT")).thenReturn(token);
+            when(assets.requireToken(profile, "USDT")).thenReturn(token);
             when(collections.claimSigning(TENANT, "TRON", "collection-test", null)).thenReturn(1);
             when(nativeTransfers.signTrxTransfer(same(client), any(KeyPair.class), anyString(), anyLong())).thenReturn(signed);
             when(tokens.signTransfer(same(client), any(KeyPair.class), anyString(), anyString(), any(), anyInt(), anyLong())).thenReturn(signed);

@@ -3,6 +3,7 @@ package com.surprising.wallet.gateway;
 import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
 import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -32,7 +33,7 @@ import tools.jackson.databind.ObjectMapper;
  * 估算 Gas、构造签名交易并广播。
  */
 @Component
-public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGateway {
+public class EvmAssetRecoveryChainGateway {
 
     private static final BigDecimal WEI = new BigDecimal("1000000000000000000");
     private static final String TRANSFER_TOPIC =
@@ -61,23 +62,13 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
         this.httpServices = httpServices;
     }
 
-    @Override
-    public boolean supports(String chain) {
-        try {
-            return ChainType.valueOf(chain).isEvm();
-        } catch (RuntimeException e) {
-            return false;
-        }
-    }
-
-    @Override
     public Verification verify(VerificationRequest request) {
         AccountChainProfile profile = profile(request.chain());
         return withWeb3(profile, web3j -> verify(web3j, profile, request));
     }
 
-    @Override
     public String execute(ExecutionRequest request) {
+        requireEvmChain(request.chain());
         if (request.tokenContract() == null) {
             return transactions.sendNative(
                     request.chain(), request.source(), request.recoveryAddress(), request.amount());
@@ -95,7 +86,6 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
                 request.chain(), request.source(), token, request.recoveryAddress(), request.amount());
     }
 
-    @Override
     public boolean confirmed(String chain, String txHash) {
         AccountChainProfile profile = profile(chain);
         return withWeb3(profile, web3j -> {
@@ -225,7 +215,17 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
         }
         return decimals;
     }
+    private static void requireEvmChain(String chain) {
+        try {
+            if (ChainType.valueOf(chain).isEvm()) return;
+        } catch (IllegalArgumentException ignored) {
+            // Unknown identifiers have the same unsupported-chain outcome.
+        }
+        throw new IllegalArgumentException("automatic recovery is not available for chain " + chain);
+    }
+
     private AccountChainProfile profile(String chain) {
+        requireEvmChain(chain);
         AccountChainProfile profile = chainProfileRepository.findAccountByChain(chain)
                 .orElseThrow(() -> new IllegalArgumentException("actual chain is not enabled by the platform"));
         if (!"evm".equalsIgnoreCase(profile.getFamily())) {
@@ -235,7 +235,7 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
     }
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodes.withFailover(profile.getChain(), profile.getNetwork(), node -> {
-            Web3j web3j = Web3j.build(httpServices.create(node.getRpcUrl()));
+            Web3j web3j = Web3j.build(httpServices.create(node.getRpcUrl(), rpcNodes.authHeaders(node)));
             try {
                 return request.apply(web3j);
             } catch (RuntimeException e) {
@@ -273,5 +273,30 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
     @FunctionalInterface
     private interface Web3Request<T> {
         T apply(Web3j web3j) throws Exception;
+    }
+
+    /** 交易永久失败异常（如链上 revert），不可重试 */
+    public static final class PermanentlyFailedTransactionException extends RuntimeException {
+        public PermanentlyFailedTransactionException(String message) {
+            super(message);
+        }
+    }
+
+    /** 验证请求，包含源交易和预期资产信息 */
+    public record VerificationRequest(
+            String chain, String assetSymbol, String tokenContract, String txHash,
+            Long requestedLogIndex, String destinationAddress, BigDecimal claimedAmount) {
+    }
+
+    /** 验证结果，包含链上确认的实际转入金额和区块信息 */
+    public record Verification(
+            String tokenContract, Integer tokenDecimals, long logIndex, BigDecimal amount,
+            long blockHeight, String blockHash, int confirmations, String detailsJson) {
+    }
+
+    /** 执行请求，包含找回资产的完整参数 */
+    public record ExecutionRequest(
+            String chain, String assetSymbol, String tokenContract, int tokenDecimals,
+            BigDecimal amount, ChainAddressRecord source, String recoveryAddress) {
     }
 }

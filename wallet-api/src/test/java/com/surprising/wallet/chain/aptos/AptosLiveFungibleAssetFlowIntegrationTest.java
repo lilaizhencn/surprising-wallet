@@ -134,9 +134,7 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 ledger(jdbc, tenantAddress.tenantId(), symbol, owner.getAccountId()));
 
         String withdrawalNo = "aptos-fa-withdraw-" + UUID.randomUUID();
-        assertEquals(
-                1,
-                repository.withdrawalOrderRepository.createForTenant(
+        assertTrue(repository.withdrawalOrderRepository.createForTenant(
                         tenantAddress.tenantId(),
                         withdrawalNo,
                         owner.getUserId(),
@@ -146,7 +144,7 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                         owner.getAccountId(),
                         external.getAddress(),
                         operationAmount,
-                        BigDecimal.ZERO));
+                        BigDecimal.ZERO) > 0L);
         assertTrue(repository.ledgerBalanceRepository.freeze("APTOS", symbol, owner.getAccountId(), operationAmount, tenantAddress.tenantId()));
         repository.withdrawalOrderRepository.updateStatus(tenantAddress.tenantId(), "APTOS", withdrawalNo, "FROZEN", owner.getAddress(), null, null);
         assertEquals(1, repository.withdrawalClaimService.claim(tenantAddress.tenantId(), "APTOS", withdrawalNo, owner.getAddress()));

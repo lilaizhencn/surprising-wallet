@@ -127,9 +127,7 @@ class AptosLiveNativeFlowIntegrationTest {
         assertAmount(DEPOSIT_AMOUNT, ledger(jdbc, tenantAddress.tenantId(), owner.getAccountId()));
 
         String withdrawOrder = "aptos-live-withdraw-" + UUID.randomUUID();
-        assertEquals(
-                1,
-                repository.withdrawalOrderRepository.createForTenant(
+        assertTrue(repository.withdrawalOrderRepository.createForTenant(
                         tenantAddress.tenantId(),
                         withdrawOrder,
                         owner.getUserId(),
@@ -139,7 +137,7 @@ class AptosLiveNativeFlowIntegrationTest {
                         owner.getAccountId(),
                         external.getAddress(),
                         WITHDRAW_AMOUNT,
-                        BigDecimal.ZERO));
+                        BigDecimal.ZERO) > 0L);
         assertTrue(repository.ledgerBalanceRepository.freeze("APTOS", "APT", owner.getAccountId(), WITHDRAW_AMOUNT, tenantAddress.tenantId()));
         repository.withdrawalOrderRepository.updateStatus(
                 tenantAddress.tenantId(),

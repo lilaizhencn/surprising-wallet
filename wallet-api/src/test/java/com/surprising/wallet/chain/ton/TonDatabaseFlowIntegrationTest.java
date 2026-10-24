@@ -54,14 +54,13 @@ class TonDatabaseFlowIntegrationTest {
     void addressRestartDepositReplayLedgerLocksAndSeqnoReservationAreSafe() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.db.enabled"),
                 "set -Dton.db.enabled=true for PostgreSQL-backed TON validation");
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                env("TON_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
-                env("TON_DB_USER", "wallet"),
-                env("TON_DB_PASSWORD", ""));
+        DriverManagerDataSource dataSource = com.surprising.wallet.custody.CustodyIntegrationDatabase.dataSource();
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            long profileId = repository.chainProfileRepository.findAccountByChain("TON").orElseThrow().getId();
+            jdbc.update("update chain_profile set enabled=true, scan_enabled=true where id=?", profileId);
             TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
             TonAddressService addresses = new TonAddressService(keys, repository.chainAddressRepository, repository.chainProfileRepository);
             UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);
@@ -77,15 +76,17 @@ class TonDatabaseFlowIntegrationTest {
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());
             assertNotEquals(userA.getAddress(), userB.getAddress());
 
+            TonTenantIntegrationFixture.attachDepositAddress(jdbc, userA);
+            TonTenantIntegrationFixture.attachDepositAddress(jdbc, userB);
             String txHash = UUID.randomUUID().toString().replace("-", "");
             DepositEvent deposit = new DepositEvent(ChainType.TON, "TON", txHash,
                     "external", userA.getAddress(), BigDecimal.ONE,
                     123L, txHash, 1, null, "{}");
             assertTrue(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
             assertFalse(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
-            assertTrue(repository.ledgerBalanceRepository.freeze("TON", "TON", userA.getAccountId(), new BigDecimal("0.2"), null));
-            assertFalse(repository.ledgerBalanceRepository.freeze("TON", "TON", userA.getAccountId(), new BigDecimal("0.9"), null));
-            assertTrue(repository.ledgerBalanceRepository.release("TON", "TON", userA.getAccountId(), new BigDecimal("0.2"), null));
+            assertTrue(repository.ledgerBalanceRepository.freeze("TON", "TON", userA.getAccountId(), new BigDecimal("0.2"), tenantId));
+            assertFalse(repository.ledgerBalanceRepository.freeze("TON", "TON", userA.getAccountId(), new BigDecimal("0.9"), tenantId));
+            assertTrue(repository.ledgerBalanceRepository.release("TON", "TON", userA.getAccountId(), new BigDecimal("0.2"), tenantId));
 
             long seq0 = repository.accountSequenceRepository.reserve("TON", userA.getAddress(), 4);
             long seq1 = repository.accountSequenceRepository.reserve("TON", userA.getAddress(), 4);
@@ -178,13 +179,7 @@ class TonDatabaseFlowIntegrationTest {
         }
     }
 
-    /**
-     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value;
-    }
+
 
     /**
      * 测试替身 {@code FakeTonApiClient}，用于隔离外部依赖并验证调用参数和状态变化。

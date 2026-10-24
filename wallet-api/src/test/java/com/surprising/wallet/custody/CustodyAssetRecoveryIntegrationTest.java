@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.surprising.wallet.gateway.CustodyAssetRecoveryChainGateway;
+import com.surprising.wallet.gateway.EvmAssetRecoveryChainGateway;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
@@ -56,7 +56,7 @@ class CustodyAssetRecoveryIntegrationTest {
                 new CustodyAssetRecoveryRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc),
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new DepositRecordRepository(jdbc),
-                List.of(gateway), new CustodyJacksonConfiguration().custodyObjectMapper(),
+                gateway.client, new CustodyJacksonConfiguration().custodyObjectMapper(),
                 com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
         var command = new CustodyAssetRecoveryService.SubmitCommand(
                 "BNB", "ETH", "USDT", "0x1111111111111111111111111111111111111111",
@@ -95,6 +95,11 @@ class CustodyAssetRecoveryIntegrationTest {
         assertEquals(fixture.address(), gateway.executedSource.getAddress());
         assertEquals(fixture.derivationSubject(), gateway.executedSource.getUserId());
         assertEquals(fixture.namespace(), gateway.executedSource.getBiz());
+        assertEquals(0L, gateway.executedSource.getAddressIndex());
+        assertEquals("DEPOSIT", gateway.executedSource.getWalletRole());
+        assertEquals(fixture.address(), gateway.executedSource.getOwnerAddress());
+        assertEquals("m/44/60/" + fixture.namespace() + "/" + fixture.derivationSubject() + "/0",
+                gateway.executedSource.getDerivationPath());
         assertEquals(1, jdbc.queryForObject("""
                 select count(*) from custody_audit_log
                  where tenant_id = ? and action = 'ASSET_RECOVERY.EXECUTE'
@@ -115,7 +120,7 @@ class CustodyAssetRecoveryIntegrationTest {
                 new CustodyAssetRecoveryRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc),
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new DepositRecordRepository(jdbc),
-                List.of(new FakeGateway()), new CustodyJacksonConfiguration().custodyObjectMapper(),
+                new FakeGateway().client, new CustodyJacksonConfiguration().custodyObjectMapper(),
                 com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
         var command = new CustodyAssetRecoveryService.SubmitCommand(
                 "BNB", "ETH", "BNB", null, "0xunknown", 0L,
@@ -125,6 +130,69 @@ class CustodyAssetRecoveryIntegrationTest {
         assertEquals(0, jdbc.queryForObject(
                 "select count(*) from custody_asset_recovery", Integer.class));
     }
+
+    @Test void rejectionPreservesSpecialCharactersInAudit() {
+        Fixture fixture = fixture();
+        try (var context = recoveryContext(new FakeGateway())) {
+            var service = context.getBean(CustodyAssetRecoveryService.class);
+            var submitted = service.submit(fixture.tenantPrincipal(), command(fixture), "127.0.0.1");
+            String reason = "manual review\nquoted \"reason\" and path C:\\review\tcontrol\b end";
+            var result = service.reject(fixture.platformPrincipal(), submitted.id(),
+                    new CustodyAssetRecoveryService.RejectCommand(reason), "127.0.0.1");
+            assertEquals("REJECTED", result.status());
+            assertEquals(reason, jdbc.queryForObject("""
+                    select details->>'reason' from custody_audit_log
+                     where tenant_id=? and action='ASSET_RECOVERY.REJECT'
+                    """, String.class, fixture.tenantId()));
+        }
+    }
+
+    @Test void auditFailureRollsBackRejection() {
+        Fixture fixture = fixture();
+        try (var context = recoveryContext(new FakeGateway())) {
+            var service = context.getBean(CustodyAssetRecoveryService.class);
+            var submitted = service.submit(fixture.tenantPrincipal(), command(fixture), "127.0.0.1");
+            assertThrows(RuntimeException.class, () -> service.reject(fixture.platformPrincipal(), submitted.id(),
+                    new CustodyAssetRecoveryService.RejectCommand("needs review"), "invalid-ip"));
+            assertEquals("VERIFIED", new CustodyAssetRecoveryRepository(jdbc).require(submitted.id()).status());
+            assertEquals(0, jdbc.queryForObject("select count(*) from custody_audit_log where action='ASSET_RECOVERY.REJECT'", Integer.class));
+        }
+    }
+
+    @Test void differentDerivationPathsRemainAmbiguousAcrossChains() {
+        Fixture fixture = fixture();
+        jdbc.update("update chain_address set derivation_path=derivation_path || '/1' where tenant_id=? and chain='BNB'", fixture.tenantId());
+        try (var context = recoveryContext(new FakeGateway())) {
+            var service = context.getBean(CustodyAssetRecoveryService.class);
+            var error = assertThrows(IllegalStateException.class, () -> service.submit(
+                    fixture.tenantPrincipal(), command(fixture), "127.0.0.1"));
+            assertTrue(error.getMessage().contains("ambiguous ownership"));
+            assertEquals(0, jdbc.queryForObject("select count(*) from custody_asset_recovery", Integer.class));
+        }
+    }
+
+    private CustodyAssetRecoveryService.SubmitCommand command(Fixture fixture) {
+        return new CustodyAssetRecoveryService.SubmitCommand("BNB", "ETH", "USDT",
+                "0x1111111111111111111111111111111111111111", "0xwrong-chain-transfer", 7L, fixture.address(), "3.25");
+    }
+
+    private org.springframework.context.annotation.AnnotationConfigApplicationContext recoveryContext(FakeGateway gateway) {
+        var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
+        context.register(RecoveryTransactions.class);
+        context.registerBean(org.springframework.transaction.PlatformTransactionManager.class,
+                () -> new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        context.registerBean(CustodyAssetRecoveryService.class, () -> new CustodyAssetRecoveryService(
+                new CustodyAssetRecoveryRepository(jdbc), new CustodyAuditRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc), new DepositRecordRepository(jdbc),
+                gateway.client, new CustodyJacksonConfiguration().custodyObjectMapper(),
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc)));
+        context.refresh();
+        return context;
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    @org.springframework.transaction.annotation.EnableTransactionManagement
+    static class RecoveryTransactions { }
 
     /**
      * 验证 {@code fixture} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -195,60 +263,33 @@ class CustodyAssetRecoveryIntegrationTest {
         assertEquals(0, new BigDecimal(expected).compareTo(actual));
     }
 
-    /**
-     * 测试替身 {@code FakeGateway}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeGateway implements CustodyAssetRecoveryChainGateway {
-        /**
-         * 保存 {@code executedSource}，用于承载当前测试夹具的配置或运行数据。
-         */
+    private static final class FakeGateway {
+        private final EvmAssetRecoveryChainGateway client = org.mockito.Mockito.mock(EvmAssetRecoveryChainGateway.class);
         private ChainAddressRecord executedSource;
-        /**
-         * 保存 {@code confirmed}，记录测试开关、处理状态、确认结果或重试信息。
-         */
         private boolean confirmed = true;
 
-        /**
-         * 验证 {@code supports} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean supports(String chain) {
-            return "BNB".equals(chain);
-        }
-
-        /**
-         * 验证 {@code verify} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Verification verify(VerificationRequest request) {
-            assertEquals("BNB", request.chain());
-            assertEquals(7L, request.requestedLogIndex());
-            return new Verification(
-                    request.tokenContract(), 6, 7L, new BigDecimal("3.25"),
-                    123_456L, "0xcanonical-block", 18,
-                    "{\"canonical\":true,\"nativeBalanceForGas\":\"0.01\"}");
-        }
-
-        /**
-         * 验证 {@code execute} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public String execute(ExecutionRequest request) {
-            executedSource = request.source();
-            assertAmount("3.25", request.amount());
-            assertEquals("0x9999999999999999999999999999999999999999",
-                    request.recoveryAddress());
-            return "0xrecovery-transaction";
-        }
-
-        /**
-         * 验证 {@code confirmed} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean confirmed(String chain, String txHash) {
-            assertEquals("BNB", chain);
-            assertEquals("0xrecovery-transaction", txHash);
-            return confirmed;
+        private FakeGateway() {
+            org.mockito.Mockito.when(client.verify(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+                EvmAssetRecoveryChainGateway.VerificationRequest request = invocation.getArgument(0);
+                assertEquals("BNB", request.chain());
+                assertEquals(7L, request.requestedLogIndex());
+                return new EvmAssetRecoveryChainGateway.Verification(request.tokenContract(), 6, 7L,
+                        new BigDecimal("3.25"), 123_456L, "0xcanonical-block", 18,
+                        "{\"canonical\":true,\"nativeBalanceForGas\":\"0.01\"}");
+            });
+            org.mockito.Mockito.when(client.execute(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+                EvmAssetRecoveryChainGateway.ExecutionRequest request = invocation.getArgument(0);
+                executedSource = request.source();
+                assertAmount("3.25", request.amount());
+                assertEquals("0x9999999999999999999999999999999999999999", request.recoveryAddress());
+                return "0xrecovery-transaction";
+            });
+            org.mockito.Mockito.when(client.confirmed(org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> {
+                assertEquals("BNB", invocation.getArgument(0));
+                assertEquals("0xrecovery-transaction", invocation.getArgument(1));
+                return confirmed;
+            });
         }
     }
 
