@@ -252,9 +252,7 @@ class CardanoDevnetFullFlowIntegrationTest {
                 ? transactions.sendNative(from, to.getAddress(), CardanoTransactionService.toLovelace(amount))
                 : transactions.sendToken(from, token, to.getAddress(), amount);
         assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), txHash));
-        assertTrue(transactions.confirmWithdrawal(tenantId,
-                repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), orderNo, txHash,
-                symbol, from.getAccountId(), amount));
+        assertTrue(transactions.confirmWithdrawal(tenantId, repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), orderNo, txHash));
     }
 
     /**

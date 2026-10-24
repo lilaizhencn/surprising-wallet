@@ -292,6 +292,15 @@ public class WithdrawalOrderRepository {
                 (rs, rowNum) -> map(rs), args).stream().findFirst();
     }
 
+    /** 锁定所属订单，供结算读取不可变扣款字段。 */
+    public Optional<WithdrawalOrderRecord> lockForSettlement(UUID tenantId, String chain, String orderNo) {
+        return jdbc.query("""
+                select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id,
+                       to_address, amount, fee, tx_hash, status, error_message, created_at, updated_at
+                  from withdrawal_order where tenant_id=? and chain=? and order_no=? for update
+                """, (rs, rowNum) -> map(rs), tenantId, chain, orderNo).stream().findFirst();
+    }
+
     /** 查询待 EVM 批量提现的订单，仅锁定提现订单单表行。 */
     public List<Map<String, Object>> listClaimable(String chain, int limit) {
         return jdbc.queryForList("""

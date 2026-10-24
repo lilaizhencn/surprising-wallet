@@ -83,7 +83,7 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
   -> 同一业务事务：锁定余额/UTXO、写 chain_signing_transaction
   -> UtxoSigningSubmissionService：锁定并校验持久化请求、写入去重凭据 + PGMQ SIGN_FIRST 入队
   -> PGMQ sig1 → sig2 → 广播队列；处理事务行锁 + 广播业务租约
-  -> 链上确认 → WithdrawalSettlementService：租户/状态/哈希校验 → 冻结扣款 + 订单确认同事务
+  -> 链上确认 → WithdrawalSettlementService(租户, 链, 订单号, 哈希)：锁定所属订单 → 状态/哈希校验 → 读取币种/扣款账户/金额+客户手续费 → 冻结扣款 + 订单确认同事务
   -> CONFIRMED：托管状态、事件与 Gas 投影
   -> FAILED/REJECTED/CANCELLED：释放锁定本金、手续费与 Gas
   -> BROADCAST_UNKNOWN：禁止盲目重建，等待链上对账与人工审计
@@ -236,7 +236,7 @@ SOL/TON/APTOS/SUI：
 
 UTXO 充值扫描：运行时完整读取 RPC 区块 → `UtxoBlock/UtxoOutput` → `UtxoDepositService.scanBlock`。canonical 区块、UTXO、充值、账本、租户投影、PGMQ 充值通知和扫描游标同事务，空区块也推进游标，读取不完整则整块重试。重组替换块重新入账时不回退主游标。输出序号使用 int，不拼接到交易哈希，也不截断为 short。
 
-`UtxoConfirmationJob` 独立调度已观察充值的补确认、重组核对和签名交易确认，不受新扫描/提现开关影响。刷新只操作仍为 canonical 的待确认输出，过期观察或孤儿输出不复活；提现同时检查当前和历史尝试，确认后仍由原结算服务原子扣款。该拆分不修改数据库表结构。
+`UtxoConfirmationJob` 独立调度已观察充值的补确认、重组核对和签名交易确认，不受新扫描/提现开关影响。刷新只操作仍为 canonical 的待确认输出，过期观察或孤儿输出不复活；提现同时检查当前和历史尝试。选中实际上链的请求后，锁定所属订单并核对用户、币种、收款地址、客户金额与客户手续费，再标记该哈希为 CONFIRMING；统一结算服务只按订单扣款，签名状态、订单、余额和 UTXO 同事务。提现替换不改变客户手续费；归集替换的输出与矿工费仍按上链尝试恢复。该收敛不修改数据库表结构。
 
 ## Cloudflare Demo 入账与提现
 

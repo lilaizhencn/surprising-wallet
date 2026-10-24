@@ -471,22 +471,10 @@ public class SolanaTransactionService {
         }
     }
 
-    /**
-     * 确认提现交易（等待链上确认并清算）。
-     *
-     * @param tenantId    租户 ID
-     * @param orderNo     提现订单号
-     * @param assetSymbol 资产符号
-     * @param accountId   账户 ID
-     * @param debitAmount 扣款金额
-     * @return true 表示确认并结算成功
-     */
-    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(UUID tenantId, String orderNo) {
         String signature = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
-        if (settlements.confirm(
-                tenantId, CHAIN, orderNo, signature, assetSymbol, accountId, debitAmount)) {
+        if (settlements.confirm(tenantId, CHAIN, orderNo, signature)) {
             updateConfirmedTransaction(signature, status);
             return true;
         }

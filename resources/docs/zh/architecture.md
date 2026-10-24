@@ -113,7 +113,7 @@ APTOS、ADA、NEAR、DOT、SOLANA、SUI、TON、XRP 的扫描器和交易服务�
 EVM 普通交易和两个 EIP-7702 协调器直接注入 `EvmNonceRepository`。Nonce 预留通过一条 `INSERT ... ON CONFLICT ... RETURNING` 完成，独立调用也可并发分配，加入已有事务时可随签名/Gas 失败回滚；不再经通用门面传递，也不做 BigInteger/long 往返转换。输入沿用 uint256 校验且不返回范围外值；生产代码不保留覆盖已预留计数的通用 upsert 或测试 DTO。
 RPC 客户端直接注入 `ChainProfileRepository` 与 `ChainRpcNodeService`，不再经过 `ChainJdbcRepository` 转发链配置。节点选择、故障切换、认证和 provider 限流只有一条路径；本地测试通过配置仓储提供节点，生产代码不保留固定测试端点或空依赖构造分支。`ChainRpcNodeService` 的环境名和并发上限由唯一构造器注入。
 
-`WithdrawalSettlementService` 统一编排单笔提现确认：租户、订单状态和交易哈希校验、冻结余额扣款、订单条件确认在同一事务中完成。各链交易服务、UTXO 结算、账户链工作流和 EVM 批量提现协调器直接调用该用例，结算入口必须明确租户。原有余额更新和状态条件更新顺序保持不变，竞争失败时全部回滚。
+`WithdrawalSettlementService.confirm` 只接收租户、链、订单号和交易哈希。事务内锁定所属订单，校验状态与哈希，再从订单读取币种、扣款账户及金额加客户手续费；不接受调用方重复传来的扣款事实，也不从其他账户回退。缺少扣款账户时拒绝结算。冻结扣款、订单条件确认一起提交或回滚；并发重复确认在订单行锁后读取终态并返回无变化。各链交易服务、UTXO 结算、账户链工作流和 EVM 批量提现协调器直接调用该用例。链服务只保留 RPC 确认或内部充值识别实际需要的参数，已删除 EVM、Aptos、Monero 的无租户确认重载和账户链资产服务中的扣款参数拼装。
 
 各模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 
@@ -138,7 +138,7 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 
 `chain_signing_transaction` 分别保存有类型的 request、signed_transaction 和完整 attempts 快照；链、租户、请求 UUID、业务类型及当前哈希由 JSON 生成数据库列，唯一键、索引及租户外键直接使用生成列，避免手工同步两份身份。API 内的 UtxoSigningTransaction 管理生命周期，签名服务不接收数据库状态或历史。UtxoBroadcastService 在同一签名行锁下校验结果身份，持久化签名事实后广播；初次广播 UNKNOWN 也保留哈希并继续确认。SIGN_DONE 队列的持久化结果在失败重试期间保留原始签名，禁止释放任何已有已签尝试的输入。
 
-批处理、请求提交、RBF、广播、确认和内部归集识别直接调用 ChainSigningTransactionRepository，总仓储不再转发签名表方法。RBF 保存完整请求与签名快照，原尝试确认时恢复对应金额与实际费用；提现先将已验证的历史尝试标为 CONFIRMING，再由 WithdrawalSettlementService 扣款确认。签名行、订单、UTXO 与余额更新在同一事务中提交或回滚，终态不可重开。
+批处理、请求提交、RBF、广播、确认和内部归集识别直接调用 ChainSigningTransactionRepository，总仓储不再转发签名表方法。RBF 保存完整请求与签名快照；归集原尝试确认时恢复对应金额与矿工费。提现 RBF 保留客户支付金额与客户手续费，确认前在订单行锁下核对实际上链请求的用户、币种、收款地址、金额与客户手续费，匹配后标记 CONFIRMING，再由 WithdrawalSettlementService 按订单扣款。签名行、订单、UTXO 与余额更新在同一事务中提交或回滚，终态不可重开。此收敛复用现有表、字段和约束，不修改数据库基线。
 
 ## 调度与运行时开关
 

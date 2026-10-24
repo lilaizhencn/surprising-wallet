@@ -340,8 +340,7 @@ class CustodyMultiChainLoadIntegrationTest {
                 account.address(),
                 txHash,
                 null);
-        assertTrue(settlements.confirm(
-                tenantId, account.chain().name(), orderNo, txHash, account.symbol(), account.accountId(), WITHDRAW_AMOUNT));
+        assertTrue(settlements.confirm(tenantId, account.chain().name(), orderNo, txHash));
     }
 
     /**

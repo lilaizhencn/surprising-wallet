@@ -69,27 +69,11 @@ public class MoneroTransactionService {
         return transfer.txHash();
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public void confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
-                                  String debitAccountId, BigDecimal debitAmount,
-                                  String toAddress, BigDecimal amount) {
-        confirmWithdrawal(withdrawalOrderRepository.requireTenant(CHAIN, orderNo),
-                profile, orderNo, txHash, debitAccountId, debitAmount, toAddress, amount);
-    }
-
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public void confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                  String orderNo, String txHash,
-                                  String debitAccountId, BigDecimal debitAmount,
-                                  String toAddress, BigDecimal amount) {
+                                  String orderNo, String txHash, String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations());
         if (transfer != null) {
-            if (settlements.confirm(
-                    tenantId, CHAIN, orderNo, txHash, SYMBOL, debitAccountId, debitAmount)) {
+            if (settlements.confirm(tenantId, CHAIN, orderNo, txHash)) {
                 creditInternalRecipient(profile, transfer, toAddress, amount);
             }
         }

@@ -346,24 +346,10 @@ public class AptosTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(withdrawalOrderRepository.requireTenant(CHAIN, orderNo),
-                orderNo, assetSymbol, accountId, debitAmount);
-    }
-
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo) {
         String hash = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
-        if (settlements.confirm(
-                tenantId, CHAIN, orderNo, hash, assetSymbol, accountId, debitAmount)) {
+        if (settlements.confirm(tenantId, CHAIN, orderNo, hash)) {
             markConfirmed(hash, transaction);
             return true;
         }

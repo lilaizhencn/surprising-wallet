@@ -6,7 +6,6 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -146,30 +145,6 @@ class AccountChainAssetService {
     boolean isNative(AccountChainProfile profile, String symbol) {
         return symbol != null
                 && symbol.equalsIgnoreCase(profile.getNativeSymbol());
-    }
-
-    /**
-     * 执行 {@code debitAccountId} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    String debitAccountId(
-            WithdrawalOrderRecord order, ChainAddressRecord from) {
-        String debitAccountId = order.getDebitAccountId();
-        return debitAccountId == null || debitAccountId.isBlank()
-                ? from.getAccountId()
-                : debitAccountId;
-    }
-
-    /**
-     * 处理 {@code withdrawalDebitAmount} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    BigDecimal withdrawalDebitAmount(WithdrawalOrderRecord order) {
-        BigDecimal amount = order.getAmount() == null
-                ? BigDecimal.ZERO
-                : order.getAmount();
-        BigDecimal fee = order.getFee() == null
-                ? BigDecimal.ZERO
-                : order.getFee();
-        return amount.add(fee);
     }
 
     /**

@@ -8,17 +8,26 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
@@ -28,6 +37,8 @@ import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
+import org.web3j.protocol.core.Request;
+import org.web3j.protocol.core.Response;
 import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
@@ -35,6 +46,7 @@ import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,12 +58,17 @@ class EvmForkTransactionServiceIntegrationTest {
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
     /** 测试使用的原生币最小单位换算因子。 */
     private static final BigDecimal NATIVE_UNIT = new BigDecimal("1000000000000000000");
+    private static final UUID TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableTransactionManagement
+    static class Transactions { }
 
     /**
      * 验证 EVM 交易服务可以发送原生币和 ERC-20，并把链上结果写入交易记录。
      */
     @Test
-    void shouldSendNativeAndTokenThroughAccountTransactionService() throws Exception {
+    void shouldSendAndConfirmNativeAndTokenThroughAccountTransactionService() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.service.enabled"),
                 "set -Devm.service.enabled=true and start local Hardhat on 127.0.0.1:8545");
 
@@ -62,6 +79,13 @@ class EvmForkTransactionServiceIntegrationTest {
         String originalNetwork = originalProfile.getNetwork();
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
         EvmHttpServiceFactory httpServices = new EvmHttpServiceFactory();
+        var context = new AnnotationConfigApplicationContext();
+        context.register(Transactions.class);
+        context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(jdbc.getDataSource()));
+        context.registerBean(WithdrawalOrderRepository.class, () -> repository.withdrawalOrderRepository);
+        context.registerBean(LedgerBalanceRepository.class, () -> repository.ledgerBalanceRepository);
+        context.registerBean(WithdrawalSettlementService.class);
+        context.refresh();
         try {
             List<String> accounts = web3j.ethAccounts().send().getAccounts();
             assertTrue(accounts.size() >= 3, "Hardhat must expose deployer and recipients");
@@ -93,7 +117,7 @@ class EvmForkTransactionServiceIntegrationTest {
                     keyService,
                     new EvmTransactionBuilder(),
                     httpServices,
-                    com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                    context.getBean(WithdrawalSettlementService.class),
                     new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
 
             sendUnlockedNative(web3j, accounts.getFirst(), from.getAddress(), new BigDecimal("2"));
@@ -102,34 +126,76 @@ class EvmForkTransactionServiceIntegrationTest {
             TransactionReceipt nativeReceipt = waitReceipt(web3j, nativeHash);
             assertTrue(nativeReceipt.isStatusOK(), "service native transaction must succeed");
             assertSentTransaction(jdbc, chain, nativeHash, localProfile.getNativeSymbol(), null);
+            confirmAndAssertOrderDebit(service, repository, jdbc, localProfile, from,
+                    localProfile.getNativeSymbol(), accounts.get(1), nativeHash, new BigDecimal("0.25"), new BigDecimal("0.01"));
 
-            List<TokenDefinition> configuredTokens = repository.chainProfileRepository.findAccountByChain(chain.name()).map( configuredNetworkProfile -> repository.tokenConfigRepository.listDefinitions(chain.name(), configuredNetworkProfile.getNetwork())).orElse(List.of());
-            if (!configuredTokens.isEmpty()) {
-                TokenDefinition token = configuredTokens.getFirst();
-                sendUnlockedTokenCall(web3j, accounts.getFirst(), token.getContractAddress(),
-                        encodeMint(from.getAddress(), new BigDecimal("100"), token.getDecimals()));
-                String tokenHash = service.sendToken(
-                        chain.name(), from, token, accounts.get(2), new BigDecimal("25"));
-                TransactionReceipt tokenReceipt = waitReceipt(web3j, tokenHash);
-                assertTrue(tokenReceipt.isStatusOK(), "service token transaction must succeed");
-                assertSentTransaction(jdbc, chain, tokenHash, token.getSymbol(), token.getContractAddress());
-                assertEquals(new BigDecimal("75").setScale(token.getDecimals()),
-                        tokenBalance(web3j, token.getContractAddress(), from.getAddress(), token.getDecimals()));
-                assertEquals(new BigDecimal("25").setScale(token.getDecimals()),
-                        tokenBalance(web3j, token.getContractAddress(), accounts.get(2), token.getDecimals()));
-            }
+            List<TokenDefinition> configuredTokens = repository.tokenConfigRepository.listDefinitions(chain.name(), originalNetwork);
+            assertFalse(configuredTokens.isEmpty(), "the local matrix must exercise an enabled ERC-20");
+            TokenDefinition token = configuredTokens.getFirst();
+            sendUnlockedTokenCall(web3j, accounts.getFirst(), token.getContractAddress(),
+                    encodeMint(from.getAddress(), new BigDecimal("100"), token.getDecimals()));
+            String tokenHash = service.sendToken(
+                    chain.name(), from, token, accounts.get(2), new BigDecimal("25"));
+            TransactionReceipt tokenReceipt = waitReceipt(web3j, tokenHash);
+            assertTrue(tokenReceipt.isStatusOK(), "service token transaction must succeed");
+            assertSentTransaction(jdbc, chain, tokenHash, token.getSymbol(), token.getContractAddress());
+            confirmAndAssertOrderDebit(service, repository, jdbc, localProfile, from,
+                    token.getSymbol(), accounts.get(2), tokenHash, new BigDecimal("25"), new BigDecimal("0.5"));
+            assertEquals(new BigDecimal("75").setScale(token.getDecimals()),
+                    tokenBalance(web3j, token.getContractAddress(), from.getAddress(), token.getDecimals()));
+            assertEquals(new BigDecimal("25").setScale(token.getDecimals()),
+                    tokenBalance(web3j, token.getContractAddress(), accounts.get(2), token.getDecimals()));
 
             BigInteger pendingNonce = web3j.ethGetTransactionCount(
                     from.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
-            assertEquals(configuredTokens.isEmpty() ? BigInteger.ONE : BigInteger.TWO, pendingNonce,
+            assertEquals(BigInteger.TWO, pendingNonce,
                     "service must reserve consecutive nonces for configured asset transfers");
         } finally {
+            context.close();
             httpServices.close();
             jdbc.update("update chain_profile set network = ?, updated_at = now() "
                             + "where chain = ? and network = 'local'",
                     originalNetwork, chain.name());
             web3j.shutdown();
         }
+    }
+
+    /** Exercise the real receipt path and normal Spring settlement transaction, including a replay. */
+    private static void confirmAndAssertOrderDebit(EvmAccountTransactionService service,
+            ChainRepositoryFixture repository, JdbcTemplate jdbc, AccountChainProfile profile,
+            ChainAddressRecord from, String symbol, String recipient, String hash,
+            BigDecimal amount, BigDecimal customerFee) throws Exception {
+        String account = "service-customer-" + profile.getChain();
+        String orderNo = "service-confirm-" + profile.getChain() + "-" + symbol;
+        BigDecimal debit = amount.add(customerFee);
+        jdbc.update("""
+                insert into ledger_balance(tenant_id, chain, asset_symbol, account_id,
+                    available_balance, locked_balance, total_balance) values (?, ?, ?, ?, ?, 0, ?)
+                """, TENANT, profile.getChain(), symbol, account, debit.add(BigDecimal.ONE), debit.add(BigDecimal.ONE));
+        assertEquals(1, repository.withdrawalOrderRepository.createForTenant(TENANT, orderNo, from.getUserId(),
+                profile.getChain(), symbol, from.getAddress(), account, recipient, amount, customerFee));
+        assertTrue(repository.ledgerBalanceRepository.freeze(profile.getChain(), symbol, account, debit, TENANT));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(TENANT, profile.getChain(), orderNo,
+                "SENT", from.getAddress(), hash, null));
+        var mining = new HttpService(LOCAL_RPC);
+        try {
+            var response = new Request<>("hardhat_mine", List.of(Numeric.encodeQuantity(
+                    BigInteger.valueOf(Math.max(1, profile.getWithdrawConfirmations())))), mining, Response.class).send();
+            assertFalse(response.hasError(), "local blocks must satisfy the actual profile confirmation threshold");
+        } finally {
+            mining.close();
+        }
+        assertTrue(service.confirmWithdrawal(TENANT, profile.getChain(), orderNo));
+        assertFalse(service.confirmWithdrawal(TENANT, profile.getChain(), orderNo));
+        var order = repository.withdrawalOrderRepository.find(profile.getChain(), orderNo, TENANT).orElseThrow();
+        assertEquals("CONFIRMED", order.getStatus());
+        assertEquals(hash, order.getTxHash());
+        var balance = repository.ledgerBalanceRepository.find(TENANT, profile.getChain(), symbol, account).orElseThrow();
+        assertEquals(0, BigDecimal.ONE.compareTo(balance.getAvailableBalance()));
+        assertEquals(0, balance.getLockedBalance().signum());
+        assertEquals(0, BigDecimal.ONE.compareTo(balance.getTotalBalance()));
+        assertEquals("CONFIRMED", jdbc.queryForObject("select status from evm_tx where chain=? and tx_hash=?",
+                String.class, profile.getChain(), hash));
     }
 
     /**

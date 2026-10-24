@@ -6,6 +6,8 @@ import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.WithdrawalSettlementService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,7 +28,6 @@ import static org.mockito.Mockito.*;
 @EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
 class WithdrawalSettlementIntegrationTest {
     private static final UUID TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final BigDecimal DEBIT = new BigDecimal("1.25");
     private static final String ORDER = "SETTLEMENT-TEST", ACCOUNT = "shared-account", HASH = "0xconfirmed";
     private AnnotationConfigApplicationContext context;
     private JdbcTemplate jdbc;
@@ -76,10 +77,8 @@ class WithdrawalSettlementIntegrationTest {
     }
 
     @Test void tenantHashAndStatusMismatchLeaveTheLedgerUntouched() {
-        assertThrows(IllegalStateException.class, () -> settlements.confirm(otherTenant,
-                "ETH", ORDER, HASH, "ETH", ACCOUNT, DEBIT));
-        assertThrows(IllegalStateException.class, () -> settlements.confirm(TENANT,
-                "ETH", ORDER, "0xwrong", "ETH", ACCOUNT, DEBIT));
+        assertThrows(IllegalStateException.class, () -> settlements.confirm(otherTenant, "ETH", ORDER, HASH));
+        assertThrows(IllegalStateException.class, () -> settlements.confirm(TENANT, "ETH", ORDER, "0xwrong"));
         orders.updateStatus(TENANT, "ETH", ORDER, "SIGNING", ACCOUNT, HASH, null);
         assertThrows(IllegalStateException.class, this::confirm);
         assertBalance(TENANT, "3.75");
@@ -104,11 +103,35 @@ class WithdrawalSettlementIntegrationTest {
                 "select total_balance from ledger_balance where tenant_id=?", BigDecimal.class, TENANT)));
     }
 
+    @Test void confirmationChargesOnlyTheAccountAndAssetRecordedOnItsOrder() {
+        jdbc.update("""
+                insert into ledger_balance(tenant_id, chain, asset_symbol, account_id,
+                    available_balance, locked_balance, total_balance)
+                values (?, 'ETH', 'USDT', 'unrelated-account', 0, 3.75, 3.75)
+                """, TENANT);
+        assertTrue(settlements.confirm(TENANT, "ETH", ORDER, HASH));
+        assertBalance(TENANT, "2.50");
+        assertBalance(otherTenant, "3.75");
+        assertEquals(0, new BigDecimal("3.75").compareTo(jdbc.queryForObject("""
+                select total_balance from ledger_balance
+                 where tenant_id=? and asset_symbol='USDT' and account_id='unrelated-account'
+                """, BigDecimal.class, TENANT)));
+    }
+
+    @ParameterizedTest @NullAndEmptySource
+    void missingDebitAccountLeavesAllBalancesUntouched(String missingAccount) {
+        jdbc.update("update withdrawal_order set debit_account_id=? where tenant_id=? and order_no=?",
+                missingAccount, TENANT, ORDER);
+        assertThrows(IllegalStateException.class, this::confirm);
+        assertEquals("SENT", status());
+        assertBalance(TENANT, "3.75");
+        assertBalance(otherTenant, "3.75");
+    }
+
     @Test void concurrentConfirmationsCannotCommitMoreThanOneDebit() throws Exception {
         try (var executor = Executors.newFixedThreadPool(8)) {
             var futures = IntStream.range(0, 24).mapToObj(i -> executor.submit(() -> {
-                try { return confirm(); }
-                catch (IllegalStateException losingTransition) { return false; }
+                return confirm();
             })).toList();
             int committed = 0;
             for (var future : futures) if (future.get(20, TimeUnit.SECONDS)) committed++;
@@ -119,11 +142,14 @@ class WithdrawalSettlementIntegrationTest {
         assertBalance(otherTenant, "3.75");
     }
 
-    private boolean confirm() { return settlements.confirm(TENANT, "ETH", ORDER, HASH, "ETH", ACCOUNT, DEBIT); }
+    private boolean confirm() { return settlements.confirm(TENANT, "ETH", ORDER, HASH); }
     private String status() { return orders.findStatus("ETH", ORDER).orElseThrow(); }
 
     private void assertBalance(UUID tenant, String expected) {
-        var balance = jdbc.queryForMap("select locked_balance,total_balance from ledger_balance where tenant_id=?", tenant);
+        var balance = jdbc.queryForMap("""
+                select locked_balance,total_balance from ledger_balance
+                 where tenant_id=? and asset_symbol='ETH' and account_id=?
+                """, tenant, tenant.equals(TENANT) ? ACCOUNT : ACCOUNT + "-foreign");
         assertEquals(0, new BigDecimal(expected).compareTo((BigDecimal) balance.get("locked_balance")));
         assertEquals(0, new BigDecimal(expected).compareTo((BigDecimal) balance.get("total_balance")));
     }

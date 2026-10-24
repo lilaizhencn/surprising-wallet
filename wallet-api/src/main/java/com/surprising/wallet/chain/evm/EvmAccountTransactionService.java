@@ -195,22 +195,7 @@ public class EvmAccountTransactionService {
         });
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(
-            String chain, String orderNo, String symbol,
-            String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(withdrawalOrderRepository.requireTenant(chain, orderNo),
-                chain, orderNo, symbol, accountId, debitAmount);
-    }
-
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(
-            java.util.UUID tenantId, String chain, String orderNo, String symbol,
-            String accountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String chain, String orderNo) {
         String txHash = withdrawalOrderRepository.findTxHash(chain, orderNo, tenantId).orElseThrow();
         EvmTransactionReceipt receipt = confirmedReceipt(chain, txHash).orElse(null);
         if (receipt == null) {
@@ -220,8 +205,7 @@ public class EvmAccountTransactionService {
             throw new IllegalStateException("EVM transaction failed: " + txHash);
         }
         markConfirmed(chain, txHash, receipt);
-        return settlements.confirm(
-                tenantId, chain, orderNo, txHash, symbol, accountId, debitAmount);
+        return settlements.confirm(tenantId, chain, orderNo, txHash);
     }
 
     /**

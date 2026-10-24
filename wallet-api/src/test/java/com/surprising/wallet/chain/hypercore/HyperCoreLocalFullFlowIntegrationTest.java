@@ -191,8 +191,7 @@ class HyperCoreLocalFullFlowIntegrationTest {
                 ? transactions.sendUsd(profile, from, to.getAddress(), amount)
                 : transactions.sendSpot(profile, from, token, to.getAddress(), amount);
         assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), actionId));
-        assertTrue(transactions.confirmWithdrawal(
-                tenantId, orderNo, actionId, symbol, from.getAccountId(), amount));
+        assertTrue(transactions.confirmWithdrawal(tenantId, orderNo, actionId));
     }
 
     /**

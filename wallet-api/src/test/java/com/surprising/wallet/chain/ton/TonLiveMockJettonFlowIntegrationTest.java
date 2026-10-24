@@ -153,9 +153,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                 tenantId, nativeWithdrawOrder, owner.getUserId(), owner,
                 external.getAddress(), nativeWithdrawAmount, "TON withdraw gate"));
         waitForSeqnoGreaterThan(rpc, owner.getAddress(), nativeWithdrawSeqno, FLOW_TIMEOUT);
-        assertTrue(transactions.confirmWithdrawal(
-                tenantId, nativeWithdrawOrder, "TON", owner.getAccountId(),
-                new BigDecimal("0.055")));
+        assertTrue(transactions.confirmWithdrawal(tenantId, nativeWithdrawOrder, owner.getAccountId()));
 
         String nativeCollection = collectNative(
                 tenantId, custodyAddressId, owner, hot, transactions, repository, rpc);
@@ -287,8 +285,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                 withdrawAmount, symbol + " withdraw gate"));
         waitForSeqnoGreaterThan(rpc, jetton.userJettonWallet().getOwnerAddress(), withdrawSeqno,
                 FLOW_TIMEOUT);
-        assertTrue(transactions.confirmWithdrawal(
-                tenantId, orderNo, symbol, jetton.userJettonWallet().getAccountId(), withdrawAmount));
+        assertTrue(transactions.confirmWithdrawal(tenantId, orderNo, jetton.userJettonWallet().getAccountId()));
 
         String collectionNo = "ton-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("100");

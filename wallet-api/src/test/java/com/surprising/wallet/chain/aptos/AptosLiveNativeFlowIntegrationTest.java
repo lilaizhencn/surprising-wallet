@@ -154,9 +154,7 @@ class AptosLiveNativeFlowIntegrationTest {
                 withdrawOrder,
                 owner.getAddress(),
                 withdrawHash));
-        assertTrue(transactions.confirmWithdrawal(
-                tenantAddress.tenantId(), withdrawOrder, "APT",
-                owner.getAccountId(), WITHDRAW_AMOUNT));
+        assertTrue(transactions.confirmWithdrawal(tenantAddress.tenantId(), withdrawOrder));
 
         String collectionNo = "aptos-live-collection-" + UUID.randomUUID();
         assertEquals(

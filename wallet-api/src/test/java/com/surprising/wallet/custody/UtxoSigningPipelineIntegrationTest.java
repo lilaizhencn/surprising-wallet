@@ -245,6 +245,22 @@ class UtxoSigningPipelineIntegrationTest {
         }
     }
 
+    @Test void orderFeeMismatchCannotChangeTheMinedAttemptOrDebit() {
+        var transaction = prepare("BTC", false);
+        var result = sign(transaction);
+        done.broadcast();
+        var before = balances.find(TENANT, "BTC", "BTC", account("BTC")).orElseThrow();
+        jdbc.update("update withdrawal_order set fee=fee+0.01 where tenant_id=? and order_no='WD-PIPELINE'", TENANT);
+        assertThrows(IllegalStateException.class,
+                () -> settlement.settleConfirmed("BTC", transaction.id(), result.transaction().txId()));
+        assertEquals(Constants.SENT, current(transaction).status());
+        assertEquals("SENT", orderStatus("BTC"));
+        assertEquals("LOCKED", inputStatus("BTC"));
+        var after = balances.find(TENANT, "BTC", "BTC", account("BTC")).orElseThrow();
+        assertEquals(0, before.getLockedBalance().compareTo(after.getLockedBalance()));
+        assertEquals(0, before.getTotalBalance().compareTo(after.getTotalBalance()));
+    }
+
     @Test void generatedIdentityColumnsMatchTheIntentAndRejectIndependentWrites() {
         var transaction = prepare("BTC", false);
         var row = jdbc.queryForMap("select chain, tenant_id, signing_request_id, business_type from chain_signing_transaction where id = ?", transaction.id());

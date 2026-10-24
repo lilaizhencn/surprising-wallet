@@ -275,11 +275,11 @@ class AccountChainWorkflowServiceTest {
                 .fee(BigDecimal.ZERO).txHash("ton-message-hash").status("SENT").build();
 
         ton.messageConfirmed = false;
-        confirmTonWithdrawal(service, order, owner);
+        confirmTonWithdrawal(service, order);
         assertEquals(0, repository.withdrawalSettlements);
 
         ton.messageConfirmed = true;
-        confirmTonWithdrawal(service, order, owner);
+        confirmTonWithdrawal(service, order);
         assertEquals(1, repository.withdrawalSettlements);
     }
 
@@ -321,12 +321,11 @@ class AccountChainWorkflowServiceTest {
      * 验证 {@code confirmTonWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void confirmTonWithdrawal(AccountChainWorkflowService service,
-                                             WithdrawalOrderRecord order,
-                                             ChainAddressRecord address) throws Exception {
+                                             WithdrawalOrderRecord order) throws Exception {
         Method method = AccountChainWorkflowService.class.getDeclaredMethod(
-                "confirmTonWithdrawal", WithdrawalOrderRecord.class, ChainAddressRecord.class);
+                "confirmTonWithdrawal", WithdrawalOrderRecord.class);
         method.setAccessible(true);
-        method.invoke(service, order, address);
+        method.invoke(service, order);
     }
 
     /**
@@ -469,8 +468,7 @@ class AccountChainWorkflowServiceTest {
             }
         }
         var settlements = Mockito.mock(WithdrawalSettlementService.class);
-        Mockito.when(settlements.confirm(any(), anyString(), anyString(), anyString(),
-                anyString(), anyString(), any())).thenAnswer(invocation -> {
+        Mockito.when(settlements.confirm(any(), anyString(), anyString(), anyString())).thenAnswer(invocation -> {
             if (!(repository instanceof FakeRepository fake)) {
                 throw new AssertionError("unexpected withdrawal settlement in this fixture");
             }

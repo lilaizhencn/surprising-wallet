@@ -75,17 +75,11 @@ public class CardanoTransactionService {
         return send(from, toAddress, Amount.asset(unit, atomic));
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                     String orderNo, String txHash,
-                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile, String orderNo, String txHash) {
         if (!confirmed(profile, txHash)) {
             return false;
         }
-        return settlements.confirm(tenantId, CHAIN, orderNo, txHash,
-                assetSymbol, debitAccountId, debitAmount);
+        return settlements.confirm(tenantId, CHAIN, orderNo, txHash);
     }
 
     /**

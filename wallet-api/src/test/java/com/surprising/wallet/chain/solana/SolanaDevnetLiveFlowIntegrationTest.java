@@ -130,8 +130,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
         assertEquals(withdraw, transactions.withdrawNative(
                 tenantId, withdrawOrder, userA.getUserId(), userA,
                 external.getPublicKeyBase58(), withdrawAmount));
-        transactions.confirmWithdrawal(tenantId, withdrawOrder, "SOL", userA.getAccountId(),
-                withdrawAmount.add(new BigDecimal("0.000005")));
+        transactions.confirmWithdrawal(tenantId, withdrawOrder);
 
         String collectionNo = "sol-live-collection-" + UUID.randomUUID();
         assertEquals(
@@ -297,7 +296,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
         assertEquals(withdraw, transactions.withdrawToken(
                 tenantId, orderNo, nativeUserA.getUserId(), userA,
                 mint.getPublicKeyBase58(), external.getPublicKeyBase58(), withdrawAmount));
-        transactions.confirmWithdrawal(tenantId, orderNo, symbol, userA.getAccountId(), withdrawAmount);
+        transactions.confirmWithdrawal(tenantId, orderNo);
 
         String collectionNo = "sol-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("3");

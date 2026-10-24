@@ -19,13 +19,12 @@ public class WithdrawalSettlementService {
     private final LedgerBalanceRepository balances;
 
     @Transactional(rollbackFor = Throwable.class)
-    public boolean confirm(UUID tenantId, String chain, String orderNo, String txHash,
-                           String assetSymbol, String accountId, BigDecimal amount) {
+    public boolean confirm(UUID tenantId, String chain, String orderNo, String txHash) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         if (txHash == null || txHash.isBlank()) {
             throw new IllegalArgumentException("withdrawal tx hash must not be blank");
         }
-        var order = orders.find(chain, orderNo, tenantId)
+        var order = orders.lockForSettlement(tenantId, chain, orderNo)
                 .orElseThrow(() -> new IllegalStateException("missing tenant withdrawal order " + chain + ":" + orderNo));
         if ("CONFIRMED".equals(order.getStatus())) {
             return false;
@@ -36,6 +35,12 @@ public class WithdrawalSettlementService {
         if (order.getTxHash() == null || !order.getTxHash().equals(txHash)) {
             throw new IllegalStateException("withdrawal " + orderNo + " tx hash mismatch");
         }
+        String assetSymbol = order.getAssetSymbol();
+        String accountId = order.getDebitAccountId();
+        if (accountId == null || accountId.isBlank()) {
+            throw new IllegalStateException("withdrawal " + orderNo + " debit account is missing");
+        }
+        BigDecimal amount = order.getAmount().add(order.getFee());
         if (!balances.settle(chain, assetSymbol, accountId, amount, tenantId)) {
             throw new IllegalStateException("unable to settle locked " + assetSymbol + " balance");
         }

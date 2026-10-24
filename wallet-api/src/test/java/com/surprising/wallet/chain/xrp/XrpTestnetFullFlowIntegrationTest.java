@@ -233,9 +233,7 @@ class XrpTestnetFullFlowIntegrationTest {
         String txHash = transactions.sendNative(from, to.getAddress(), amount);
         assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), txHash));
         waitValidated(rpc, txHash);
-        assertTrue(transactions.confirmWithdrawal(tenantId,
-                repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(),
-                orderNo, CHAIN, from.getAccountId(), amount));
+        assertTrue(transactions.confirmWithdrawal(tenantId, repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), orderNo));
     }
 
     /**
@@ -249,9 +247,7 @@ class XrpTestnetFullFlowIntegrationTest {
         String txHash = transactions.sendIssuedCurrency(from, token, to.getAddress(), amount);
         assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), txHash));
         waitValidated(rpc, txHash);
-        assertTrue(transactions.confirmWithdrawal(tenantId,
-                repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(),
-                orderNo, token.getSymbol(), from.getAccountId(), amount));
+        assertTrue(transactions.confirmWithdrawal(tenantId, repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), orderNo));
     }
 
     /**

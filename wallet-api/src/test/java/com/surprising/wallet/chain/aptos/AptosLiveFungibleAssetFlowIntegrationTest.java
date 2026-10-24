@@ -158,9 +158,7 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 owner.getAddress(),
                 withdrawalHash));
         assertEquals(withdrawalHash, repository.withdrawalOrderRepository.findTxHash("APTOS", withdrawalNo, tenantAddress.tenantId()).orElseThrow());
-        assertTrue(transactions.confirmWithdrawal(
-                tenantAddress.tenantId(), withdrawalNo, symbol,
-                owner.getAccountId(), operationAmount));
+        assertTrue(transactions.confirmWithdrawal(tenantAddress.tenantId(), withdrawalNo));
 
         String collectionNo = "aptos-fa-collection-" + UUID.randomUUID();
         assertEquals(

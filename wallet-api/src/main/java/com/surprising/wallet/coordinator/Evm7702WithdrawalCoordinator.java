@@ -116,9 +116,7 @@ public class Evm7702WithdrawalCoordinator {
                         batch.tenantId(), batch.batchId(), index, result, "CONFIRMED") != 1) {
                     throw new IllegalStateException("payout item completion transition failed");
                 }
-                if (!settlements.confirm(
-                        batch.tenantId(), batch.chain(), item.orderNo(), txHash,
-                        item.assetSymbol(), item.debitAccountId(), item.amount().add(item.fee()))) {
+                if (!settlements.confirm(batch.tenantId(), batch.chain(), item.orderNo(), txHash)) {
                     throw new IllegalStateException("withdrawal was already settled outside its payout batch");
                 }
             } else {

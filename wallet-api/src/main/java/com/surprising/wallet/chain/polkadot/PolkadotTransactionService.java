@@ -127,17 +127,12 @@ public class PolkadotTransactionService {
         return tx.txHash();
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                     String orderNo, String txHash,
-                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
+                                     String orderNo, String txHash, String assetSymbol) {
         if (!transactionFinalized(assetSymbol, txHash, confirmationLookback(profile))) {
             return false;
         }
-        return settlements.confirm(tenantId, CHAIN, orderNo, txHash,
-                assetSymbol, debitAccountId, debitAmount);
+        return settlements.confirm(tenantId, CHAIN, orderNo, txHash);
     }
 
     /**

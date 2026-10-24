@@ -148,8 +148,7 @@ class MoneroRegtestFullFlowIntegrationTest {
                 runScript(root, "mine", "12");
                 walletRpc.refresh();
 
-                transactionService.confirmWithdrawal(TEST_TENANT_ID, profile, orderNo, txHash,
-                        userAccount, WITHDRAW_AMOUNT, recipientAddress.address(), WITHDRAW_AMOUNT);
+                transactionService.confirmWithdrawal(TEST_TENANT_ID, profile, orderNo, txHash, recipientAddress.address(), WITHDRAW_AMOUNT);
                 assertEquals("CONFIRMED", repository.withdrawalOrderRepository.find(CHAIN, orderNo, TEST_TENANT_ID)
                         .orElseThrow().getStatus());
                 assertBalance(repository, userAccount,

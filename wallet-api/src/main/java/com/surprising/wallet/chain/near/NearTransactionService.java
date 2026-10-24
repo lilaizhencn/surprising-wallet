@@ -216,15 +216,9 @@ public class NearTransactionService {
         return new BigInteger(min);
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                     String orderNo, String txHash,
-                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
-        JsonNode status = requireSuccessfulConfirmation(txHash, debitAccountId, Duration.ofMinutes(2));
-        if (settlements.confirm(
-                tenantId, CHAIN, orderNo, txHash, assetSymbol, debitAccountId, debitAmount)) {
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String txHash, String signerAccountId) {
+        JsonNode status = requireSuccessfulConfirmation(txHash, signerAccountId, Duration.ofMinutes(2));
+        if (settlements.confirm(tenantId, CHAIN, orderNo, txHash)) {
             nearTransactionRepository.markConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status), status.toString());
             return true;
         }

@@ -412,38 +412,27 @@ public class AccountChainWorkflowService {
                 && evmBatchOwnershipService.withdrawalPending(tenantId, order.getId())) {
             return;
         }
-        ChainAddressRecord from = assets.requireAddress(tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            evmTransactionService.confirmWithdrawal(tenantId, order.getChain(), order.getOrderNo(),
-                    order.getAssetSymbol(), assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
+            evmTransactionService.confirmWithdrawal(tenantId, order.getChain(), order.getOrderNo());
             return;
         }
         switch (profile.getChain()) {
-            case "SOLANA" -> solanaTransactionService.confirmWithdrawal(tenantId,
-                    order.getOrderNo(), order.getAssetSymbol(), assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "APTOS" -> aptosTransactionService.confirmWithdrawal(tenantId,
-                    order.getOrderNo(), order.getAssetSymbol(), assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "SUI" -> suiTransactionService.confirmWithdrawal(tenantId,
-                    order.getOrderNo(), order.getAssetSymbol(), assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "TON" -> confirmTonWithdrawal(order, from);
-            case "XRP" -> xrpTransactionService.confirmWithdrawal(tenantId,
-                    profile, order.getOrderNo(), order.getAssetSymbol(), assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "ADA" -> cardanoTransactionService.confirmWithdrawal(tenantId,
-                    profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
-                    assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "DOT" -> polkadotTransactionService.confirmWithdrawal(tenantId,
-                    profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
-                    assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "XMR" -> moneroTransactionService.confirmWithdrawal(tenantId,
-                    profile, order.getOrderNo(), order.getTxHash(), assets.debitAccountId(order, from),
-                    assets.withdrawalDebitAmount(order), order.getToAddress(), order.getAmount());
+            case "SOLANA" -> solanaTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
+            case "APTOS" -> aptosTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
+            case "SUI" -> suiTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
+            case "TON" -> confirmTonWithdrawal(order);
+            case "XRP" -> xrpTransactionService.confirmWithdrawal(tenantId, profile, order.getOrderNo());
+            case "ADA" -> cardanoTransactionService.confirmWithdrawal(tenantId, profile,
+                    order.getOrderNo(), order.getTxHash());
+            case "DOT" -> polkadotTransactionService.confirmWithdrawal(tenantId, profile,
+                    order.getOrderNo(), order.getTxHash(), order.getAssetSymbol());
+            case "XMR" -> moneroTransactionService.confirmWithdrawal(tenantId, profile,
+                    order.getOrderNo(), order.getTxHash(), order.getToAddress(), order.getAmount());
             case "NEAR" -> nearTransactionService.confirmWithdrawal(tenantId,
-                    profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
-                    assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
+                    order.getOrderNo(), order.getTxHash(), order.getDebitAccountId());
             case "HYPERCORE" -> hyperCoreTransactionService.confirmWithdrawal(tenantId,
-                    order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
-                    assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
-            case "TRON" -> tronWorkflow.confirmWithdrawal(profile, order, from);
+                    order.getOrderNo(), order.getTxHash());
+            case "TRON" -> tronWorkflow.confirmWithdrawal(profile, order);
             default -> {
             }
         }
@@ -697,13 +686,14 @@ public class AccountChainWorkflowService {
     /**
      * 处理 {@code confirmTonWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
-    private void confirmTonWithdrawal(WithdrawalOrderRecord order, ChainAddressRecord from) {
+    private void confirmTonWithdrawal(WithdrawalOrderRecord order) {
         if (order.getTxHash() == null || order.getTxHash().isBlank()) {
             return;
         }
+        ChainAddressRecord from = assets.requireAddress(order.getTenantId(), order.getChain(),
+                order.getAssetSymbol(), order.getFromAddress());
         if (tonTransactionService.confirmSentMessage(order.getTxHash(), tonOwnerAddress(from))) {
-            settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash(),
-                    order.getAssetSymbol(), assets.debitAccountId(order, from), assets.withdrawalDebitAmount(order));
+            settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash());
         }
     }
     /**

@@ -155,8 +155,9 @@ class TronAccountChainService {
      */
     void confirmWithdrawal(
             AccountChainProfile profile,
-            WithdrawalOrderRecord order,
-            ChainAddressRecord from) throws Exception {
+            WithdrawalOrderRecord order) throws Exception {
+        ChainAddressRecord from = assets.requireAddress(order.getTenantId(), order.getChain(),
+                order.getAssetSymbol(), order.getFromAddress());
         Response.TransactionInfo txInfo =
                 confirmedTransaction(profile, order.getTxHash());
         if (txInfo == null) {
@@ -166,11 +167,7 @@ class TronAccountChainService {
                 order.getChain(), order.getTxHash(), from.getAddress(),
                 order.getToAddress(), order.getAssetSymbol(),
                 order.getAmount(), txInfo);
-        settlements.confirm(
-                order.getTenantId(), order.getChain(), order.getOrderNo(),
-                order.getTxHash(), order.getAssetSymbol(),
-                assets.debitAccountId(order, from),
-                assets.withdrawalDebitAmount(order));
+        settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash());
     }
 
     /**

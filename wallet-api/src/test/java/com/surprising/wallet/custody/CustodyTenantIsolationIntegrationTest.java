@@ -207,20 +207,16 @@ class CustodyTenantIsolationIntegrationTest {
                         new BigDecimal("0.25")));
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(ownerTenant, "ETH", orderNo, "SENT", accountId, txHash, null));
 
-        assertThrows(IllegalStateException.class, () -> settlements.confirm(
-                otherTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
-        assertThrows(IllegalStateException.class, () -> settlements.confirm(
-                ownerTenant, "ETH", orderNo, txHash + "bad", "ETH", accountId, debit));
+        assertThrows(IllegalStateException.class, () -> settlements.confirm(otherTenant, "ETH", orderNo, txHash));
+        assertThrows(IllegalStateException.class, () -> settlements.confirm(ownerTenant, "ETH", orderNo, txHash + "bad"));
         assertEquals(0, new BigDecimal("1.25").compareTo(jdbc.queryForObject("""
                 select locked_balance from ledger_balance
                  where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
                    and account_id = ?
                 """, BigDecimal.class, ownerTenant, accountId)));
 
-        assertTrue(settlements.confirm(
-                ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
-        assertFalse(settlements.confirm(
-                ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
+        assertTrue(settlements.confirm(ownerTenant, "ETH", orderNo, txHash));
+        assertFalse(settlements.confirm(ownerTenant, "ETH", orderNo, txHash));
         assertEquals("CONFIRMED", repository.withdrawalOrderRepository.find("ETH", orderNo, ownerTenant).orElseThrow().getStatus());
         assertEquals(0, BigDecimal.ZERO.compareTo(jdbc.queryForObject("""
                 select locked_balance from ledger_balance

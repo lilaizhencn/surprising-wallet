@@ -472,24 +472,13 @@ public class TonTransactionService {
         }
     }
 
-    /**
-     * 确认提现交易（等待外部消息被链上处理并清算）。
-     *
-     * @param tenantId    租户 ID
-     * @param orderNo     提现订单号
-     * @param symbol      资产符号
-     * @param accountId   账户 ID
-     * @param debitAmount 扣款金额
-     * @return true 表示确认并结算成功
-     */
-    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String symbol, String accountId,
-                                     BigDecimal debitAmount) {
+    /** senderAccountId 只用于确认外部消息，扣款账户由结算用例读取订单。 */
+    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String senderAccountId) {
         String hash = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
-        if (!confirmSentMessage(hash, accountId)) {
+        if (!confirmSentMessage(hash, senderAccountId)) {
             return false;
         }
-        if (settlements.confirm(
-                tenantId, CHAIN, orderNo, hash, symbol, accountId, debitAmount)) {
+        if (settlements.confirm(tenantId, CHAIN, orderNo, hash)) {
             tonTransactionRepository.markConfirmed(CHAIN, hash);
             return true;
         }

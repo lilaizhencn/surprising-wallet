@@ -324,15 +324,10 @@ public class SuiTransactionService {
         }
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(UUID tenantId, String orderNo) {
         String digest = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
-        if (settlements.confirm(
-                tenantId, CHAIN, orderNo, digest, assetSymbol, accountId, debitAmount)) {
+        if (settlements.confirm(tenantId, CHAIN, orderNo, digest)) {
             markConfirmed(digest, transaction);
             return true;
         }

@@ -176,27 +176,13 @@ public class XrpTransactionService {
         return txHash;
     }
 
-    /**
-     * 确认提现交易（等待链上确认并结算）。
-     *
-     * @param tenantId    租户 ID
-     * @param profile     链配置
-     * @param orderNo     提现订单号
-     * @param assetSymbol 资产符号
-     * @param accountId   账户 ID
-     * @param debitAmount 扣款金额
-     * @return true 表示确认并结算成功
-     */
-    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                     String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile, String orderNo) {
         String txHash = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         Confirmation confirmation = confirmation(profile, txHash);
         if (!confirmation.confirmed()) {
             return false;
         }
-        if (settlements.confirm(
-                tenantId, CHAIN, orderNo, txHash, assetSymbol, accountId, debitAmount)) {
+        if (settlements.confirm(tenantId, CHAIN, orderNo, txHash)) {
             updateConfirmedTransaction(txHash, confirmation);
             return true;
         }

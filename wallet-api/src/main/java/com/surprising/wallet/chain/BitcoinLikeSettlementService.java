@@ -1,7 +1,5 @@
 package com.surprising.wallet.chain;
 
-import com.surprising.wallet.chain.model.UtxoSigningTransaction;
-import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.signing.UtxoSigningRequest;
 import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
@@ -41,11 +39,8 @@ public class BitcoinLikeSettlementService {
             }
         } else {
             for (var payment : request.payments()) {
-                var order = markOrderConfirming(request, payment.reference(), txId);
-                String account = order.getDebitAccountId();
-                if (account == null || account.isBlank()) account = Long.toString(payment.userId());
-                settlements.confirm(request.tenantId(), chain, payment.reference(), txId, chain, account,
-                        payment.amount().add(payment.customerFee()));
+                markOrderConfirming(request, payment, txId);
+                settlements.confirm(request.tenantId(), chain, payment.reference(), txId);
             }
         }
         if (request.inputs().isEmpty()
@@ -65,17 +60,23 @@ public class BitcoinLikeSettlementService {
                 throw new IllegalStateException("collection confirmation state changed");
             }
         } else {
-            for (var payment : request.payments()) markOrderConfirming(request, payment.reference(), txId);
+            for (var payment : request.payments()) markOrderConfirming(request, payment, txId);
         }
     }
 
-    private WithdrawalOrderRecord markOrderConfirming(UtxoSigningRequest request, String orderNo, String txId) {
-        var order = orders.find(request.asset().chain(), orderNo, request.tenantId()).orElseThrow();
+    private void markOrderConfirming(UtxoSigningRequest request, UtxoSigningRequest.Payment payment, String txId) {
+        String orderNo = payment.reference();
+        var order = orders.lockForSettlement(request.tenantId(), request.asset().chain(), orderNo).orElseThrow();
+        if (!request.asset().chain().equals(order.getAssetSymbol()) || order.getUserId() != payment.userId()
+                || !payment.address().equals(order.getToAddress())
+                || payment.amount().compareTo(order.getAmount()) != 0
+                || payment.customerFee().compareTo(order.getFee()) != 0) {
+            throw new IllegalStateException("withdrawal does not match the mined signing request");
+        }
         if ("CONFIRMED".equals(order.getStatus())) {
             if (!txId.equals(order.getTxHash())) throw new IllegalStateException("confirmed withdrawal hash mismatch");
         } else if (orders.markUtxoAttemptConfirming(request.tenantId(), request.asset().chain(), orderNo, txId) != 1) {
             throw new IllegalStateException("withdrawal is not confirmable");
         }
-        return order;
     }
 }

@@ -90,17 +90,11 @@ public class HyperCoreTransactionService {
         return submit("spotSend", token.getSymbol(), from.getAddress(), destination, amount, nonce, action, signature);
     }
 
-    /**
-     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo,
-                                     String actionId, String assetSymbol,
-                                     String debitAccountId, BigDecimal debitAmount) {
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String actionId) {
         if (!hyperCoreRepository.actionAccepted(actionId)) {
             return false;
         }
-        return settlements.confirm(tenantId, CHAIN, orderNo, actionId,
-                assetSymbol, debitAccountId, debitAmount);
+        return settlements.confirm(tenantId, CHAIN, orderNo, actionId);
     }
     /**
      * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。

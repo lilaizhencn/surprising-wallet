@@ -128,8 +128,7 @@ class SuiLiveNativeFlowIntegrationTest {
         assertEquals(withdrawDigest, transactions.withdrawNative(
                 tenantId, withdrawOrder, owner.getUserId(), owner,
                 external.getAddress(), withdrawAmount));
-        assertTrue(transactions.confirmWithdrawal(tenantId, withdrawOrder, "SUI", owner.getAccountId(),
-                withdrawAmount.add(new BigDecimal("0.01"))));
+        assertTrue(transactions.confirmWithdrawal(tenantId, withdrawOrder));
 
         String collectionNo = "sui-live-collection-" + UUID.randomUUID();
         assertEquals(
