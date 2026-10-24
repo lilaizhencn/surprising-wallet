@@ -1,8 +1,9 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.service.WalletRuntimeConfigService.GlobalSwitches;
+import static com.surprising.wallet.service.WalletRuntimeConfigService.*;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,7 +12,6 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -36,15 +36,6 @@ import com.surprising.wallet.repository.WalletSystemConfigRepository;
  */
 @Service
 public class WalletConfigOverviewService {
-    /**
-     * 定义 {@code SWITCH_KEYS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    private static final Map<String, String> SWITCH_KEYS = Map.of(
-            "wallet", "global.all.enabled",
-            "scan", "global.scan.enabled",
-            "withdraw", "global.withdraw.enabled",
-            "collection", "global.collection.enabled",
-            "transfer", "global.transfer.enabled");
     /** 全局系统配置仓储。 */
     private final WalletSystemConfigRepository systemConfigRepository;
     /** 链配置仓储。 */
@@ -67,11 +58,11 @@ public class WalletConfigOverviewService {
      * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
      */
     private final String environment;
+    private final WalletRuntimeConfigService runtimeConfig;
 
     /**
      * 构造 {@code WalletConfigOverviewService}，初始化该组件运行所需的状态和依赖。
      */
-    @Autowired
     public WalletConfigOverviewService(WalletSystemConfigRepository systemConfigRepository,
                                        ChainProfileRepository chainProfileRepository,
                                        TokenConfigRepository tokenConfigRepository,
@@ -80,7 +71,7 @@ public class WalletConfigOverviewService {
                                        CustodyAuditRepository audits,
                                        WalletKeyMaterialProvider keyMaterial,
                                        @Value("${sw.app.env.name:dev}")
-                                       String environment) {
+                                       String environment, WalletRuntimeConfigService runtimeConfig) {
         this.systemConfigRepository = systemConfigRepository;
         this.chainProfileRepository = chainProfileRepository;
         this.tokenConfigRepository = tokenConfigRepository;
@@ -89,6 +80,7 @@ public class WalletConfigOverviewService {
         this.audits = audits;
         this.keyMaterial = keyMaterial;
         this.environment = normalizeEnvironment(environment);
+        this.runtimeConfig = runtimeConfig;
     }
 
     /**
@@ -96,7 +88,7 @@ public class WalletConfigOverviewService {
      */
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
-        GlobalSwitches switches = loadSwitches();
+        GlobalSwitches switches = runtimeConfig.globalSwitches();
         boolean keysetConfigured = this.keyMaterial.isConfigured();
         List<ProfileRow> profiles = loadProfiles();
         List<TokenRow> tokens = loadTokens();
@@ -166,13 +158,11 @@ public class WalletConfigOverviewService {
                 || command.transferEnabled() == null) {
             throw new IllegalArgumentException("all five global switches are required");
         }
-        Map<String, Boolean> values = new LinkedHashMap<>();
-        values.put(SWITCH_KEYS.get("wallet"), command.walletEnabled());
-        values.put(SWITCH_KEYS.get("scan"), command.scanEnabled());
-        values.put(SWITCH_KEYS.get("withdraw"), command.withdrawEnabled());
-        values.put(SWITCH_KEYS.get("collection"), command.collectionEnabled());
-        values.put(SWITCH_KEYS.get("transfer"), command.transferEnabled());
-        values.forEach(this::upsertSwitch);
+        systemConfigRepository.upsertBoolean(GLOBAL_WALLET_ENABLED, command.walletEnabled());
+        systemConfigRepository.upsertBoolean(globalTaskKey(TASK_SCAN), command.scanEnabled());
+        systemConfigRepository.upsertBoolean(globalTaskKey(TASK_WITHDRAW), command.withdrawEnabled());
+        systemConfigRepository.upsertBoolean(globalTaskKey(TASK_COLLECTION), command.collectionEnabled());
+        systemConfigRepository.upsertBoolean(globalTaskKey(TASK_TRANSFER), command.transferEnabled());
 
         String details = String.format(Locale.ROOT,
                 "{\"walletEnabled\":%s,\"scanEnabled\":%s,"
@@ -184,23 +174,6 @@ public class WalletConfigOverviewService {
                 "WALLET_GLOBAL_SWITCHES.UPDATE", "WALLET_GLOBAL_SWITCHES", "global",
                 sourceIp, details);
         return summary(actor);
-    }
-    /**
-     * 获取或查询 {@code loadSwitches} 对应的数据，供调用方读取当前状态。
-     */
-    private GlobalSwitches loadSwitches() {
-        Map<String, Boolean> values = new HashMap<>();
-        for (Map<String, Object> row : systemConfigRepository.listGlobalSwitches()) {
-            boolean enabled = booleanValue(row.get("enabled"), true);
-            values.put(stringValue(row.get("config_key")),
-                    enabled && Boolean.parseBoolean(stringValue(row.get("config_value"))));
-        }
-        return new GlobalSwitches(
-                values.getOrDefault(SWITCH_KEYS.get("wallet"), true),
-                values.getOrDefault(SWITCH_KEYS.get("scan"), true),
-                values.getOrDefault(SWITCH_KEYS.get("withdraw"), true),
-                values.getOrDefault(SWITCH_KEYS.get("collection"), true),
-                values.getOrDefault(SWITCH_KEYS.get("transfer"), true));
     }
     /**
      * 获取或查询 {@code loadProfiles} 对应的数据，供调用方读取当前状态。
@@ -356,10 +329,10 @@ public class WalletConfigOverviewService {
                 profile.scanEnabled(), profile.withdrawEnabled(),
                 profile.collectionEnabled(), profile.transferEnabled());
         TaskSwitches effective = new TaskSwitches(
-                effective(global.walletEnabled(), global.scanEnabled(), profile.enabled(), profile.scanEnabled()),
-                effective(global.walletEnabled(), global.withdrawEnabled(), profile.enabled(), profile.withdrawEnabled()),
-                effective(global.walletEnabled(), global.collectionEnabled(), profile.enabled(), profile.collectionEnabled()),
-                effective(global.walletEnabled(), global.transferEnabled(), profile.enabled(), profile.transferEnabled()));
+                global.effective(profile.enabled(), global.taskEnabled(TASK_SCAN, profile.scanEnabled())),
+                global.effective(profile.enabled(), global.taskEnabled(TASK_WITHDRAW, profile.withdrawEnabled())),
+                global.effective(profile.enabled(), global.taskEnabled(TASK_COLLECTION, profile.collectionEnabled())),
+                global.effective(profile.enabled(), global.taskEnabled(TASK_TRANSFER, profile.transferEnabled())));
         LinkedHashSet<String> blockers = new LinkedHashSet<>();
         if (!profile.enabled()) {
             blockers.add("Chain profile is disabled.");
@@ -434,20 +407,7 @@ public class WalletConfigOverviewService {
     private boolean currentEnvironment(RpcRow row) {
         return environment.equalsIgnoreCase(row.environment());
     }
-    /**
-     * 写入或更新 {@code upsertSwitch} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    private void upsertSwitch(String key, boolean value) {
-        systemConfigRepository.upsertBoolean(key, value);
-    }
 
-    /**
-     * 执行 {@code effective} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static boolean effective(boolean wallet, boolean globalTask,
-                                     boolean profile, boolean profileTask) {
-        return wallet && globalTask && profile && profileTask;
-    }
     /**
      * 执行 {@code sameContract} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
@@ -527,13 +487,6 @@ public class WalletConfigOverviewService {
             Instant generatedAt) {
     }
 
-    public record GlobalSwitches(
-            boolean walletEnabled,
-            boolean scanEnabled,
-            boolean withdrawEnabled,
-            boolean collectionEnabled,
-            boolean transferEnabled) {
-    }
 
     public record StatisticsView(
             int configuredChainProfileCount,

@@ -5,6 +5,9 @@ import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.service.*;
+import com.surprising.wallet.testutil.CustodyTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -126,4 +129,81 @@ class RuntimeConfigurationIntegrationTest {
                     com.surprising.wallet.common.chain.ChainType.ETH, "ETH", "http://127.0.0.1:1", 1, 1L));
         });
     }
+    @Test
+    void runtimeTokenManagementAndOverviewShareDefaultsDisabledRowsAndTaskRules() {
+        transaction.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            var profiles = new ChainProfileRepository(jdbc);
+            var settings = new WalletSystemConfigRepository(jdbc);
+            var tokens = new TokenConfigRepository(jdbc);
+            var assets = new ChainAssetRepository(jdbc);
+            var rpc = new ChainRpcNodeRepository(jdbc);
+            var audits = new CustodyAuditRepository(jdbc);
+            var runtime = new WalletRuntimeConfigService(profiles, settings);
+            String network = profiles.findAccountByChain("ETH").orElseThrow().getNetwork();
+            long token = tokens.insert("ETH", network, "POLICY_TEST", "ERC20", "0x" + "12".repeat(20),
+                    null, null, 6, true, BigDecimal.ZERO, BigDecimal.ZERO, false, BigDecimal.ZERO, "NATIVE", 1);
+            assets.upsertNonNative("ETH", "POLICY_TEST", "ERC20", "0x" + "12".repeat(20), 6, true,
+                    BigDecimal.ZERO, BigDecimal.ZERO);
+            var management = WalletConfigTestSupport.management(jdbc, runtime);
+            var keys = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
+            org.mockito.Mockito.when(keys.isConfigured()).thenReturn(true);
+            var overview = new WalletConfigOverviewService(settings, profiles, tokens, assets, rpc, audits,
+                    keys, "test", runtime);
+            for (String task : List.of("scan", "withdraw", "collection", "transfer")) {
+                for (String key : List.of("all", "scan", "withdraw", "collection", "transfer")) {
+                    settings.upsertBoolean("global." + key + ".enabled", true);
+                }
+                jdbc.update("""
+                        update chain_profile set scan_enabled=?, withdraw_enabled=?,
+                            collection_enabled=?, transfer_enabled=? where chain='ETH' and network=?
+                        """, task.equals("scan"), task.equals("withdraw"), task.equals("collection"),
+                        task.equals("transfer"), network);
+                tokens.updateEnabled(token, true, false);
+                assertPolicyViews(runtime, management, overview, network, task, true, !task.equals("collection"));
+                if (task.equals("collection")) {
+                    tokens.updateEnabled(token, true, true);
+                    assertPolicyViews(runtime, management, overview, network, task, true, true);
+                }
+                jdbc.update("update wallet_system_config set enabled=false where config_key=?",
+                        WalletRuntimeConfigService.globalTaskKey(task));
+                assertPolicyViews(runtime, management, overview, network, task, false, false);
+                settings.upsertBoolean(WalletRuntimeConfigService.globalTaskKey(task), true);
+                settings.upsertBoolean(WalletRuntimeConfigService.GLOBAL_WALLET_ENABLED, false);
+                assertPolicyViews(runtime, management, overview, network, task, false, false);
+                var blocked = management.listTokens(CustodyTestSupport.platformAdmin(), "POLICY_TEST", "ETH",
+                        network, "", null, null).getFirst();
+                assertTrue(blocked.blockers().contains("Wallet master switch is off."));
+                assertFalse(blocked.blockers().contains("No wallet task is effectively enabled for this chain."));
+                jdbc.update("delete from wallet_system_config where config_key in (?, ?)",
+                        WalletRuntimeConfigService.GLOBAL_WALLET_ENABLED, WalletRuntimeConfigService.globalTaskKey(task));
+                assertPolicyViews(runtime, management, overview, network, task, true, true);
+            }
+            jdbc.update("update chain_profile set enabled=false where chain='ETH' and network=?", network);
+            assertPolicyViews(runtime, management, overview, network, "transfer", false, false);
+            assertTrue(runtime.isGlobalTaskEnabled("unregistered-task"));
+            settings.upsertBoolean("global.unregistered-task.enabled", false);
+            assertFalse(runtime.isGlobalTaskEnabled("unregistered-task"));
+        });
+    }
+
+    private static void assertPolicyViews(WalletRuntimeConfigService runtime,
+            WalletConfigManagementService management, WalletConfigOverviewService overview,
+            String network, String task, boolean expectedTask, boolean expectedToken) {
+        assertEquals(expectedTask, runtime.isTaskEnabled("ETH", task), task + " runtime");
+        var effective = overview.summary(CustodyTestSupport.platformAdmin()).chains().stream()
+                .filter(row -> row.chain().equals("ETH") && row.network().equals(network))
+                .findFirst().orElseThrow().effectiveTasks();
+        boolean shown = switch (task) {
+            case "scan" -> effective.scanEnabled();
+            case "withdraw" -> effective.withdrawEnabled();
+            case "collection" -> effective.collectionEnabled();
+            case "transfer" -> effective.transferEnabled();
+            default -> throw new AssertionError(task);
+        };
+        assertEquals(expectedTask, shown, task + " overview");
+        assertEquals(expectedToken, management.listTokens(CustodyTestSupport.platformAdmin(), "POLICY_TEST", "ETH",
+                network, "", null, null).getFirst().effectiveEnabled(), task + " token management");
+    }
+
 }

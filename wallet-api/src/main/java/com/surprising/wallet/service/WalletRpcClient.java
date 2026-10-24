@@ -2,7 +2,6 @@ package com.surprising.wallet.service;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -34,16 +33,8 @@ class WalletRpcClient {
     /**
      * 构造 {@code WalletRpcClient}，初始化该组件运行所需的状态和依赖。
      */
-    @Autowired
     WalletRpcClient(ObjectMapper objectMapper) {
-        this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(), objectMapper);
-    }
-
-    /**
-     * 构造 {@code WalletRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    WalletRpcClient(HttpClient httpClient, ObjectMapper objectMapper) {
-        this.httpClient = httpClient;
+        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         this.objectMapper = objectMapper;
     }
 

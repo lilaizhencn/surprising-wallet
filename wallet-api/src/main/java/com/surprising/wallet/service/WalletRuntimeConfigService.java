@@ -29,6 +29,7 @@ public class WalletRuntimeConfigService {
     public static final String TASK_COLLECTION = "collection";
     /** 转账任务标识 */
     public static final String TASK_TRANSFER = "transfer";
+    public static final String GLOBAL_WALLET_ENABLED = "global.all.enabled";
     /** 提现管理员审批开关键 */
     public static final String WITHDRAWAL_ADMIN_APPROVAL_REQUIRED = "withdrawal.admin.approval.required";
 
@@ -95,14 +96,11 @@ public class WalletRuntimeConfigService {
      * @return 是否启用
      */
     public boolean isTaskEnabled(String chain, String task) {
-        if (!enabledSetting("global.all.enabled", true)) {
-            return false;
-        }
-        if (!enabledSetting("global." + task + ".enabled", true)) {
-            return false;
-        }
+        GlobalSwitches global = globalSwitches();
+        if (!global.effective(true, global.taskEnabled(task, true))) return false;
         return profiles.findAccountByChain(chain)
-                .map(profile -> chainTaskEnabled(profile, task))
+                .map(profile -> global.effective(Boolean.TRUE.equals(profile.getEnabled()),
+                        global.taskEnabled(task, chainTaskEnabled(profile, task))))
                 .orElse(false);
     }
     /**
@@ -112,12 +110,12 @@ public class WalletRuntimeConfigService {
      * @return 是否启用
      */
     public boolean isGlobalTaskEnabled(String task) {
-        return enabledSetting("global.all.enabled", true)
-                && enabledSetting("global." + task + ".enabled", true);
+        return enabledSetting(GLOBAL_WALLET_ENABLED, true)
+                && enabledSetting(globalTaskKey(task), true);
     }
     /** @return 全局总开关是否启用 */
     public boolean isGlobalEnabled() {
-        return enabledSetting("global.all.enabled", true);
+        return enabledSetting(GLOBAL_WALLET_ENABLED, true);
     }
 
     /**
@@ -212,8 +210,40 @@ public class WalletRuntimeConfigService {
         };
     }
 
+    /** 管理页、概览和运行时使用相同的缺省值与生效规则，不缓存可实时关闭的开关。 */
+    public GlobalSwitches globalSwitches() {
+        Map<String, Boolean> values = settings.globalSwitchValues();
+        return new GlobalSwitches(values.getOrDefault(GLOBAL_WALLET_ENABLED, true),
+                values.getOrDefault(globalTaskKey(TASK_SCAN), true),
+                values.getOrDefault(globalTaskKey(TASK_WITHDRAW), true),
+                values.getOrDefault(globalTaskKey(TASK_COLLECTION), true),
+                values.getOrDefault(globalTaskKey(TASK_TRANSFER), true));
+    }
+
+    public static String globalTaskKey(String task) {
+        return "global." + task + ".enabled";
+    }
+
+    public record GlobalSwitches(boolean walletEnabled, boolean scanEnabled, boolean withdrawEnabled,
+            boolean collectionEnabled, boolean transferEnabled) {
+        public boolean taskEnabled(String task, boolean profileTask) {
+            if (!profileTask) return false;
+            return switch (task) {
+                case TASK_SCAN -> scanEnabled;
+                case TASK_WITHDRAW -> withdrawEnabled;
+                case TASK_COLLECTION -> collectionEnabled;
+                case TASK_TRANSFER -> transferEnabled;
+                default -> false;
+            };
+        }
+
+        public boolean effective(boolean profileEnabled, boolean anyTaskEnabled) {
+            return walletEnabled && profileEnabled && anyTaskEnabled;
+        }
+    }
+
     private boolean enabledSetting(String key, boolean defaultValue) {
-        return settings.find(key).map(setting -> setting.enabled() && Boolean.parseBoolean(setting.value()))
+        return settings.find(key).map(WalletSystemConfigRepository.Setting::booleanValue)
                 .orElse(defaultValue);
     }
 }

@@ -5,6 +5,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Map;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 /**
  * wallet_system_config 单表仓储。
@@ -20,15 +22,19 @@ public class WalletSystemConfigRepository {
     }
 
     /** 查询全局任务开关。 */
-    public List<Map<String, Object>> listGlobalSwitches() {
-        return jdbc.queryForList("""
+    public Map<String, Boolean> globalSwitchValues() {
+        return jdbc.query("""
                 select config_key, config_value, enabled
                   from wallet_system_config
                  where config_key in (
                     'global.all.enabled', 'global.scan.enabled',
                     'global.withdraw.enabled', 'global.collection.enabled',
                     'global.transfer.enabled')
-                """);
+                """, rs -> {
+            Map<String, Boolean> values = new java.util.HashMap<>();
+            while (rs.next()) values.put(rs.getString("config_key"), setting(rs).booleanValue());
+            return values;
+        });
     }
 
     /** 查询全部系统配置。 */
@@ -55,9 +61,17 @@ public class WalletSystemConfigRepository {
     public java.util.Optional<Setting> find(String key) {
         return jdbc.query("""
                 select config_value, enabled from wallet_system_config where config_key = ?
-                """, (rs, rowNum) -> new Setting(rs.getString("config_value"), rs.getBoolean("enabled")), key)
+                """, (rs, rowNum) -> setting(rs), key)
                 .stream().findFirst();
     }
 
-    public record Setting(String value, boolean enabled) { }
+    private static Setting setting(ResultSet rs) throws SQLException {
+        return new Setting(rs.getString("config_value"), rs.getBoolean("enabled"));
+    }
+
+    public record Setting(String value, boolean enabled) {
+        public boolean booleanValue() {
+            return enabled && Boolean.parseBoolean(value);
+        }
+    }
 }

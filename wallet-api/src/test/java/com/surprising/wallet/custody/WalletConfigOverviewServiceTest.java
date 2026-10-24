@@ -115,13 +115,19 @@ class WalletConfigOverviewServiceTest {
         org.mockito.Mockito.when(keyMaterial.isConfigured()).thenReturn(keysetConfigured);
         var tokens = org.mockito.Mockito.mock(TokenConfigRepository.class);
         org.mockito.Mockito.when(tokens.listAll()).thenReturn(List.of());
-        return new WalletConfigOverviewService(
-                new WalletSystemConfigRepository(jdbc),
-                new ChainProfileRepository(jdbc),
-                tokens,
-                new ChainAssetRepository(jdbc),
-                new ChainRpcNodeRepository(jdbc),
-                audit, keyMaterial, environment);
+        var settings = org.mockito.Mockito.spy(new WalletSystemConfigRepository(jdbc));
+        org.mockito.Mockito.doAnswer(ignored -> {
+            Map<String, Boolean> values = new LinkedHashMap<>();
+            for (var row : jdbc.systemRows) {
+                values.put((String) row.get("config_key"), Boolean.TRUE.equals(row.get("enabled"))
+                        && Boolean.parseBoolean((String) row.get("config_value")));
+            }
+            return values;
+        }).when(settings).globalSwitchValues();
+        var profiles = new ChainProfileRepository(jdbc);
+        return new WalletConfigOverviewService(settings, profiles, tokens, new ChainAssetRepository(jdbc),
+                new ChainRpcNodeRepository(jdbc), audit, keyMaterial, environment,
+                new com.surprising.wallet.service.WalletRuntimeConfigService(profiles, settings));
     }
 
     /**

@@ -7,7 +7,6 @@ import com.surprising.wallet.config.WalletEnvironmentPolicy;
 import com.surprising.wallet.config.WalletRpcPolicy;
 import com.surprising.wallet.common.chain.EvmFeeModel;
 import com.surprising.wallet.common.chain.EvmGasPolicy;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +19,6 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,7 +38,8 @@ import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
-import com.surprising.wallet.repository.WalletSystemConfigRepository;
+import com.surprising.wallet.service.WalletRuntimeConfigService.GlobalSwitches;
+import static com.surprising.wallet.service.WalletRuntimeConfigService.*;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 
 /**
@@ -51,10 +50,7 @@ import com.surprising.wallet.repository.WithdrawalOrderRepository;
  */
 @Service
 public class WalletConfigManagementService {
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final WalletSystemConfigRepository systemConfigRepository;
+    private final WalletRuntimeConfigService runtimeConfig;
     private final ChainProfileRepository chainProfileRepository;
     private final ChainRpcNodeRepository rpcNodeRepository;
     private final ChainAssetRepository chainAssetRepository;
@@ -80,8 +76,7 @@ public class WalletConfigManagementService {
     /**
      * 构造 {@code WalletConfigManagementService}，初始化该组件运行所需的状态和依赖。
      */
-    @Autowired
-    public WalletConfigManagementService(WalletSystemConfigRepository systemConfigRepository,
+    public WalletConfigManagementService(WalletRuntimeConfigService runtimeConfig,
                                          ChainProfileRepository chainProfileRepository,
                                          ChainRpcNodeRepository rpcNodeRepository,
                                          ChainAssetRepository chainAssetRepository,
@@ -95,7 +90,7 @@ public class WalletConfigManagementService {
                                          @Value("${sw.app.env.name:dev}")
                                          String environment,
                                          WalletRpcClient rpcClient) {
-        this.systemConfigRepository = systemConfigRepository;
+        this.runtimeConfig = runtimeConfig;
         this.chainProfileRepository = chainProfileRepository;
         this.rpcNodeRepository = rpcNodeRepository;
         this.chainAssetRepository = chainAssetRepository;
@@ -457,7 +452,7 @@ public class WalletConfigManagementService {
     private List<TokenView> listTokensInternal(String search, String chain, Boolean enabled) {
         String query = normalize(search);
         String chainFilter = normalize(chain);
-        RuntimeSwitches runtime = loadRuntimeSwitches();
+        GlobalSwitches runtime = runtimeConfig.globalSwitches();
         return tokenConfigRepository.listAll().stream()
                 .filter(row -> chainFilter.isEmpty() || normalize(row.chain()).equals(chainFilter))
                 .filter(row -> enabled == null || row.enabled() == enabled)
@@ -506,7 +501,7 @@ public class WalletConfigManagementService {
     private TokenView requireToken(long id) {
         TokenConfiguration row = tokenConfigRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("token not found"));
-        return tokenView(row, loadRuntimeSwitches());
+        return tokenView(row, runtimeConfig.globalSwitches());
     }
 
     /**
@@ -977,19 +972,19 @@ public class WalletConfigManagementService {
     /**
      * 编码 {@code tokenView} 对应的数据，生成链上或接口所需的表示。
      */
-    private TokenView tokenView(TokenConfiguration row, RuntimeSwitches runtime) {
+    private TokenView tokenView(TokenConfiguration row, GlobalSwitches runtime) {
         boolean configured = row.enabled();
         boolean assetActive = chainAssetRepository.find(row.chain(), row.symbol())
                 .map(asset -> bool(asset.get("active"))).orElse(false);
         Map<String, Object> profile = chainProfileRepository.findByChainAndNetwork(row.chain(), row.network())
                 .orElse(Map.of());
         boolean chainEnabled = bool(profile.get("enabled"));
-        boolean anyTaskEnabled = (runtime.scan() && bool(profile.get("scan_enabled")))
-                || (runtime.withdraw() && bool(profile.get("withdraw_enabled")))
-                || (runtime.collection() && bool(profile.get("collection_enabled")) && row.collectEnabled())
-                || (runtime.transfer() && bool(profile.get("transfer_enabled")));
+        boolean anyTaskEnabled = runtime.taskEnabled(TASK_SCAN, bool(profile.get("scan_enabled")))
+                || runtime.taskEnabled(TASK_WITHDRAW, bool(profile.get("withdraw_enabled")))
+                || runtime.taskEnabled(TASK_COLLECTION, bool(profile.get("collection_enabled")) && row.collectEnabled())
+                || runtime.taskEnabled(TASK_TRANSFER, bool(profile.get("transfer_enabled")));
         List<String> blockers = new ArrayList<>();
-        if (!runtime.wallet()) blockers.add("Wallet master switch is off.");
+        if (!runtime.walletEnabled()) blockers.add("Wallet master switch is off.");
         if (!configured) blockers.add("Token is disabled.");
         if (!assetActive) blockers.add("Chain asset is disabled.");
         if (!chainEnabled) blockers.add("Chain network is disabled.");
@@ -998,7 +993,7 @@ public class WalletConfigManagementService {
                 row.contractAddress(), nullable(row.contractAddressBase58()), nullable(row.contractAddressHex()), row.decimals(), configured,
                 row.collectEnabled(), decimal(row.minDeposit()), decimal(row.minWithdraw()), decimal(row.collectThreshold()),
                 nullable(row.gasStrategy()), row.confirmationRequired(), assetActive, chainEnabled,
-                runtime.wallet() && configured && assetActive && chainEnabled && anyTaskEnabled,
+                configured && assetActive && runtime.effective(chainEnabled, anyTaskEnabled),
                 List.copyOf(blockers), row.createdAt(), row.updatedAt());
     }
 
@@ -1011,20 +1006,6 @@ public class WalletConfigManagementService {
                 || depositRecordRepository.existsByChain(chain)
                 || withdrawalOrderRepository.existsByChain(chain)
                 || collectionRecordRepository.existsByChain(chain);
-    }
-    /**
-     * 获取或查询 {@code loadRuntimeSwitches} 对应的数据，供调用方读取当前状态。
-     */
-    private RuntimeSwitches loadRuntimeSwitches() {
-        Map<String, Boolean> values = new HashMap<>();
-        systemConfigRepository.listGlobalSwitches().forEach(row -> values.put(string(row.get("config_key")),
-                bool(row.get("enabled")) && Boolean.parseBoolean(string(row.get("config_value")))));
-        return new RuntimeSwitches(
-                values.getOrDefault("global.all.enabled", true),
-                values.getOrDefault("global.scan.enabled", true),
-                values.getOrDefault("global.withdraw.enabled", true),
-                values.getOrDefault("global.collection.enabled", true),
-                values.getOrDefault("global.transfer.enabled", true));
     }
     /**
      * 编码 {@code tokenHasRuntimeData} 对应的数据，生成链上或接口所需的表示。
@@ -1276,6 +1257,4 @@ public class WalletConfigManagementService {
             return family != null && family.toUpperCase(Locale.ROOT).contains("EVM");
         }
     }
-    private record RuntimeSwitches(boolean wallet, boolean scan, boolean withdraw,
-                                   boolean collection, boolean transfer) {}
 }
