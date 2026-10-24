@@ -4,7 +4,7 @@ import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.exception.CustodyForbiddenException;
@@ -41,9 +41,9 @@ public class CustodyAssetRecoveryService {
      */
     private final CustodyAssetRecoveryRepository repository;
     /**
-     * 保存 {@code custody}，用于承载当前对象的运行配置或业务数据。
+     * 保存 {@code audits}，用于承载当前对象的运行配置或业务数据。
      */
-    private final CustodyRepository custody;
+    private final CustodyAuditRepository audits;
     /**
      * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -65,7 +65,7 @@ public class CustodyAssetRecoveryService {
      * 构造 {@code CustodyAssetRecoveryService}，初始化该组件运行所需的状态和依赖。
      */
     public CustodyAssetRecoveryService(CustodyAssetRecoveryRepository repository,
-                                       CustodyRepository custody,
+                                       CustodyAuditRepository audits,
                                        CustodyAddressRepository custodyAddressRepository,
                                        ChainAddressRepository chainAddressRepository,
                                        DepositRecordRepository depositRecordRepository,
@@ -73,7 +73,7 @@ public class CustodyAssetRecoveryService {
                                        ObjectMapper objectMapper,
                                        CustodyEventService events) {
         this.repository = repository;
-        this.custody = custody;
+        this.audits = audits;
         this.custodyAddressRepository = custodyAddressRepository;
         this.chainAddressRepository = chainAddressRepository;
         this.depositRecordRepository = depositRecordRepository;
@@ -126,7 +126,7 @@ public class CustodyAssetRecoveryService {
                     .orElseThrow(() -> new IllegalStateException("recovery request already exists"));
             return toView(requireSameTenant(principal.tenantId(), existing));
         }
-        custody.audit(principal.tenantId(), principal.actorType().name(),
+        audits.insert(UUID.randomUUID(), principal.tenantId(), principal.actorType().name(),
                 principal.actorId().toString(), "ASSET_RECOVERY.SUBMIT", "ASSET_RECOVERY",
                 recovery.id().toString(), sourceIp,
                 "{\"actualChain\":\"" + actualChain + "\",\"txHash\":\"" + txHash + "\"}");
@@ -184,7 +184,7 @@ public class CustodyAssetRecoveryService {
                 recovery.expectedChain() == null ? recovery.actualChain() : recovery.expectedChain());
         RecoveryRecord result = verifyInternal(
                 recovery, ownership, recovery.requestedLogIndex());
-        custody.audit(recovery.tenantId(), principal.actorType().name(), principal.actorId().toString(),
+        audits.insert(UUID.randomUUID(), recovery.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.VERIFY", "ASSET_RECOVERY", id.toString(), sourceIp,
                 "{\"status\":\"" + result.status() + "\"}");
         return toView(result);
@@ -207,7 +207,7 @@ public class CustodyAssetRecoveryService {
             throw new IllegalArgumentException("recoveryAddress must differ from the source address");
         }
         RecoveryRecord result = repository.approve(id, recoveryAddress, principal.actorId());
-        custody.audit(existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
+        audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.APPROVE", "ASSET_RECOVERY", id.toString(), sourceIp,
                 "{\"recoveryAddress\":\"" + recoveryAddress + "\"}");
         return toView(result);
@@ -233,7 +233,7 @@ public class CustodyAssetRecoveryService {
                     existing.tokenDecimals() == null ? 18 : existing.tokenDecimals(),
                     existing.verifiedAmount(), source, existing.recoveryAddress()));
             RecoveryRecord result = repository.broadcasted(id, recoveryTxHash, principal.actorId());
-            custody.audit(existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
+            audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                     "ASSET_RECOVERY.EXECUTE", "ASSET_RECOVERY", id.toString(), sourceIp,
                     "{\"recoveryTxHash\":\"" + recoveryTxHash + "\"}");
             return toView(result);
@@ -248,7 +248,7 @@ public class CustodyAssetRecoveryService {
         requirePlatform(principal);
         RecoveryRecord result = confirm(repository.require(id));
         if ("RECOVERED".equals(result.status())) {
-            custody.audit(result.tenantId(), principal.actorType().name(), principal.actorId().toString(),
+            audits.insert(UUID.randomUUID(), result.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                     "ASSET_RECOVERY.CONFIRM", "ASSET_RECOVERY", id.toString(), sourceIp,
                     "{\"recoveryTxHash\":\"" + result.recoveryTxHash() + "\"}");
         }
@@ -262,7 +262,7 @@ public class CustodyAssetRecoveryService {
             try {
                 RecoveryRecord result = confirm(recovery);
                 if ("RECOVERED".equals(result.status())) {
-                    custody.audit(result.tenantId(), "SYSTEM", "asset-recovery-finality",
+                    audits.insert(UUID.randomUUID(), result.tenantId(), "SYSTEM", "asset-recovery-finality",
                             "ASSET_RECOVERY.CONFIRM", "ASSET_RECOVERY", result.id().toString(), null,
                             "{\"recoveryTxHash\":\"" + result.recoveryTxHash() + "\"}");
                 }
@@ -333,7 +333,7 @@ public class CustodyAssetRecoveryService {
         RecoveryRecord existing = repository.require(id);
         String reason = required(command.reason(), "reason", 500);
         RecoveryRecord result = repository.reject(id, reason, principal.actorId());
-        custody.audit(existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
+        audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.REJECT", "ASSET_RECOVERY", id.toString(), sourceIp,
                 "{\"reason\":\"" + reason.replace("\"", "'") + "\"}");
         return toView(result);
@@ -346,7 +346,7 @@ public class CustodyAssetRecoveryService {
     public RecoveryView cancel(CustodyPrincipal principal, UUID id, String sourceIp) {
         requireTenant(principal);
         RecoveryRecord result = repository.cancel(principal.tenantId(), id);
-        custody.audit(principal.tenantId(), principal.actorType().name(), principal.actorId().toString(),
+        audits.insert(UUID.randomUUID(), principal.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.CANCEL", "ASSET_RECOVERY", id.toString(), sourceIp, "{}");
         return toView(result);
     }

@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -35,7 +36,7 @@ import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
@@ -64,9 +65,9 @@ public class WalletConfigManagementService {
     private final WithdrawalOrderRepository withdrawalOrderRepository;
     private final CollectionRecordRepository collectionRecordRepository;
     /**
-     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     * 保存 {@code audits}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final CustodyRepository custodyRepository;
+    private final CustodyAuditRepository audits;
     /**
      * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
      */
@@ -90,7 +91,7 @@ public class WalletConfigManagementService {
                                          DepositRecordRepository depositRecordRepository,
                                          WithdrawalOrderRepository withdrawalOrderRepository,
                                          CollectionRecordRepository collectionRecordRepository,
-                                         CustodyRepository custodyRepository,
+                                         CustodyAuditRepository audits,
                                          @Value("${sw.app.env.name:dev}")
                                          String environment,
                                          WalletRpcClient rpcClient) {
@@ -104,7 +105,7 @@ public class WalletConfigManagementService {
         this.depositRecordRepository = depositRecordRepository;
         this.withdrawalOrderRepository = withdrawalOrderRepository;
         this.collectionRecordRepository = collectionRecordRepository;
-        this.custodyRepository = custodyRepository;
+        this.audits = audits;
         this.environment = normalizeLower(environment);
         this.rpcClient = rpcClient;
     }
@@ -438,8 +439,8 @@ public class WalletConfigManagementService {
         int pageSize = Math.min(Math.max(limit, 1), 200);
         int pageOffset = Math.max(offset, 0);
         return new PageView<>(
-                custodyRepository.listPlatformAudit(pageSize, pageOffset),
-                custodyRepository.countPlatformAudit(),
+                audits.listPlatform(pageSize, pageOffset),
+                audits.countPlatform(),
                 pageSize, pageOffset);
     }
     /**
@@ -1049,7 +1050,7 @@ public class WalletConfigManagementService {
      */
     private void audit(CustodyPrincipal actor, String action, String resourceType,
                        String resourceId, String sourceIp, String details) {
-        custodyRepository.audit(null, "PLATFORM_USER", actor.actorId().toString(), action,
+        audits.insert(UUID.randomUUID(), null, "PLATFORM_USER", actor.actorId().toString(), action,
                 resourceType, resourceId, sourceIp, details);
     }
     /**

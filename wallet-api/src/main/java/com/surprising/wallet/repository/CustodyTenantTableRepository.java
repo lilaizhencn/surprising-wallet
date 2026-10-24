@@ -15,6 +15,10 @@ import java.util.UUID;
 public class CustodyTenantTableRepository {
     private static final String COLUMNS = "id, slug, name, status, derivation_namespace, "
             + "ip_allowlist_enabled, display_currency, created_at, updated_at";
+    private static final String FILTER = """
+             where (?='' or position(lower(?) in lower(slug))>0 or position(lower(?) in lower(name))>0)
+               and (?='' or status=?)
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -67,14 +71,20 @@ public class CustodyTenantTableRepository {
                 CustodyTenantTableRepository::mapTenant);
     }
 
+    public List<TenantRecord> query(String search, String status, int limit, int offset) {
+        String value = search == null ? "" : search.trim();
+        String state = status == null ? "" : status;
+        return jdbc.query("select " + COLUMNS + " from custody_tenant " + FILTER
+                        + " order by created_at desc, id limit ? offset ?",
+                CustodyTenantTableRepository::mapTenant, value, value, value, state, state,
+                Math.min(Math.max(limit, 1), 500), Math.max(offset, 0));
+    }
+
     /** 统计租户数量。 */
     public long count(String search, String status) {
         String value = search == null ? "" : search.trim();
-        Long count = jdbc.queryForObject("""
-                select count(*) from custody_tenant
-                 where (? = '' or slug ilike '%' || ? || '%' or name ilike '%' || ? || '%')
-                   and (? = '' or status = ?)
-                """, Long.class, value, value, value, status == null ? "" : status, status == null ? "" : status);
+        Long count = jdbc.queryForObject("select count(*) from custody_tenant " + FILTER,
+                Long.class, value, value, value, status == null ? "" : status, status == null ? "" : status);
         return count == null ? 0 : count;
     }
 

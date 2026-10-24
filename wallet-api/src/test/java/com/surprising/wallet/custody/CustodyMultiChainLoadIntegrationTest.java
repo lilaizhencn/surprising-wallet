@@ -9,7 +9,7 @@ import com.surprising.wallet.job.custody.CustodyWebhookDispatcher;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyWebhookDispatchService;
@@ -110,12 +110,12 @@ class CustodyMultiChainLoadIntegrationTest {
              var http = new com.surprising.wallet.gateway.CustodyWebhookHttpClient(crypto, "dev")) {
             context.register(Transactions.class);
             context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(dataSource));
-            context.registerBean(CustodyRepository.class,
-                    () -> com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc));
+            context.registerBean(CustodyWithdrawalRepository.class,
+                    () -> new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc));
             context.registerBean(WithdrawalSettlementService.class,
                     () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
             context.refresh();
-            CustodyRepository custody = context.getBean(CustodyRepository.class);
+            CustodyWithdrawalRepository custody = context.getBean(CustodyWithdrawalRepository.class);
             WithdrawalSettlementService settlements = context.getBean(WithdrawalSettlementService.class);
             UUID endpointId = insertWebhook(jdbc, crypto, tenant.id(), callback.url());
 
@@ -308,7 +308,7 @@ class CustodyMultiChainLoadIntegrationTest {
      * 验证 {@code createAndConfirmWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void createAndConfirmWithdrawal(ChainRepositoryFixture chains,
-                                                   CustodyRepository custody, WithdrawalSettlementService settlements, UUID tenantId,
+    CustodyWithdrawalRepository custody, WithdrawalSettlementService settlements, UUID tenantId,
                                                    UserAccount account) {
         String orderNo = "LOAD-" + account.chain().name() + "-" + account.index();
         int created = chains.withdrawalOrderRepository.createForTenant(
@@ -325,8 +325,8 @@ class CustodyMultiChainLoadIntegrationTest {
         assertEquals(1, created);
         assertTrue(chains.ledgerBalanceRepository.freeze(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, tenantId));
         chains.withdrawalOrderRepository.updateStatus(tenantId, account.chain().name(), orderNo, "FROZEN", account.address(), null, null);
-        custody.insertCustodyWithdrawal(
-                UUID.randomUUID(), tenantId, account.custodyAddressId(), orderNo,
+        custody.insert(
+                UUID.randomUUID(), tenantId, account.custodyAddressId(), chains.withdrawalOrderRepository.find(account.chain().name(), orderNo, tenantId).orElseThrow().getId().longValue(), orderNo,
                 "external-" + account.index(), "load-idempotency-" + account.index(),
                 account.chain().name(), account.symbol(),
                 address(account.chain(), account.index() + 20_000), WITHDRAW_AMOUNT, BigDecimal.ZERO,

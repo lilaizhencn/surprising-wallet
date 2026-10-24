@@ -3,8 +3,7 @@ package com.surprising.wallet.custody;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
@@ -87,10 +86,9 @@ class CustodyDepositFinalityIntegrationTest {
                     select count(*) from custody_event
                      where tenant_id = ? and event_type = 'DEPOSIT.REORGED'
                     """, Integer.class, fixture.tenantId()));
-            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc).hasOpenReorgDeficit(
-                    fixture.tenantId(), fixture.custodyAddressId(), "ETH", "ETH"));
-            var dashboardDeficits = new CustodyAssetDashboardRepository(jdbc)
-                    .openReorgDeficits(fixture.tenantId());
+            assertTrue(new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc).existsOpen(fixture.tenantId(), "ETH", "ETH", fixture.accountId()));
+            var dashboardDeficits = new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc)
+                    .listOpen(fixture.tenantId());
             assertEquals(1, dashboardDeficits.size());
             assertAmount("7", dashboardDeficits.getFirst().outstandingAmount());
             assertEquals(

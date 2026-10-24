@@ -1,6 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.model.custody.GasAccountRecord;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +13,9 @@ import java.util.UUID;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 
 /**
@@ -26,10 +28,9 @@ import com.surprising.wallet.repository.CustodyTenantChainRepository;
 public class CustodyTenantChainService {
     /** 租户链配置数据访问 */
     private final CustodyTenantChainRepository chains;
-    /**
-     * 保存 {@code custody}，用于承载当前对象的运行配置或业务数据。
-     */
-    private final CustodyRepository custody;
+    private final CustodyGasAccountRepository gasAccounts;
+    private final CustodyAddressRepository addresses;
+    private final CustodyAuditRepository audits;
     /**
      * 校验启用链的实际运行时配置。
      */
@@ -38,10 +39,14 @@ public class CustodyTenantChainService {
      * 构造 {@code CustodyTenantChainService}，初始化该组件运行所需的状态和依赖。
      */
     public CustodyTenantChainService(CustodyTenantChainRepository chains,
-                                     CustodyRepository custody,
+                                     CustodyGasAccountRepository gasAccounts,
+                                     CustodyAddressRepository addresses,
+                                     CustodyAuditRepository audits,
                                      BlockchainRuntimeService runtime) {
         this.chains = chains;
-        this.custody = custody;
+        this.gasAccounts = gasAccounts;
+        this.addresses = addresses;
+        this.audits = audits;
         this.runtime = runtime;
     }
     /**
@@ -49,10 +54,7 @@ public class CustodyTenantChainService {
      */
     public List<ChainView> list(CustodyPrincipal principal) {
         requireScope(principal, "chains:read");
-        Map<String, GasAccountRecord> addresses = custody
-                .listGasAccounts(principal.tenantId()).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        GasAccountRecord::chain, row -> row));
+        Map<String, CustodyAddressRecord> addresses = gasAddresses(principal.tenantId());
         return chains.list(principal.tenantId()).stream()
                 .map(row -> toView(row, addresses.get(row.chain())))
                 .toList();
@@ -72,15 +74,12 @@ public class CustodyTenantChainService {
         runtime.requireRuntime(chain);
         String status = enabled ? "ACTIVE" : "CLOSED";
         chains.setStatus(principal.tenantId(), chain, status, principal.actorId());
-        custody.audit(principal.tenantId(), principal.actorType().name(),
+        audits.insert(UUID.randomUUID(), principal.tenantId(), principal.actorType().name(),
                 principal.actorId().toString(),
                 enabled ? "TENANT_CHAIN.OPEN" : "TENANT_CHAIN.CLOSE",
                 "TENANT_CHAIN", chain, sourceIp,
                 "{\"chain\":\"" + chain + "\",\"status\":\"" + status + "\"}");
-        Map<String, GasAccountRecord> addresses = custody
-                .listGasAccounts(principal.tenantId()).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        GasAccountRecord::chain, row -> row));
+        Map<String, CustodyAddressRecord> addresses = gasAddresses(principal.tenantId());
         return chains.list(principal.tenantId()).stream()
                 .filter(row -> row.chain().equals(chain))
                 .map(row -> toView(row, addresses.get(row.chain())))
@@ -112,8 +111,22 @@ public class CustodyTenantChainService {
     /**
      * 将数据库开关和资产配置投影为租户可见的链信息。
      */
+    private Map<String, CustodyAddressRecord> gasAddresses(UUID tenant) {
+        var gas = gasAccounts.listByTenant(tenant);
+        var rows = addresses.findByIds(tenant, gas.stream()
+                .map(CustodyGasAccountRepository.Definition::custodyAddressId).toList()).stream()
+                .collect(java.util.stream.Collectors.toMap(row -> row.id(), row -> row));
+        Map<String, CustodyAddressRecord> result = new java.util.HashMap<>();
+        for (var account : gas) {
+            var address = rows.get(account.custodyAddressId());
+            if (address == null) throw new IllegalStateException("gas custody address is missing");
+            result.put(account.chain(), address);
+        }
+        return result;
+    }
+
     private ChainView toView(CustodyTenantChainRepository.ChainRecord row,
-                                      GasAccountRecord address) {
+                             CustodyAddressRecord address) {
         List<TokenView> tokens = row.tokens().stream()
                 .map(CustodyTenantChainService::tokenView)
                 .toList();
@@ -126,7 +139,7 @@ public class CustodyTenantChainService {
                 row.eip7702Enabled(),
                 enabledAssets, tokens, row.status(), "ACTIVE".equals(row.status()),
                 row.scanEnabled(), row.withdrawalEnabled(), row.transferEnabled(),
-                address == null ? null : address.custodyAddressId(),
+                address == null ? null : address.id(),
                 address == null ? null : address.address(),
                 address == null ? null : address.memo(),
                 row.openedAt(), row.closedAt());

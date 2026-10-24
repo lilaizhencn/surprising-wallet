@@ -5,8 +5,8 @@ import java.time.Instant;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import java.util.List;
-import java.util.Map;
+import java.util.Optional;
+import com.surprising.wallet.model.custody.IdempotencyRecord;
 import java.util.UUID;
 
 /** custody_idempotency_key 单表仓储。 */
@@ -21,13 +21,17 @@ public class CustodyIdempotencyRepository {
     }
 
     /** 查询未过期幂等记录。 */
-    public List<Map<String, Object>> find(UUID tenantId, String key, String operation) {
-        return jdbc.queryForList("""
+    public Optional<IdempotencyRecord> find(UUID tenantId, String key, String operation) {
+        return jdbc.query("""
                 select request_hash, response_status, response_body::text as response_json, expires_at
                   from custody_idempotency_key
                  where tenant_id = ? and idempotency_key = ? and operation = ?
                    and (expires_at is null or expires_at > now())
-                """, tenantId, key, operation);
+                """, (rs, rowNum) -> {
+                    Timestamp expires = rs.getTimestamp("expires_at");
+                    return new IdempotencyRecord(rs.getString("request_hash"), rs.getObject("response_status", Integer.class),
+                            rs.getString("response_json"), expires == null ? null : expires.toInstant());
+                }, tenantId, key, operation).stream().findFirst();
     }
 
     /** 开始幂等请求，返回是否成功占用。 */

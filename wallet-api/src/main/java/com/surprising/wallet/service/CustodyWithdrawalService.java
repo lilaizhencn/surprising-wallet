@@ -18,7 +18,12 @@ import java.util.UUID;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantTableRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.CustodyReorgDeficitRepository;
+import com.surprising.wallet.repository.CustodyIdempotencyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 
@@ -33,10 +38,12 @@ import com.surprising.wallet.repository.CustodyAddressRepository;
 public class CustodyWithdrawalService {
     /** 提现创建操作的幂等键前缀 */
     private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final CustodyRepository repository;
+    private final CustodyTenantTableRepository tenants;
+    private final ChainAddressRepository chainAddresses;
+    private final CustodyReorgDeficitRepository deficits;
+    private final CustodyIdempotencyRepository idempotency;
+    private final CustodyWithdrawalRepository withdrawals;
+    private final CustodyAuditRepository audits;
     /**
      * 保存 {@code executionService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -64,16 +71,23 @@ public class CustodyWithdrawalService {
     /**
      * 构造 {@code CustodyWithdrawalService}，初始化该组件运行所需的状态和依赖。
      */
-    public CustodyWithdrawalService(CustodyRepository repository,
-                                    CustodyWithdrawalExecutionService executionService,
+    public CustodyWithdrawalService(CustodyWithdrawalExecutionService executionService,
                                     CustodyGasService gasService,
                                     CustodyTenantChainService tenantChains,
                                     CustodyCryptoService crypto,
                                     ObjectMapper objectMapper,
                                     CustodyEventService events,
                                     CustodyAddressRepository addresses,
-                                    CustodyGasAccountRepository gasAccounts) {
-        this.repository = repository;
+                                    CustodyGasAccountRepository gasAccounts,
+                                    CustodyTenantTableRepository tenants, ChainAddressRepository chainAddresses,
+                                    CustodyReorgDeficitRepository deficits, CustodyIdempotencyRepository idempotency,
+                                    CustodyWithdrawalRepository withdrawals, CustodyAuditRepository audits) {
+        this.tenants = tenants;
+        this.chainAddresses = chainAddresses;
+        this.deficits = deficits;
+        this.idempotency = idempotency;
+        this.withdrawals = withdrawals;
+        this.audits = audits;
         this.executionService = executionService;
         this.gasService = gasService;
         this.tenantChains = tenantChains;
@@ -112,8 +126,9 @@ public class CustodyWithdrawalService {
         }
         tenantChains.requireActive(principal.tenantId(), chain);
         tenantChains.requireWithdrawalEnabled(principal.tenantId(), chain, symbol);
-        if (repository.hasOpenReorgDeficit(
-                principal.tenantId(), address.id(), chain, symbol)) {
+        var account = chainAddresses.findOwned(principal.tenantId(), address.chainAddressId())
+                .orElseThrow(() -> new IllegalArgumentException("custody chain address not found"));
+        if (deficits.existsOpen(principal.tenantId(), chain, symbol, account.getAccountId())) {
             throw new IllegalStateException(
                     "withdrawals are paused because this account has an unresolved deposit reorg deficit");
         }
@@ -129,7 +144,7 @@ public class CustodyWithdrawalService {
         if (replay != null) {
             return replay;
         }
-        if (!repository.beginIdempotency(
+        if (!idempotency.begin(
                 principal.tenantId(), normalizedIdempotencyKey, CREATE_OPERATION,
                 requestHash, Instant.now().plus(Duration.ofDays(7)))) {
             replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
@@ -140,7 +155,8 @@ public class CustodyWithdrawalService {
                     "a withdrawal request with this idempotency key is still processing");
         }
 
-        TenantRecord tenant = repository.requireTenant(principal.tenantId());
+        TenantRecord tenant = tenants.findById(principal.tenantId())
+                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
         String tenantOrderSlug = tenant.slug().substring(0, Math.min(tenant.slug().length(), 32));
         String orderPrefix = "CW-" + tenantOrderSlug + "-"
                 + address.id().toString().substring(0, 8);
@@ -153,10 +169,11 @@ public class CustodyWithdrawalService {
         BigDecimal amountValue = result.amount();
         BigDecimal feeValue = result.fee();
         String broadcastAddress = result.toAddress();
-        repository.insertCustodyWithdrawal(
+        withdrawals.insert(
                 withdrawalId,
                 tenant.id(),
                 address.id(),
+                result.orderId(),
                 orderNo,
                 externalReference,
                 normalizedIdempotencyKey,
@@ -180,7 +197,7 @@ public class CustodyWithdrawalService {
                 eventId, tenant.id(), "WITHDRAWAL.CREATED", "WITHDRAWAL", orderNo,
                 eventPayload(eventId, "WITHDRAWAL.CREATED", view),
                 "API".equals(address.source()));
-        repository.audit(
+        audits.insert(UUID.randomUUID(),
                 tenant.id(), principal.actorType().name(), principal.actorId().toString(),
                 "WITHDRAWAL.CREATE", "CUSTODY_WITHDRAWAL", withdrawalId.toString(), sourceIp,
                 json(Map.of(
@@ -189,7 +206,7 @@ public class CustodyWithdrawalService {
                         "assetSymbol", symbol,
                         "amount", amountValue,
                         "source", normalizedSource)));
-        repository.completeIdempotency(
+        idempotency.complete(
                 tenant.id(), normalizedIdempotencyKey, CREATE_OPERATION, 202, json(view));
         return view;
     }
@@ -198,7 +215,7 @@ public class CustodyWithdrawalService {
      * 执行 {@code replay} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
-        IdempotencyRecord existing = repository.findIdempotency(tenantId, key, CREATE_OPERATION)
+        IdempotencyRecord existing = idempotency.find(tenantId, key, CREATE_OPERATION)
                 .orElse(null);
         if (existing == null) {
             return null;

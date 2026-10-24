@@ -16,6 +16,23 @@ import org.springframework.stereotype.Repository;
 /** ledger_balance 单表仓储。 */
 @Repository
 public class LedgerBalanceRepository {
+    public List<LedgerBalanceRecord> listOwned(UUID tenantId) {
+        return jdbc.query("""
+                select id, chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
+                       created_at, updated_at from ledger_balance where tenant_id=?
+                 order by chain, asset_symbol, account_id
+                """, (rs, rowNum) -> map(rs), tenantId);
+    }
+
+    public List<LedgerBalanceRecord> findByAccounts(UUID tenantId, List<String> accounts) {
+        if (accounts.isEmpty()) return List.of();
+        return jdbc.query("""
+                select id, chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
+                       created_at, updated_at from ledger_balance
+                 where tenant_id=? and account_id=any(?)
+                """, (rs, rowNum) -> map(rs), tenantId, new SqlArrayValue("varchar", accounts.toArray()));
+    }
+
     public List<LedgerBalanceRecord> findByAccounts(UUID tenantId, String chain, String symbol, List<String> accounts) {
         if (accounts.isEmpty()) return List.of();
         return jdbc.query("""

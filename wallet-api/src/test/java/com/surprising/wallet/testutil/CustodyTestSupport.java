@@ -10,9 +10,9 @@ public final class CustodyTestSupport {
     private CustodyTestSupport() { }
 
     public static com.surprising.wallet.service.CustodyAddressService addresses(JdbcTemplate jdbc,
-            CustodyRepository custody, com.surprising.wallet.chain.BlockchainRuntimeService runtime,
+            com.surprising.wallet.chain.BlockchainRuntimeService runtime,
             com.surprising.wallet.service.CustodyTenantChainService tenantChains) {
-        return new com.surprising.wallet.service.CustodyAddressService(custody,
+        return new com.surprising.wallet.service.CustodyAddressService(new CustodyTenantTableRepository(jdbc),
                 new ChainAddressRepository(jdbc), runtime, tenantChains,
                 new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper(),
                 new Evm7702CollectionRepository(jdbc), new CustodyAddressRepository(jdbc),
@@ -21,18 +21,58 @@ public final class CustodyTestSupport {
     }
 
     public static com.surprising.wallet.service.CustodyGasService gas(JdbcTemplate jdbc,
-            CustodyRepository custody, com.surprising.wallet.service.CustodyAddressService addresses,
+            com.surprising.wallet.service.CustodyAddressService addresses,
             com.surprising.wallet.chain.BlockchainRuntimeService runtime) {
-        return new com.surprising.wallet.service.CustodyGasService(custody, addresses, runtime,
+        return new com.surprising.wallet.service.CustodyGasService(addresses, runtime,
                 new CustodyGasAccountRepository(jdbc), new CustodyGasUsageRepository(jdbc),
                 new CustodyDepositRepository(jdbc), new CustodyDerivationSubjectRepository(jdbc), gasAccounting(jdbc),
-                new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc));
+                new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
+                new LedgerBalanceRepository(jdbc), new CustodyAuditRepository(jdbc));
     }
 
-    public static CustodyRepository repository(JdbcTemplate jdbc) {
-        return new CustodyRepository(jdbc, new CustodyTenantTableRepository(jdbc),
-                new CustodyTenantUserRepository(jdbc), new CustodyApiKeyRepository(jdbc),
-                new CustodySessionRepository(jdbc), new CustodyIpRuleRepository(jdbc));
+    public static com.surprising.wallet.service.CustodyGasService gas(JdbcTemplate jdbc) {
+        return gas(jdbc, org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
+                org.mockito.Mockito.mock(com.surprising.wallet.chain.BlockchainRuntimeService.class));
+    }
+
+    public static com.surprising.wallet.service.CustodyAssetDashboardService assets(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.CustodyAssetDashboardService(new CustodyAssetPriceRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc), new ChainAddressRepository(jdbc),
+                new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
+                new CustodyTenantChainTableRepository(jdbc), new LedgerBalanceRepository(jdbc),
+                new CustodyReorgDeficitRepository(jdbc), new CustodyAuditRepository(jdbc));
+    }
+
+    public static com.surprising.wallet.service.CustodyTenantService tenants(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.CustodyTenantService(new CustodyTenantTableRepository(jdbc),
+                new com.surprising.wallet.service.CustodyPasswordService(),
+                new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper(),
+                new CustodyTenantUserRepository(jdbc), new CustodySessionRepository(jdbc), new CustodyAuditRepository(jdbc));
+    }
+
+    public static com.surprising.wallet.service.CustodyTenantQueryService tenantQueries(JdbcTemplate jdbc) {
+        var runtime = org.mockito.Mockito.mock(com.surprising.wallet.chain.BlockchainRuntimeService.class);
+        var chains = org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyTenantChainService.class);
+        var addresses = addresses(jdbc, runtime, chains);
+        return new com.surprising.wallet.service.CustodyTenantQueryService(new CustodyTenantTableRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc), new CustodyTenantUserRepository(jdbc),
+                new CustodySessionRepository(jdbc), new CustodyApiKeyRepository(jdbc), new CustodyIpRuleRepository(jdbc),
+                new CustodyAuditRepository(jdbc), new CustodyWebhookEndpointRepository(jdbc), new CustodyWebhookDeliveryRepository(jdbc),
+                new CustodyWithdrawalRepository(jdbc), new CustodyDepositRepository(jdbc), new CustodyTenantChainTableRepository(jdbc),
+                new ChainProfileRepository(jdbc), addresses, gas(jdbc, addresses, runtime), assets(jdbc), webhooks(jdbc),
+                new com.surprising.wallet.service.CustodyTransactionQueryService(new CustodyDepositRepository(jdbc),
+                        new CustodyWithdrawalRepository(jdbc), new CustodyAddressRepository(jdbc), new WithdrawalOrderRepository(jdbc)));
+    }
+
+    public static com.surprising.wallet.model.CustodyPrincipal platformAdmin() {
+        return new com.surprising.wallet.model.CustodyPrincipal(com.surprising.wallet.model.CustodyPrincipal.ActorType.PLATFORM_USER,
+                java.util.UUID.randomUUID(), null, null, "PLATFORM_ADMIN", java.util.Set.of("*"));
+    }
+
+    public static com.surprising.wallet.model.CustodyPrincipal tenantAdmin(java.util.UUID tenantId) {
+        return new com.surprising.wallet.model.CustodyPrincipal(com.surprising.wallet.model.CustodyPrincipal.ActorType.TENANT_USER,
+                java.util.UUID.randomUUID(), tenantId, "fixture", "TENANT_ADMIN", java.util.Set.of("*"));
     }
 
     public static com.surprising.wallet.service.CustodyWebhookService webhooks(JdbcTemplate jdbc) {

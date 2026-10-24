@@ -1,7 +1,7 @@
 package com.surprising.wallet.custody;
 
 import com.surprising.wallet.model.custody.GasUsageRecord;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.service.CustodyGasReconciliationService;
 import com.surprising.wallet.testutil.CustodyTestSupport;
 import org.junit.jupiter.api.AfterEach;
@@ -31,7 +31,6 @@ class CustodyGasAccountingIntegrationTest {
     private AnnotationConfigApplicationContext context;
     private JdbcTemplate jdbc;
     private com.surprising.wallet.service.CustodyGasAccountingService accounting;
-    private CustodyRepository custody;
     private CustodyGasReconciliationService reconciliation;
     private UUID operationId;
     private String gasAccount;
@@ -48,11 +47,9 @@ class CustodyGasAccountingIntegrationTest {
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
-        context.registerBean(CustodyRepository.class, () -> CustodyTestSupport.repository(jdbc));
         context.registerBean(com.surprising.wallet.service.CustodyGasAccountingService.class, () -> CustodyTestSupport.gasAccounting(jdbc));
         context.registerBean(CustodyGasReconciliationService.class, () -> CustodyTestSupport.gasReconciliation(jdbc));
         context.refresh();
-        custody = context.getBean(CustodyRepository.class);
         accounting = context.getBean(com.surprising.wallet.service.CustodyGasAccountingService.class);
         reconciliation = context.getBean(CustodyGasReconciliationService.class);
         gasAccount = "gas-" + UUID.randomUUID();
@@ -73,7 +70,7 @@ class CustodyGasAccountingIntegrationTest {
                 values (?, ?, 1, 'ETH', 'USDT', 'customer', 'customer', 'destination', 3, 0, 'SENT', 'gas-test-hash')
                 """, TENANT, orderNo);
         operationId = UUID.randomUUID();
-        custody.insertCustodyWithdrawal(operationId, TENANT, customerAddress, orderNo,
+        new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(operationId, TENANT, customerAddress, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, TENANT).orElseThrow().getId().longValue(), orderNo,
                 null, null, "ETH", "USDT", "destination", new BigDecimal("3"), BigDecimal.ZERO,
                 "SENT", "API_KEY", "gas-test");
     }
@@ -201,7 +198,7 @@ class CustodyGasAccountingIntegrationTest {
                     values (?, ?, 1, 'ETH', 'USDT', 'customer', 'customer', 'destination', 3, 0, 'SENT')
                     """, TENANT, pendingOrder);
             UUID pendingId = UUID.randomUUID();
-            custody.insertCustodyWithdrawal(pendingId, TENANT, customerAddress, pendingOrder,
+            new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(pendingId, TENANT, customerAddress, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", pendingOrder, TENANT).orElseThrow().getId().longValue(), pendingOrder,
                     null, null, "ETH", "USDT", "destination", new BigDecimal("3"), BigDecimal.ZERO,
                     "SENT", "API_KEY", "gas-test");
             accounting.reserve(TENANT, "WITHDRAWAL", pendingId, new BigDecimal("0.001"));

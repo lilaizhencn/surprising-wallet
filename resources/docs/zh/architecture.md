@@ -125,9 +125,9 @@ Console 认证由 `CustodyAuthService` 直接调用用户、租户、会话和�
 登录、会话访问和平台管理员初始化不再经过 `CustodyRepository`、`CustodySecurityRepository`。
 托管业务记录位于 `model/custody`，调用方不依赖总仓储的嵌套类型。用户、租户、会话、API Key 和 IP 规则由对应单表仓储映射为有类型记录；认证服务不再解析数据库 Map、UUID 或 Timestamp。
 `CustodyApiKeyService` 直接编排密钥、租户、IP 规则、nonce 和审计仓储；`CustodySecurityService` 直接处理 IP 规则、租户开关和审计。用户列表和密钥列表采用不含秘密字段的专用投影。`CustodyTenantService` 在原事务内直接撤销租户会话、条件解锁管理员并写审计；安全维护服务直接清理 nonce、会话和幂等键。租户基础响应直接复用 `TenantRecord`，不再逐字段重建相同 DTO。`CustodySecurityRepository` 已删除，不保留安全域转发或无效的密钥版本/过期时间兼容重载。API Key 与 Webhook 表不再保存未使用的 `secret_version` 列，密文格式自身的版本标记是唯一解密版本来源。
-`CustodyRepository` 等托管控制面组合组件使用 `@Component`，自身不执行 SQL，只在 Java 中组合
-单表仓储并维护必要的事务边界；它们不属于 SQL Repository。Service 不持有 `JdbcTemplate`、不执行 SQL，负责业务规则
-和工作流调用。任何 SQL Repository 内禁止使用 JOIN、跨表子查询或同时读写多张业务表。
+`CustodyRepository` 与 `CustodyAssetDashboardRepository` 已删除。租户写操作由 `CustodyTenantService` 编排租户、管理员、会话和审计；控制器直接调用 `CustodyTenantQueryService` 获取租户分页、详情与上手清单。Gas 身份、地址和原生币余额由 `CustodyGasService` 批量组合；资产持仓、配置展示与价格由 `CustodyAssetDashboardService` 负责。审计、幂等与提现投影创建直接依赖各自单表仓储，不恢复通用转发门面。租户链展示仅批量组合 Gas 定义与托管地址，不依赖 Gas 服务，避免 Gas → 地址 → 租户链 → Gas 的环。Service 不持有 `JdbcTemplate`、不执行 SQL；单表仓储禁止 JOIN、跨表子查询或同时读写多张业务表。
+
+租户页先在数据库过滤和分页，再按本页租户批量统计地址、Gas 和用户，列表与总数共用字面搜索条件。查询服务用只读一致快照组合结果。账户身份采用链与区分大小写的账户号，Gas 排除不跨链传播；已观察持仓在链或资产关闭后仍可见，看板配置视图单独遵守平台与租户启用规则。价格和赤字仓储直接返回领域记录，不再逐层复制相同字段。此重构复用数据库基线，无新增表、字段、状态或兼容迁移。
 
 `com.surprising.wallet.chain.model`、业务数据库记录和转账请求模型属于 `wallet-api` 内部领域层。
 Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提供者位于 `chain-sdks`；`common`

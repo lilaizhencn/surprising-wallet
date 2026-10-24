@@ -9,7 +9,7 @@ import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.CustodyAddressService;
 import com.surprising.wallet.service.CustodyTenantChainService;
-import com.surprising.wallet.testutil.CustodyTestSupport;
+import com.surprising.wallet.repository.CustodyTenantTableRepository;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.aop.support.AopUtils;
@@ -69,7 +69,7 @@ class CustodyAddressAllocationIntegrationTest {
         context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
         context.registerBean(CustodyAddressService.class, () -> new CustodyAddressService(
-                CustodyTestSupport.repository(jdbc), chainAddresses, runtime, chains,
+                new CustodyTenantTableRepository(jdbc), chainAddresses, runtime, chains,
                 new CustodyJacksonConfiguration().custodyObjectMapper(), projections,
                 new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc),
                 new CustodyDerivationSubjectRepository(jdbc), new CustodyAuditRepository(jdbc),

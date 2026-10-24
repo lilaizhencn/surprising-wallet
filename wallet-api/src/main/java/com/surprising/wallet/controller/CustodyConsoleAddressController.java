@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.service.CustodyAddressService;
+import com.surprising.wallet.service.CustodyAssetDashboardService;
 import com.surprising.wallet.model.CustodyRequestSupport;
 
 /**
@@ -32,12 +33,14 @@ import com.surprising.wallet.model.CustodyRequestSupport;
 public class CustodyConsoleAddressController {
     /** 地址服务，处理创建、更新、列表逻辑。 */
     private final CustodyAddressService addresses;
+    private final CustodyAssetDashboardService assets;
 
     /**
      * 注入地址服务。
      */
-    public CustodyConsoleAddressController(CustodyAddressService addresses) {
+    public CustodyConsoleAddressController(CustodyAddressService addresses, CustodyAssetDashboardService assets) {
         this.addresses = addresses;
+        this.assets = assets;
     }
 
     /**
@@ -86,7 +89,7 @@ public class CustodyConsoleAddressController {
      * 查询资产维度清单，供后台侧余额与链路配置展示。
      */
     @GetMapping("/assets")
-    public List<Map<String, Object>> assets(HttpServletRequest request) {
-        return addresses.assets(CustodyRequestSupport.requirePrincipal(request));
+    public List<CustodyAssetDashboardService.CustomerAssetBalance> assets(HttpServletRequest request) {
+        return assets.assets(CustodyRequestSupport.requirePrincipal(request));
     }
 }

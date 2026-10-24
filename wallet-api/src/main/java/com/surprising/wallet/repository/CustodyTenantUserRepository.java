@@ -16,6 +16,16 @@ import java.util.UUID;
 /** custody_tenant_user 单表仓储。 */
 @Repository
 public class CustodyTenantUserRepository {
+    public java.util.Map<UUID, Long> countByTenants(List<UUID> ids) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        return jdbc.query("select tenant_id, count(*) as total from custody_tenant_user where tenant_id=any(?) group by tenant_id",
+                rs -> {
+                    java.util.Map<UUID, Long> counts = new java.util.HashMap<>();
+                    while (rs.next()) counts.put(rs.getObject("tenant_id", UUID.class), rs.getLong("total"));
+                    return counts;
+                }, new org.springframework.jdbc.support.SqlArrayValue("uuid", ids.toArray()));
+    }
+
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

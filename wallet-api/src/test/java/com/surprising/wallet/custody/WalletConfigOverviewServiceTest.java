@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.service.WalletConfigOverviewService;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -110,7 +110,7 @@ class WalletConfigOverviewServiceTest {
     private static WalletConfigOverviewService service(FakeJdbcTemplate jdbc,
                                                        String environment,
                                                        boolean keysetConfigured,
-                                                       CustodyRepository audit) {
+                                                       CustodyAuditRepository audit) {
         var keyMaterial = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
         org.mockito.Mockito.when(keyMaterial.isConfigured()).thenReturn(keysetConfigured);
         var tokens = org.mockito.Mockito.mock(TokenConfigRepository.class);
@@ -256,7 +256,7 @@ class WalletConfigOverviewServiceTest {
     /**
      * 测试替身 {@code FakeAuditRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeAuditRepository extends CustodyRepository {
+    private static final class FakeAuditRepository extends CustodyAuditRepository {
         /**
          * 保存 {@code action}，用于承载当前测试夹具的配置或运行数据。
          */
@@ -274,23 +274,19 @@ class WalletConfigOverviewServiceTest {
          * 验证 {@code FakeAuditRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeAuditRepository() {
-            super(null,
-                    new com.surprising.wallet.repository.CustodyTenantTableRepository(null),
-                    new com.surprising.wallet.repository.CustodyTenantUserRepository(null),
-                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyApiKeyRepository.class),
-                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodySessionRepository.class),
-                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyIpRuleRepository.class));
+            super(new org.springframework.jdbc.core.JdbcTemplate());
         }
 
         /**
          * 验证 {@code audit} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         @Override
-        public void audit(UUID tenantId, String actorType, String actorId, String action,
+        public int insert(UUID id, UUID tenantId, String actorType, String actorId, String action,
                           String resourceType, String resourceId, String sourceIp, String detailsJson) {
             this.action = action;
             this.sourceIp = sourceIp;
             this.details = detailsJson;
+            return 1;
         }
     }
 }

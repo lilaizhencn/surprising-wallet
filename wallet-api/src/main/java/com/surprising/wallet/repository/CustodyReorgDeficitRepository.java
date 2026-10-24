@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.ReorgDeficitRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -18,14 +19,14 @@ public class CustodyReorgDeficitRepository {
     }
 
     /** 查询租户尚未弥补的重组赤字。 */
-    public List<CustodyAssetDashboardRepository.ReorgDeficit> listOpen(UUID tenantId) {
+    public List<ReorgDeficitRecord> listOpen(UUID tenantId) {
         return jdbc.query("""
                 select id, custody_address_id, chain, asset_symbol,
                        deficit_amount, recovered_amount, created_at
                   from custody_reorg_deficit
                  where tenant_id = ? and status = 'OPEN'
                  order by created_at desc
-                """, (rs, rowNum) -> new CustodyAssetDashboardRepository.ReorgDeficit(
+                """, (rs, rowNum) -> new ReorgDeficitRecord(
                 rs.getObject("id", UUID.class),
                 rs.getObject("custody_address_id", UUID.class),
                 rs.getString("chain"), rs.getString("asset_symbol"),

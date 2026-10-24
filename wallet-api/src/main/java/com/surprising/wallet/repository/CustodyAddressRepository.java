@@ -18,6 +18,27 @@ import java.util.ArrayList;
 /** custody_address 单表仓储。 */
 @Repository
 public class CustodyAddressRepository {
+    public List<CustodyAddressRecord> listOwned(UUID tenantId) {
+        return jdbc.query("select " + COLUMNS + " from custody_address where tenant_id=? order by created_at desc, id",
+                (rs, rowNum) -> mapAddress(rs), tenantId);
+    }
+
+    public List<CustodyAddressRecord> findByIds(UUID tenantId, List<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return jdbc.query("select " + COLUMNS + " from custody_address where tenant_id=? and id=any(?)",
+                (rs, rowNum) -> mapAddress(rs), tenantId, new SqlArrayValue("uuid", ids.toArray()));
+    }
+
+    public Map<UUID, Long> countByTenants(List<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        return jdbc.query("select tenant_id, count(*) as total from custody_address where tenant_id=any(?) group by tenant_id",
+                rs -> {
+                    Map<UUID, Long> counts = new java.util.HashMap<>();
+                    while (rs.next()) counts.put(rs.getObject("tenant_id", UUID.class), rs.getLong("total"));
+                    return counts;
+                }, new SqlArrayValue("uuid", ids.toArray()));
+    }
+
     private static final String COLUMNS = """
             id, tenant_id, chain_address_id, chain, network, address, memo, subject, label,
             metadata::text as metadata_json, source, status, derivation_subject, address_version,

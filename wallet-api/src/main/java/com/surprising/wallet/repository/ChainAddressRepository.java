@@ -22,12 +22,19 @@ public class ChainAddressRepository {
     }
     public List<ChainAddressRecord> findByIds(UUID tenantId, List<Long> ids) {
         if (ids.isEmpty()) return List.of();
-        return jdbc.queryForList("""
+        return jdbc.query("""
                 select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address where tenant_id = ? and id = any (?)
-                """, tenantId, new SqlArrayValue("bigint", ids.toArray()))
-                .stream().map(ChainAddressRepository::mapRow).toList();
+                """, (rs, rowNum) -> map(rs), tenantId, new SqlArrayValue("bigint", ids.toArray()));
+    }
+
+    public List<ChainAddressRecord> listOwned(UUID tenantId) {
+        return jdbc.query("""
+                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                       address, owner_address, derivation_path, wallet_role, enabled
+                  from chain_address where tenant_id=? order by created_at desc, id
+                """, (rs, rowNum) -> map(rs), tenantId);
     }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;

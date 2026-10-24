@@ -15,6 +15,14 @@ import java.util.Optional;
  */
 @Repository
 public class ChainAssetRepository {
+    public List<ChainAsset> listActiveDefinitions() {
+        return jdbc.query("""
+                select id, chain, symbol, asset_kind, contract_address, decimals,
+                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
+                  from chain_asset where active=true order by chain, symbol
+                """, (rs, rowNum) -> mapDefinition(rs));
+    }
+
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

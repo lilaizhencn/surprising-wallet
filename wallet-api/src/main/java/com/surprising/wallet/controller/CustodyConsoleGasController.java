@@ -21,6 +21,7 @@ import java.util.UUID;
 import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
 
 import com.surprising.wallet.service.CustodyGasService;
+import com.surprising.wallet.service.CustodyTenantQueryService;
 import com.surprising.wallet.model.CustodyRequestSupport;
 
 /**
@@ -35,12 +36,14 @@ import com.surprising.wallet.model.CustodyRequestSupport;
 public class CustodyConsoleGasController {
     /** Gas 管理服务。 */
     private final CustodyGasService gas;
+    private final CustodyTenantQueryService tenants;
 
     /**
      * 注入 gas 服务。
      */
-    public CustodyConsoleGasController(CustodyGasService gas) {
+    public CustodyConsoleGasController(CustodyGasService gas, CustodyTenantQueryService tenants) {
         this.gas = gas;
+        this.tenants = tenants;
     }
 
     /**
@@ -114,7 +117,7 @@ public class CustodyConsoleGasController {
      * 查询 gas 上手册信息（最小充值、链支持、常见提示）。
      */
     @GetMapping("/onboarding")
-    public Map<String, Object> onboarding(HttpServletRequest request) {
-        return gas.onboarding(CustodyRequestSupport.requirePrincipal(request));
+    public CustodyTenantQueryService.OnboardingStatus onboarding(HttpServletRequest request) {
+        return tenants.onboarding(CustodyRequestSupport.requirePrincipal(request));
     }
 }

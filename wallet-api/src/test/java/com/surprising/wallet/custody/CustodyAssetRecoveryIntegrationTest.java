@@ -24,7 +24,7 @@ import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 
 /**
  * 验证 {@code CustodyAssetRecoveryIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -53,7 +53,7 @@ class CustodyAssetRecoveryIntegrationTest {
         Fixture fixture = fixture();
         FakeGateway gateway = new FakeGateway();
         CustodyAssetRecoveryService service = new CustodyAssetRecoveryService(
-                new CustodyAssetRecoveryRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc),
+                new CustodyAssetRecoveryRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc),
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new DepositRecordRepository(jdbc),
                 List.of(gateway), new CustodyJacksonConfiguration().custodyObjectMapper(),
@@ -112,7 +112,7 @@ class CustodyAssetRecoveryIntegrationTest {
     void unownedDestinationIsRejectedBeforeARecoveryCaseIsCreated() {
         Fixture fixture = fixture();
         CustodyAssetRecoveryService service = new CustodyAssetRecoveryService(
-                new CustodyAssetRecoveryRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc),
+                new CustodyAssetRecoveryRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc),
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new DepositRecordRepository(jdbc),
                 List.of(new FakeGateway()), new CustodyJacksonConfiguration().custodyObjectMapper(),

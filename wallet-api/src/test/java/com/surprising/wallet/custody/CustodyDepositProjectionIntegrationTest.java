@@ -3,7 +3,7 @@ package com.surprising.wallet.custody;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.service.DepositService;
@@ -58,7 +58,6 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void confirmedDepositProjectsDisabledAddressAndSubjectAtomically() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
                 jdbc,
                 com.surprising.wallet.testutil.DepositTestSupport.projection(
@@ -108,7 +107,6 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void sharedAccountIdAcrossAddressVersionsProjectsToExactAddress() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
                 jdbc,
                 com.surprising.wallet.testutil.DepositTestSupport.projection(
@@ -295,7 +293,6 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void tenantSubjectMappingIsStableAndTenantIsolated() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID firstTenant = insertTenant("subject-first");
             UUID secondTenant = insertTenant("subject-second");
 
@@ -317,7 +314,6 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
                 jdbc,
                 com.surprising.wallet.testutil.DepositTestSupport.projection(

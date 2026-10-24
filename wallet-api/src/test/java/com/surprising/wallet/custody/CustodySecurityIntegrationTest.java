@@ -78,7 +78,6 @@ class CustodySecurityIntegrationTest {
         context.registerBean(CustodyIpRuleRepository.class);
         context.registerBean(CustodyAuditRepository.class);
         context.registerBean(CustodyIdempotencyRepository.class);
-        context.registerBean(CustodyRepository.class);
         context.registerBean(CustodyEventService.class, () -> com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
         context.registerBean(CustodyAddressService.class, () -> mock(CustodyAddressService.class));
         context.registerBean(CustodyTransactionQueryService.class, () -> mock(CustodyTransactionQueryService.class));

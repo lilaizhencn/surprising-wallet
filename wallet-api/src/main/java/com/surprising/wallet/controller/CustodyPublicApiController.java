@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.surprising.wallet.service.CustodyAddressService;
+import com.surprising.wallet.service.CustodyAssetDashboardService;
 import com.surprising.wallet.model.CustodyRequestSupport;
 import com.surprising.wallet.service.CustodyTenantChainService;
 import com.surprising.wallet.service.CustodyWithdrawalService;
@@ -33,6 +34,7 @@ import com.surprising.wallet.service.CustodyTransactionQueryService;
 public class CustodyPublicApiController {
     /** 地址服务：负责创建与查询托管地址。 */
     private final CustodyAddressService addresses;
+    private final CustodyAssetDashboardService assets;
     /** 提现创建用例。 */
     private final CustodyWithdrawalService transfers;
     private final CustodyTransactionQueryService history;
@@ -45,8 +47,9 @@ public class CustodyPublicApiController {
     public CustodyPublicApiController(CustodyAddressService addresses,
                                       CustodyWithdrawalService transfers,
                                       CustodyTenantChainService chains,
-                                      CustodyTransactionQueryService history) {
+                                      CustodyTransactionQueryService history, CustodyAssetDashboardService assets) {
         this.addresses = addresses;
+        this.assets = assets;
         this.transfers = transfers;
         this.history = history;
         this.chains = chains;
@@ -98,8 +101,8 @@ public class CustodyPublicApiController {
      * 查询当前租户资产列表（可见资产、可用余额、配置状态）。
      */
     @GetMapping("/assets")
-    public List<Map<String, Object>> assets(HttpServletRequest request) {
-        return addresses.assets(CustodyRequestSupport.requirePrincipal(request));
+    public List<CustodyAssetDashboardService.CustomerAssetBalance> assets(HttpServletRequest request) {
+        return assets.assets(CustodyRequestSupport.requirePrincipal(request));
     }
 
     /**

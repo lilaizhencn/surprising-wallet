@@ -1,7 +1,7 @@
 package com.surprising.wallet.devfaucet;
 
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
@@ -40,7 +40,7 @@ class DevFaucetJobTest {
             context.registerBean(DevFaucetRepository.class,
                     () -> new FakeRepository(List.of()));
             context.registerBean(DevFaucetRpcClient.class, FakeRpcClient::new);
-            context.registerBean(CustodyRepository.class, FakeCustodyRepository::new);
+            context.registerBean(CustodyAuditRepository.class, FakeAuditRepository::new);
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
             context.register(DevFaucetService.class, DevFaucetJob.class);
             context.refresh();
@@ -69,7 +69,7 @@ class DevFaucetJobTest {
         FakeRpcClient rpc = new FakeRpcClient();
         DevFaucetProperties properties = DevFaucetPropertiesTest.validProperties();
         DevFaucetService service = new DevFaucetService(
-                properties, repository, rpc, new FakeCustodyRepository(),
+                properties, repository, rpc, new FakeAuditRepository(),
                 new ObjectMapper(), new DevFaucetAmountGenerator(new java.util.Random(1)), "test");
 
         service.validate();
@@ -186,28 +186,24 @@ class DevFaucetJobTest {
     }
 
     /**
-     * 测试替身 {@code FakeCustodyRepository}，用于隔离外部依赖并验证调用参数和状态变化。
+     * 测试替身 {@code FakeAuditRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeCustodyRepository extends CustodyRepository {
+    private static final class FakeAuditRepository extends CustodyAuditRepository {
         /**
-         * 验证 {@code FakeCustodyRepository} 对应的测试场景，明确输入、预期结果和异常边界。
+         * 验证 {@code FakeAuditRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
-        private FakeCustodyRepository() {
-            super(null,
-                    new com.surprising.wallet.repository.CustodyTenantTableRepository(null),
-                    new com.surprising.wallet.repository.CustodyTenantUserRepository(null),
-                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyApiKeyRepository.class),
-                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodySessionRepository.class),
-                    org.mockito.Mockito.mock(com.surprising.wallet.repository.CustodyIpRuleRepository.class));
+        private FakeAuditRepository() {
+            super(new org.springframework.jdbc.core.JdbcTemplate());
         }
 
         /**
          * 验证 {@code audit} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         @Override
-        public void audit(UUID tenantId, String actorType, String actorId, String action,
+        public int insert(UUID id, UUID tenantId, String actorType, String actorId, String action,
                           String resourceType, String resourceId, String sourceIp,
                           String detailsJson) {
+            return 1;
         }
     }
 }

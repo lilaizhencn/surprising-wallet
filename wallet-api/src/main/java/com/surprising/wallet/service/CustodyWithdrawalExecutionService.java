@@ -119,8 +119,9 @@ public class CustodyWithdrawalExecutionService {
                 ? "waiting for platform withdrawal approval before broadcast"
                 : null;
         withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
-        return new ExecutionResult(orderNo, status, chain, symbol, amount,
-                asset.networkFeeReserve(), toAddress, sourceAddress, spend.address(), approvalRequired);
+        long orderId = withdrawalOrderRepository.find(chain, orderNo, tenantId)
+                .orElseThrow(() -> new IllegalArgumentException("withdrawal order not found")).getId();
+        return new ExecutionResult(orderId, orderNo, status, amount, asset.networkFeeReserve(), toAddress);
     }
     /**
      * 校验 {@code requireAsset} 对应的前置条件，不满足时抛出明确异常。
@@ -224,9 +225,7 @@ public class CustodyWithdrawalExecutionService {
     private record SpendAccount(String accountId, String address) {
     }
 
-    public record ExecutionResult(String orderNo, String status, String chain, String symbol,
-                                  BigDecimal amount, BigDecimal fee, String toAddress,
-                                  String fromAddress, String debitAddress,
-                                  boolean approvalRequired) {
+    public record ExecutionResult(long orderId, String orderNo, String status,
+                                  BigDecimal amount, BigDecimal fee, String toAddress) {
     }
 }

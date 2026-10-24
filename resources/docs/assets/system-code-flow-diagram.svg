@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2020" viewBox="0 0 1180 2020">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="2220" viewBox="0 0 1180 2220">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -287,4 +287,9 @@
   <text x="40" y="1926" class="phase-label">统一结算：租户 / 链 / 订单号 / 哈希 → 所属订单行锁 → 状态与哈希 → 按订单币种 / 账户 / 金额加客户费扣款</text>
   <text x="40" y="1952" class="small">扣款与条件确认共同提交；并发重放读取终态；不接受调用方扣款快照；缺少账户拒绝；不新增表或兼容路径</text>
   <text x="40" y="1978" class="small">UTXO 上链请求先与锁定订单核对；提现 RBF 仅改变矿工费，客户金额和手续费不变；归集恢复上链尝试的输出 / 矿工费</text>
+  <rect x="30" y="2020" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="2050" style="font:13px sans-serif;fill:#1e293b">控制面：租户数据库分页 → 本页三类批量计数 → 同条件总数 / 一致快照</text>
+  <text x="50" y="2086" style="font:13px sans-serif;fill:#1e293b">资产 API → 批量身份与账本 → 按链 / 精确账户排除 Gas → 已观察持仓，关闭链仍可见</text>
+  <text x="50" y="2122" style="font:13px sans-serif;fill:#1e293b">Gas 查询四类批量读取；租户链展示仅读 Gas 定义与地址，不绕回 Gas 服务</text>
+  <text x="50" y="2158" style="font:13px sans-serif;fill:#1e293b">提现创建 → 所属订单 ID → 投影 / Gas / 事件 / 审计 / 幂等响应共同提交，无总门面</text>
 </svg>

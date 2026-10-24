@@ -3,7 +3,7 @@ package com.surprising.wallet.service;
 import com.surprising.wallet.devfaucet.DevFaucetAmountGenerator;
 import com.surprising.wallet.devfaucet.DevFaucetFunding;
 import com.surprising.wallet.devfaucet.DevFaucetProperties;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.DevFaucetRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.UUID;
 import java.util.Map;
 
 /**
@@ -31,7 +32,7 @@ public class DevFaucetService {
     /** RPC 下发客户端。 */
     private final DevFaucetRpcClient rpcClient;
     /** 审计流水仓储。 */
-    private final CustodyRepository custodyRepository;
+    private final CustodyAuditRepository audits;
     /** 审计详情序列化器。 */
     private final ObjectMapper objectMapper;
     /** 测试金额生成器。 */
@@ -45,10 +46,10 @@ public class DevFaucetService {
             DevFaucetProperties properties,
             DevFaucetRepository repository,
             DevFaucetRpcClient rpcClient,
-            CustodyRepository custodyRepository,
+            CustodyAuditRepository audits,
             ObjectMapper objectMapper,
             @Value("${sw.app.env.name:dev}") String environment) {
-        this(properties, repository, rpcClient, custodyRepository, objectMapper,
+        this(properties, repository, rpcClient, audits, objectMapper,
                 new DevFaucetAmountGenerator(), environment);
     }
 
@@ -57,14 +58,14 @@ public class DevFaucetService {
             DevFaucetProperties properties,
             DevFaucetRepository repository,
             DevFaucetRpcClient rpcClient,
-            CustodyRepository custodyRepository,
+            CustodyAuditRepository audits,
             ObjectMapper objectMapper,
             DevFaucetAmountGenerator amounts,
             String environment) {
         this.properties = properties;
         this.repository = repository;
         this.rpcClient = rpcClient;
-        this.custodyRepository = custodyRepository;
+        this.audits = audits;
         this.objectMapper = objectMapper;
         this.amounts = amounts;
         this.environment = environment;
@@ -144,7 +145,7 @@ public class DevFaucetService {
                     "amount", funding.requestedAmount().toPlainString(),
                     "txHash", transactionHash == null ? "" : transactionHash,
                     "error", error == null ? "" : error));
-            custodyRepository.audit(
+            audits.insert(UUID.randomUUID(),
                     funding.tenantId(), "SYSTEM", "dev-faucet", action,
                     "DEV_FAUCET_FUNDING", funding.id().toString(), null, details);
         } catch (RuntimeException auditError) {

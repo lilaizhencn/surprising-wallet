@@ -10,10 +10,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import com.surprising.wallet.service.CustodyAssetDashboardService;
 import com.surprising.wallet.service.CustodyAuthService;
 import com.surprising.wallet.service.CustodyTenantService.CreateTenantCommand;
-import com.surprising.wallet.service.CustodyTenantService.TenantDetail;
-import com.surprising.wallet.service.CustodyTenantService.TenantPage;
+import com.surprising.wallet.service.CustodyTenantQueryService.TenantDetail;
+import com.surprising.wallet.service.CustodyTenantQueryService.TenantPage;
 import com.surprising.wallet.service.CustodyTenantService.UpdateTenantCommand;
 import com.surprising.wallet.service.CustodyTenantService;
+import com.surprising.wallet.service.CustodyTenantQueryService;
+import com.surprising.wallet.model.custody.AssetPriceRecord;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -41,6 +43,7 @@ public class CustodyPlatformController {
     private final CustodyAuthService auth;
     /** 平台租户管理服务。 */
     private final CustodyTenantService tenants;
+    private final CustodyTenantQueryService tenantQueries;
     /** 平台资产仪表盘服务。 */
     private final CustodyAssetDashboardService assets;
 
@@ -48,9 +51,10 @@ public class CustodyPlatformController {
      * 注入平台鉴权、租户与资产服务。
      */
     public CustodyPlatformController(CustodyAuthService auth, CustodyTenantService tenants,
-                                     CustodyAssetDashboardService assets) {
+                                     CustodyAssetDashboardService assets, CustodyTenantQueryService tenantQueries) {
         this.auth = auth;
         this.tenants = tenants;
+        this.tenantQueries = tenantQueries;
         this.assets = assets;
     }
 
@@ -101,7 +105,7 @@ public class CustodyPlatformController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return tenants.list(
+        return tenantQueries.list(
                 CustodyRequestSupport.requirePrincipal(request),
                 search, status, limit, offset);
     }
@@ -122,7 +126,7 @@ public class CustodyPlatformController {
     @GetMapping("/tenants/{tenantId}")
     public TenantDetail tenant(@PathVariable UUID tenantId,
                                HttpServletRequest request) {
-        return tenants.detail(CustodyRequestSupport.requirePrincipal(request), tenantId);
+        return tenantQueries.detail(CustodyRequestSupport.requirePrincipal(request), tenantId);
     }
 
     /**
@@ -170,7 +174,7 @@ public class CustodyPlatformController {
      * 查询资产价格设置。
      */
     @GetMapping("/asset-prices")
-    public java.util.List<CustodyAssetDashboardService.AssetPriceView> assetPrices(
+    public java.util.List<AssetPriceRecord> assetPrices(
             HttpServletRequest request) {
         return assets.prices(CustodyRequestSupport.requirePrincipal(request));
     }
@@ -179,7 +183,7 @@ public class CustodyPlatformController {
      * 更新资产价格快照。
      */
     @PutMapping("/asset-prices/{symbol}")
-    public CustodyAssetDashboardService.AssetPriceView setAssetPrice(
+    public AssetPriceRecord setAssetPrice(
             @PathVariable String symbol,
             @RequestBody CustodyAssetDashboardService.SetPriceCommand body,
             HttpServletRequest request) {

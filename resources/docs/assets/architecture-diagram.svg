@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1650" viewBox="0 0 1100 1650">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1850" viewBox="0 0 1100 1850">
   <style>
     .svc   { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 10; }
     .lib   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 10; }
@@ -227,4 +227,9 @@
   <text x="50" y="1556" class="label">提现结算：四个身份参数 → 所属订单行锁 → 订单扣款事实 → 余额 / 确认同事务</text>
   <text x="50" y="1582" class="desc">链服务不再传币种 / 账户 / 扣款金额；重复确认无副作用；缺少账户拒绝结算</text>
   <text x="50" y="1608" class="desc">UTXO 先核对上链请求与订单；提现 RBF 客户费用保持，归集按上链尝试恢复输出与矿工费</text>
+  <rect x="30" y="1650" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="1680" style="font:13px sans-serif;fill:#1e293b">托管控制面：删除通用 / 看板仓储门面；写入与查询由实际应用服务拥有</text>
+  <text x="50" y="1716" style="font:13px sans-serif;fill:#1e293b">Controller → TenantQueryService / AssetDashboardService；TenantService 拥有租户写事务</text>
+  <text x="50" y="1752" style="font:13px sans-serif;fill:#1e293b">GasService 批量组合定义 / 地址 / 原生币余额；租户链直接查定义与地址，依赖无环</text>
+  <text x="50" y="1788" style="font:13px sans-serif;fill:#1e293b">单表仓储返回类型记录；链 + 精确账户身份；历史持仓与当前配置展示分开</text>
 </svg>

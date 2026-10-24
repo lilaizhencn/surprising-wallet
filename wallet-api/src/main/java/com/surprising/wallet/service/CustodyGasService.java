@@ -9,6 +9,11 @@ import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.CustodyGasUsageRepository;
 import com.surprising.wallet.repository.CustodyDepositRepository;
 import com.surprising.wallet.repository.CustodyDerivationSubjectRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import org.springframework.transaction.annotation.Isolation;
 import com.surprising.wallet.service.CustodyAddressService.AddressView;
 import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
@@ -24,10 +29,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管 Gas 账户服务，管理租户的原生币 Gas 预充值账户。
@@ -42,7 +48,10 @@ public class CustodyGasService {
     static final long COLLECTION_CHILD_INDEX = 1L;
     private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");
     private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
-    private final CustodyRepository repository;
+    private final CustodyAddressRepository custodyAddresses;
+    private final ChainAddressRepository chainAddresses;
+    private final LedgerBalanceRepository balances;
+    private final CustodyAuditRepository audits;
     private final CustodyGasAccountRepository gasAccounts;
     private final CustodyGasUsageRepository usages;
     private final CustodyGasAccountingService accounting;
@@ -53,13 +62,17 @@ public class CustodyGasService {
     private final CustodyAddressService addresses;
     private final BlockchainRuntimeService runtime;
 
-    public CustodyGasService(CustodyRepository repository,
-                             CustodyAddressService addresses,
+    public CustodyGasService(CustodyAddressService addresses,
                              BlockchainRuntimeService runtime, CustodyGasAccountRepository gasAccounts,
                              CustodyGasUsageRepository usages, CustodyDepositRepository deposits,
                              CustodyDerivationSubjectRepository subjects, CustodyGasAccountingService accounting,
-                             ChainProfileRepository profiles, ChainAssetRepository assets) {
-        this.repository = repository;
+                             ChainProfileRepository profiles, ChainAssetRepository assets,
+                             CustodyAddressRepository custodyAddresses, ChainAddressRepository chainAddresses,
+                             LedgerBalanceRepository balances, CustodyAuditRepository audits) {
+        this.custodyAddresses = custodyAddresses;
+        this.chainAddresses = chainAddresses;
+        this.balances = balances;
+        this.audits = audits;
         this.addresses = addresses;
         this.runtime = runtime;
         this.gasAccounts = gasAccounts;
@@ -70,11 +83,58 @@ public class CustodyGasService {
         this.profiles = profiles;
         this.assets = assets;
     }
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<GasAccountView> list(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
-        return repository.listGasAccounts(principal.tenantId())
+        return listForTenant(principal.tenantId())
                 .stream().map(CustodyGasService::toView).toList();
     }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<GasAccountRecord> listForTenant(UUID tenantId) {
+        return loadAccounts(tenantId, gasAccounts.listByTenant(tenantId));
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public GasAccountRecord requireGasAccount(UUID tenantId, UUID id) {
+        var row = gasAccounts.findById(tenantId, id)
+                .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
+        return loadAccounts(tenantId, List.of(row)).getFirst();
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public Optional<GasAccountRecord> findGasAccount(UUID tenantId, String chain) {
+        return gasAccounts.findByChain(tenantId, chain)
+                .map(row -> loadAccounts(tenantId, List.of(row)).getFirst());
+    }
+
+    private List<GasAccountRecord> loadAccounts(UUID tenantId, List<CustodyGasAccountRepository.Definition> definitions) {
+        if (definitions.isEmpty()) return List.of();
+        var custody = custodyAddresses.findByIds(tenantId, definitions.stream()
+                .map(CustodyGasAccountRepository.Definition::custodyAddressId).toList()).stream()
+                .collect(Collectors.toMap(row -> row.id(), row -> row));
+        var chain = chainAddresses.findByIds(tenantId, custody.values().stream()
+                .map(row -> row.chainAddressId()).distinct().toList()).stream()
+                .collect(Collectors.toMap(row -> row.getId(), row -> row));
+        var ledger = balances.findByAccounts(tenantId, chain.values().stream()
+                .map(row -> row.getAccountId()).distinct().toList()).stream()
+                .collect(Collectors.toMap(row -> new BalanceKey(row.getChain(), row.getAssetSymbol(), row.getAccountId()), row -> row));
+        return definitions.stream().map(row -> {
+            var address = Optional.ofNullable(custody.get(row.custodyAddressId()))
+                    .orElseThrow(() -> new IllegalStateException("gas custody address is missing"));
+            var owner = Optional.ofNullable(chain.get(address.chainAddressId()))
+                    .orElseThrow(() -> new IllegalStateException("gas chain address is missing"));
+            LedgerBalanceRecord balance = ledger.get(new BalanceKey(row.chain(), row.nativeSymbol(), owner.getAccountId()));
+            return new GasAccountRecord(row.id(), tenantId, row.custodyAddressId(), row.chain(), row.network(),
+                    row.nativeSymbol(), address.address(), address.memo(), owner.getAddressIndex(), owner.getAccountId(),
+                    balance == null ? BigDecimal.ZERO : balance.getAvailableBalance(),
+                    balance == null ? BigDecimal.ZERO : balance.getLockedBalance(),
+                    balance == null ? BigDecimal.ZERO : balance.getTotalBalance(),
+                    row.lowBalanceThreshold(), row.status(), row.createdAt(), row.updatedAt());
+        }).toList();
+    }
+
+    private record BalanceKey(String chain, String symbol, String accountId) { }
 
     @Transactional(rollbackFor = Throwable.class)
     public GasAccountView create(CustodyPrincipal principal, CreateGasAccountCommand command,
@@ -85,7 +145,7 @@ public class CustodyGasService {
         BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
         String collectionSubject = collectionSubject(chain, chainRuntime.chainType());
         subjects.resolve(principal.tenantId(), collectionSubject);
-        GasAccountRecord existing = repository.findGasAccount(principal.tenantId(), chain)
+        GasAccountRecord existing = findGasAccount(principal.tenantId(), chain)
                 .orElse(null);
         if (existing != null) {
             return toView(existing);
@@ -100,8 +160,9 @@ public class CustodyGasService {
                         Map.of("systemPurpose", "COLLECTION_AND_GAS")),
                 COLLECTION_CHILD_INDEX,
                 sourceIp);
-        GasAccountRecord saved = repository.insertGasAccount(
-                UUID.randomUUID(),
+        UUID id = UUID.randomUUID();
+        gasAccounts.insert(
+                id,
                 principal.tenantId(),
                 fundingAddress.id(),
                 chain,
@@ -109,7 +170,9 @@ public class CustodyGasService {
                 chainRuntime.nativeSymbol(),
                 threshold,
                 principal.actorId());
-        repository.audit(
+        GasAccountRecord saved = requireGasAccount(principal.tenantId(), id);
+        audits.insert(
+                UUID.randomUUID(),
                 principal.tenantId(),
                 "TENANT_USER",
                 principal.actorId().toString(),
@@ -132,7 +195,7 @@ public class CustodyGasService {
     public GasAccountView update(CustodyPrincipal principal, UUID gasAccountId,
                                  UpdateGasAccountCommand command, String sourceIp) {
         requireTenantAdmin(principal);
-        GasAccountRecord current = repository.requireGasAccount(
+        GasAccountRecord current = requireGasAccount(
                 principal.tenantId(), gasAccountId);
         BigDecimal threshold = command.lowBalanceThreshold() == null
                 ? current.lowBalanceThreshold()
@@ -143,9 +206,12 @@ public class CustodyGasService {
         if (!"ACTIVE".equals(status) && !"DISABLED".equals(status)) {
             throw new IllegalArgumentException("gas account status must be ACTIVE or DISABLED");
         }
-        GasAccountRecord saved = repository.updateGasAccount(
-                principal.tenantId(), gasAccountId, threshold, status);
-        repository.audit(
+        if (gasAccounts.update(principal.tenantId(), gasAccountId, threshold, status) != 1) {
+            throw new IllegalArgumentException("gas account not found");
+        }
+        GasAccountRecord saved = requireGasAccount(principal.tenantId(), gasAccountId);
+        audits.insert(
+                UUID.randomUUID(),
                 principal.tenantId(),
                 "TENANT_USER",
                 principal.actorId().toString(),
@@ -220,10 +286,6 @@ public class CustodyGasService {
                 profile.getDefaultFee() == null ? 1 : profile.getDefaultFee(), nativeAsset.getDecimals(), nativeRequested);
     }
 
-    public Map<String, Object> onboarding(CustodyPrincipal principal) {
-        requireScope(principal, "assets:read");
-        return repository.onboardingStatus(principal.tenantId());
-    }
     private static GasAccountView toView(GasAccountRecord record) {
         return new GasAccountView(
                 record.id(),

@@ -1,15 +1,37 @@
 package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Optional;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 /** custody_gas_account 单表仓储。 */
 @Repository
 public class CustodyGasAccountRepository {
+    private static final String COLUMNS = "id, tenant_id, custody_address_id, chain, network, native_symbol, "
+            + "low_balance_threshold, status, created_at, updated_at";
+
+    public record Definition(UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
+                             String nativeSymbol, BigDecimal lowBalanceThreshold, String status,
+                             Instant createdAt, Instant updatedAt) { }
+
+    public Map<UUID, Long> countByTenants(List<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        return jdbc.query("select tenant_id, count(*) as total from custody_gas_account where tenant_id=any(?) group by tenant_id",
+                rs -> {
+                    Map<UUID, Long> counts = new java.util.HashMap<>();
+                    while (rs.next()) counts.put(rs.getObject("tenant_id", UUID.class), rs.getLong("total"));
+                    return counts;
+                }, new SqlArrayValue("uuid", ids.toArray()));
+    }
     public record AccountingAccount(UUID id, UUID custodyAddressId, String chain, String nativeSymbol, String status) { }
 
     public java.util.Optional<AccountingAccount> lockForChain(UUID tenantId, String chain) {
@@ -75,34 +97,25 @@ public class CustodyGasAccountRepository {
     }
 
     /** 查询租户全部 Gas 账户单表字段。 */
-    public List<Map<String, Object>> listByTenant(UUID tenantId) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, network, native_symbol,
-                       low_balance_threshold, status, created_by, created_at, updated_at
-                  from custody_gas_account where tenant_id = ? order by chain, id
-                """, tenantId);
+    public List<Definition> listByTenant(UUID tenantId) {
+        return jdbc.query("select " + COLUMNS + " from custody_gas_account where tenant_id=? order by chain, id",
+                CustodyGasAccountRepository::mapDefinition, tenantId);
     }
 
     /** 按租户和链查询 Gas 账户单表字段。 */
-    public List<Map<String, Object>> listByTenantAndChain(UUID tenantId, String chain) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, network, native_symbol,
-                       low_balance_threshold, status, created_by, created_at, updated_at
-                  from custody_gas_account where tenant_id = ? and chain = ? order by id
-                """, tenantId, chain);
+    public List<Definition> listByTenantAndChain(UUID tenantId, String chain) {
+        return jdbc.query("select " + COLUMNS + " from custody_gas_account where tenant_id=? and chain=? order by id",
+                CustodyGasAccountRepository::mapDefinition, tenantId, chain);
     }
 
     /** 按主键查询 Gas 账户。 */
-    public java.util.Optional<Map<String, Object>> findById(UUID tenantId, UUID id) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, network, native_symbol,
-                       low_balance_threshold, status, created_by, created_at, updated_at
-                  from custody_gas_account where tenant_id = ? and id = ?
-                """, tenantId, id).stream().findFirst();
+    public Optional<Definition> findById(UUID tenantId, UUID id) {
+        return jdbc.query("select " + COLUMNS + " from custody_gas_account where tenant_id=? and id=?",
+                CustodyGasAccountRepository::mapDefinition, tenantId, id).stream().findFirst();
     }
 
     /** 按租户和链查询 Gas 账户。 */
-    public java.util.Optional<Map<String, Object>> findByChain(UUID tenantId, String chain) {
+    public Optional<Definition> findByChain(UUID tenantId, String chain) {
         return listByTenantAndChain(tenantId, chain).stream().findFirst();
     }
 
@@ -129,6 +142,13 @@ public class CustodyGasAccountRepository {
         return !jdbc.queryForList("""
                 select id from custody_gas_account where tenant_id = ? and custody_address_id = ? limit 1
                 """, UUID.class, tenantId, custodyAddressId).isEmpty();
+    }
+
+    private static Definition mapDefinition(ResultSet rs, int rowNum) throws SQLException {
+        return new Definition(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
+                rs.getObject("custody_address_id", UUID.class), rs.getString("chain"), rs.getString("network"),
+                rs.getString("native_symbol"), rs.getBigDecimal("low_balance_threshold"), rs.getString("status"),
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
     }
 
 }

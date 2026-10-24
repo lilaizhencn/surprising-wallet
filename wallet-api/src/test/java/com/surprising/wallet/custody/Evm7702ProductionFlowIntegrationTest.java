@@ -22,7 +22,7 @@ import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
@@ -137,7 +137,6 @@ class Evm7702ProductionFlowIntegrationTest {
     /**
      * 保存 {@code custodyRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
-    private CustodyRepository custodyRepository;
     /**
      * 保存 {@code depositScanner}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
@@ -184,7 +183,6 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
         ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
-        custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         CustodyTenantChainRepository tenantChainRepository =
                 new CustodyTenantChainRepository(jdbc);
         chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
@@ -224,7 +222,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 new WalletRuntimeConfigService(new ChainProfileRepository(jdbc),
                         new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc));
         CustodyTenantChainService tenantChainService = new CustodyTenantChainService(
-                tenantChainRepository, custodyRepository, null);
+                tenantChainRepository, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), null);
         CustodyWithdrawalExecutionService withdrawalExecution =
                 new CustodyWithdrawalExecutionService(
                         chainRepository.withdrawalOrderRepository,
@@ -243,19 +241,19 @@ class Evm7702ProductionFlowIntegrationTest {
                         new LedgerBalanceRepository(jdbc));
         withdrawalService = new CustodyWithdrawalService(
 
-                custodyRepository,
-                withdrawalExecution,
+
+               withdrawalExecution,
                 com.surprising.wallet.testutil.CustodyTestSupport.gas(
                         jdbc,
-                        custodyRepository,
-                        Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
+
+                       Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
                         Mockito.mock(BlockchainRuntimeService.class)),
                 tenantChainService,
                 crypto,
                 objectMapper,
                 com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
                 new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
-                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc));
+                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc), new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc));
         collectionRepository = new Evm7702CollectionRepository(jdbc);
         Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(collectionRepository,
                 com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc),

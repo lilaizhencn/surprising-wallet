@@ -9,8 +9,7 @@ import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
-import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
@@ -107,7 +106,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void webhookAttemptsKeepAutomaticAndManualHistory() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             quiesceExistingWebhookQueue();
             UUID tenantId = createTenant();
             UUID endpointId = UUID.randomUUID();
@@ -159,7 +157,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void webhookDeliveriesCanBeFilteredAndFailedBatchRetryIsEndpointScoped() {
         transactions.executeWithoutResult(transaction -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID endpointId = insertWebhookEndpoint(tenantId, "Batch endpoint");
             UUID otherEndpointId = insertWebhookEndpoint(tenantId, "Other endpoint");
@@ -198,7 +195,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void recoveredWebhookLeaseFencesTheStaleWorker() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             quiesceExistingWebhookQueue();
             UUID tenantId = createTenant();
             UUID endpointId = UUID.randomUUID();
@@ -261,7 +257,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void gasAccountUsesTheRealNativeLedgerBalance() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID addressId = UUID.randomUUID();
             UUID gasAccountId = UUID.randomUUID();
@@ -299,17 +294,17 @@ class CustodyOperationsIntegrationTest {
                     values (?, 'ETH', 'ETH', ?, 2.5, 0.5, 3)
                     """, tenantId, accountId);
 
-            var account = repository.requireGasAccount(tenantId, gasAccountId);
+            var account = com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc).requireGasAccount(tenantId, gasAccountId);
             assertEquals(0, new BigDecimal("2.5").compareTo(account.availableBalance()));
             assertEquals(0, new BigDecimal("3").compareTo(account.totalBalance()));
             assertFalse(account.lowBalance());
-            assertTrue((Boolean) repository.onboardingStatus(tenantId).get("gasAccountFunded"));
-            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc, repository,
-                    Mockito.mock(BlockchainRuntimeService.class),
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).onboarding(com.surprising.wallet.testutil.CustodyTestSupport.tenantAdmin(tenantId)).gasAccountFunded());
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
+                   Mockito.mock(BlockchainRuntimeService.class),
                     Mockito.mock(CustodyTenantChainService.class)).list(
                     new CustodyPrincipal(CustodyPrincipal.ActorType.API_KEY, UUID.randomUUID(), tenantId,
                             "gas-address-test", "API_KEY", Set.of("addresses:read")), "", "", "", "", 10, 0).isEmpty());
-            assertTrue(repository.tenantAssetOverview(tenantId).isEmpty());
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.assets(jdbc).observedBalancesForTenant(tenantId).isEmpty());
             status.setRollbackOnly();
         });
     }
@@ -320,7 +315,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void transferListsReturnFullAddressesAndApplyTenantScopedFilters() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID otherTenantId = createTenant();
             TestAddress address = insertTestAddress(
@@ -346,10 +340,10 @@ class CustodyOperationsIntegrationTest {
             String destination = "0x2222222222222222222222222222222222222222";
             String withdrawalHash = "0xwithdrawal-filter-alpha";
             insertTestWithdrawal(
-                    repository, tenantId, address, orderNo, "payout-alpha",
+            tenantId, address, orderNo, "payout-alpha",
                     destination, withdrawalHash, "CONFIRMED");
             insertTestWithdrawal(
-                    repository, otherTenantId, otherAddress, orderNo + "-OTHER",
+            otherTenantId, otherAddress, orderNo + "-OTHER",
                     "payout-alpha-other", destination, withdrawalHash + "-other", "CONFIRMED");
 
             var withdrawals = history.withdrawals(
@@ -366,14 +360,13 @@ class CustodyOperationsIntegrationTest {
     @Test
     void transferHistoryCountsAndSearchesBeyondFiveHundredRecords() {
         transactions.executeWithoutResult(transaction -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             TestAddress address = insertTestAddress(tenantId, "ETH", "USDT", "history-customer",
                     "0x7777777777777777777777777777777777777777");
             String prefix = UUID.randomUUID().toString();
             for (int index = 0; index < 620; index++) {
                 insertTestDeposit(tenantId, address, "USDT", "history-deposit-" + index, "CONFIRMED");
-                insertTestWithdrawal(repository, tenantId, address, prefix + "-" + index,
+                insertTestWithdrawal(tenantId, address, prefix + "-" + index,
                         "history-payout-" + index, "0xrecipient", "history-transaction-" + index, "CONFIRMED");
             }
             jdbc.update("""
@@ -385,11 +378,11 @@ class CustodyOperationsIntegrationTest {
                         split_part(external_reference, '-', 3)::int * interval '1 second' where tenant_id = ?
                     """, tenantId);
 
-            var summary = repository.tenantOperationsSummary(tenantId);
+            var summary = com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).detail(com.surprising.wallet.testutil.CustodyTestSupport.platformAdmin(), tenantId).statistics();
             org.junit.jupiter.api.Assertions.assertAll(
 
-                    () -> assertEquals(620L, summary.get("depositCount")),
-                    () -> assertEquals(620L, summary.get("withdrawalCount")),
+                    () -> assertEquals(620L, summary.depositCount()),
+                    () -> assertEquals(620L, summary.withdrawalCount()),
                     () -> assertEquals(620, history.depositPage(historyPrincipal(tenantId), "", "", "", "", 20, 0).total()),
                     () -> assertEquals(620, history.withdrawalPage(historyPrincipal(tenantId), "", "", "", "", 20, 0).total()),
                     () -> assertEquals(20, history.deposits(historyPrincipal(tenantId), "", "", "", "", 20, 600).size()),
@@ -403,16 +396,15 @@ class CustodyOperationsIntegrationTest {
     @Test
     void transferHistorySearchIsLiteralAndTenantScoped() {
         transactions.executeWithoutResult(transaction -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID otherTenantId = createTenant();
             var address = insertTestAddress(tenantId, "ETH", "USDT", "customer%_one", "0xown-address");
             var other = insertTestAddress(otherTenantId, "ETH", "USDT", "foreign-only", "0xforeign-address");
             insertTestDeposit(tenantId, address, "USDT", "deposit%_own", "CONFIRMED");
             insertTestDeposit(otherTenantId, other, "USDT", "deposit%_foreign", "CONFIRMED");
-            insertTestWithdrawal(repository, tenantId, address, "QUERY-OWN", "payout%_one",
+            insertTestWithdrawal(tenantId, address, "QUERY-OWN", "payout%_one",
                     "recipient%_one", "transaction%_own", "SENT");
-            insertTestWithdrawal(repository, otherTenantId, other, "QUERY-FOREIGN", "foreign-only",
+            insertTestWithdrawal(otherTenantId, other, "QUERY-FOREIGN", "foreign-only",
                     "foreign-only", "transaction%_foreign", "SENT");
             var principal = historyPrincipal(tenantId);
             for (String search : List.of("CUSTOMER%_ONE", "0xown-address", "%_")) {
@@ -457,7 +449,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void gasReservationUsesTenantGasAccountAndPreservesAuditTrail() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID addressId = UUID.randomUUID();
             UUID gasAccountId = UUID.randomUUID();
@@ -533,8 +524,8 @@ class CustodyOperationsIntegrationTest {
                             'CONFIRMED', ?)
                     """, tenantId, orderNo, Integer.toUnsignedLong(subject), accountId,
                     customerAccountId, accountId, txHash);
-            repository.insertCustodyWithdrawal(
-                    withdrawalId, tenantId, customerAddressId, orderNo, null, null,
+            new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
+                    withdrawalId, tenantId, customerAddressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo, null, null,
                     "ETH", "USDT", accountId, new BigDecimal("0.25"),
                     BigDecimal.ZERO, "FROZEN", "CONSOLE", "qa");
             com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
@@ -552,7 +543,7 @@ class CustodyOperationsIntegrationTest {
             var usage = new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc).find(tenantId, "WITHDRAWAL", withdrawalId).orElseThrow();
             assertEquals("SETTLED", usage.status());
             assertEquals(0, new BigDecimal("0.04").compareTo(usage.actualAmount()));
-            var account = repository.requireGasAccount(tenantId, gasAccountId);
+            var account = com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc).requireGasAccount(tenantId, gasAccountId);
             assertEquals(0, new BigDecimal("0.96").compareTo(account.availableBalance()));
             assertEquals(0, BigDecimal.ZERO.compareTo(account.lockedBalance()));
             assertEquals(0, new BigDecimal("0.96").compareTo(account.totalBalance()));
@@ -584,7 +575,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void failedWithdrawalProjectionDoesNotReleaseCustomerBalanceTwice() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             TestAddress address = insertTestAddress(
                     tenantId, "ETH", "ETH", "failed-withdrawal-customer", "0x"
@@ -607,7 +597,7 @@ class CustodyOperationsIntegrationTest {
                     address.address(), "0x" + (UUID.randomUUID().toString() + UUID.randomUUID().toString())
                             .replace("-", "").substring(0, 40));
             UUID withdrawalId = UUID.randomUUID();
-            repository.insertCustodyWithdrawal(withdrawalId, tenantId, address.id(), orderNo,
+            new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(withdrawalId, tenantId, address.id(), new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo,
                     "failed-withdrawal-ref", null, "ETH", "USDT", "0x" + UUID.randomUUID()
                             .toString().replace("-", "") + "12345678",
                     new BigDecimal("0.25"), BigDecimal.ZERO, "SIGNING", "API_KEY", "qa");
@@ -635,7 +625,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void overdueGasSettlementRecoversAfterTopUpAndRemainsIdempotent() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID addressId = UUID.randomUUID();
             UUID gasAccountId = UUID.randomUUID();
@@ -683,8 +672,8 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, 'ETH', 'ETH', ?, ?, ?, 0.25, 0, 'CONFIRMED')
                     """, tenantId, orderNo, Integer.toUnsignedLong(subject),
                     accountId, accountId, accountId);
-            repository.insertCustodyWithdrawal(
-                    withdrawalId, tenantId, addressId, orderNo, null, null,
+            new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
+                    withdrawalId, tenantId, addressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo, null, null,
                     "ETH", "ETH", accountId, new BigDecimal("0.25"),
                     BigDecimal.ZERO, "CONFIRMED", "CONSOLE", "qa");
             com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
@@ -707,7 +696,7 @@ class CustodyOperationsIntegrationTest {
                     tenantId, "WITHDRAWAL", withdrawalId, overdue.actualAmount(),
                     overdue.pricingSource(), overdue.txHash());
             assertEquals("SETTLED", settled.status());
-            var account = repository.requireGasAccount(tenantId, gasAccountId);
+            var account = com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc).requireGasAccount(tenantId, gasAccountId);
             assertEquals(0, new BigDecimal("0.05").compareTo(account.availableBalance()));
             assertEquals(0, BigDecimal.ZERO.compareTo(account.lockedBalance()));
             assertEquals(0, new BigDecimal("0.05").compareTo(account.totalBalance()));
@@ -715,7 +704,7 @@ class CustodyOperationsIntegrationTest {
             com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).settle(
                     tenantId, "WITHDRAWAL", withdrawalId, overdue.actualAmount(),
                     overdue.pricingSource(), overdue.txHash());
-            var unchanged = repository.requireGasAccount(tenantId, gasAccountId);
+            var unchanged = com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc).requireGasAccount(tenantId, gasAccountId);
             assertEquals(0, new BigDecimal("0.05").compareTo(unchanged.availableBalance()));
             assertEquals(1, jdbc.queryForObject("""
                     select count(*) from custody_ledger_entry
@@ -731,7 +720,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void platformTenantManagementSupportsSearchDetailUpdateUnlockAndSessionRevocation() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID tenantId = createTenant();
             UUID administratorId = UUID.randomUUID();
             String slug = jdbc.queryForObject(
@@ -753,16 +741,16 @@ class CustodyOperationsIntegrationTest {
                     "integration-test",
                     Instant.now().plusSeconds(3600));
 
-            assertEquals(1, repository.countTenants(slug, "ACTIVE"));
-            List<Map<String, Object>> tenants =
-                    repository.listTenants(slug, "ACTIVE", 20, 0);
+            assertEquals(1, com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).list(com.surprising.wallet.testutil.CustodyTestSupport.platformAdmin(), slug, "ACTIVE", 1, 0).total());
+            var tenants =
+                    com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).list(com.surprising.wallet.testutil.CustodyTestSupport.platformAdmin(), slug, "ACTIVE", 20, 0).items();
             assertEquals(1, tenants.size());
-            assertEquals(tenantId, tenants.getFirst().get("id"));
+            assertEquals(tenantId, tenants.getFirst().id());
 
-            Map<String, Object> statistics =
-                    repository.tenantOperationsSummary(tenantId);
-            assertEquals(1L, statistics.get("userCount"));
-            assertEquals(1L, statistics.get("activeSessionCount"));
+            var statistics =
+                    com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).detail(com.surprising.wallet.testutil.CustodyTestSupport.platformAdmin(), tenantId).statistics();
+            assertEquals(1L, statistics.userCount());
+            assertEquals(1L, statistics.activeSessionCount());
             assertTrue(new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc).list(tenantId, null, null, 20, 0).isEmpty());
 
             var users = new com.surprising.wallet.repository.CustodyTenantUserRepository(jdbc);
@@ -774,14 +762,14 @@ class CustodyOperationsIntegrationTest {
             assertEquals(0, unlocked.failedLoginCount());
             assertNull(unlocked.lockedUntil());
 
-            repository.updateTenantProfile(tenantId, "Updated operations tenant", "SGD");
-            var updated = repository.requireTenant(tenantId);
+            new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc).updateProfile(tenantId, "Updated operations tenant", "SGD");
+            var updated = new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc).findById(tenantId).orElseThrow();
             assertEquals("Updated operations tenant", updated.name());
             assertEquals("SGD", updated.displayCurrency());
 
             assertEquals(1, new com.surprising.wallet.repository.CustodySessionRepository(jdbc).revokeByTenant(tenantId));
             assertEquals(0L,
-                    repository.tenantOperationsSummary(tenantId).get("activeSessionCount"));
+                    com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).detail(com.surprising.wallet.testutil.CustodyTestSupport.platformAdmin(), tenantId).statistics().activeSessionCount());
             status.setRollbackOnly();
         });
     }
@@ -811,7 +799,7 @@ class CustodyOperationsIntegrationTest {
             var chains = new CustodyTenantChainRepository(jdbc);
             var runtime = new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
                             new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null);
-            var service = new CustodyTenantChainService(chains, com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc), runtime);
+            var service = new CustodyTenantChainService(chains, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), runtime);
             Set<String> expected = java.util.Arrays.stream(ChainType.values())
                     .map(Enum::name).collect(java.util.stream.Collectors.toSet());
             assertEquals(expected, service.list(principal).stream()
@@ -829,13 +817,12 @@ class CustodyOperationsIntegrationTest {
     @Test
     void tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository custody = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             CustodyTenantChainRepository chainRepository =
                     new CustodyTenantChainRepository(jdbc);
             CustodyTenantChainService service = new CustodyTenantChainService(
-                    chainRepository, custody,
-                    new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null));
+                    chainRepository, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)
+            );
             jdbc.update("""
                     update chain_profile
                        set scan_enabled = true,
@@ -909,7 +896,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void userAddressCreationIsIdempotentAndSharedAcrossEvmChains() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository custody = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             CustodyTenantChainRepository tenantChainRepository =
                     new CustodyTenantChainRepository(jdbc);
             UUID tenantId = createTenant();
@@ -926,12 +912,12 @@ class CustodyOperationsIntegrationTest {
             tenantChainRepository.setStatus(tenantId, "BNB", "ACTIVE", administratorId);
 
             CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
-                    custody,
-                    new StableEvmRuntime(jdbc),
+
+                   new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(
-                            tenantChainRepository, custody,
-                            new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
+                            tenantChainRepository, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)
+                    ));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN",
@@ -997,7 +983,6 @@ class CustodyOperationsIntegrationTest {
     @Test
     void fundedWithdrawalAddressLookupChoosesOlderAddressWithAssetBalance() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository custody = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
             UUID tenantId = createTenant();
             UUID administratorId = UUID.randomUUID();
@@ -1010,10 +995,10 @@ class CustodyOperationsIntegrationTest {
                     """, administratorId, tenantId, slug + "@example.test");
             tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
             CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
-                    custody, new StableEvmRuntime(jdbc),
-                    new CustodyTenantChainService(tenantChains, custody,
-                            new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
+            new StableEvmRuntime(jdbc),
+                    new CustodyTenantChainService(tenantChains, new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)
+                    ));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
                     "TENANT_ADMIN", Set.of("addresses:read", "addresses:write"));
@@ -1066,8 +1051,7 @@ class CustodyOperationsIntegrationTest {
                     new CustodyTenantChainRepository(jdbc);
             chainRepository.setStatus(tenantId, "TRON", "ACTIVE", administratorId);
 
-            CustodyAssetDashboardService service = new CustodyAssetDashboardService(
-                    new CustodyAssetDashboardRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc));
+            CustodyAssetDashboardService service = com.surprising.wallet.testutil.CustodyTestSupport.assets(jdbc);
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN", java.util.Set.of("assets:read"));
@@ -1148,8 +1132,7 @@ class CustodyOperationsIntegrationTest {
                      where chain = 'TRON' and symbol = 'USDT' and enabled = true
                     """);
 
-            CustodyAssetDashboardService service = new CustodyAssetDashboardService(
-                    new CustodyAssetDashboardRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc));
+            CustodyAssetDashboardService service = com.surprising.wallet.testutil.CustodyTestSupport.assets(jdbc);
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, UUID.randomUUID(), tenantId,
                     "dashboard-it", "VIEWER", java.util.Set.of("assets:read"));
@@ -1240,7 +1223,7 @@ class CustodyOperationsIntegrationTest {
     /**
      * 验证 {@code insertTestWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private void insertTestWithdrawal(CustodyRepository repository, UUID tenantId,
+    private void insertTestWithdrawal(UUID tenantId,
                                       TestAddress address, String orderNo,
                                       String externalReference, String destination,
                                       String txHash, String status) {
@@ -1251,8 +1234,8 @@ class CustodyOperationsIntegrationTest {
                 values (?, ?, ?, 'ETH', 'USDT', ?, ?, ?, 3.5, 0.1, ?, ?)
                 """, tenantId, orderNo, address.userId(), address.address(),
                 address.address(), destination, status, txHash);
-        repository.insertCustodyWithdrawal(
-                UUID.randomUUID(), tenantId, address.id(), orderNo, externalReference, null,
+        new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
+                UUID.randomUUID(), tenantId, address.id(), new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo, externalReference, null,
                 "ETH", "USDT", destination, new BigDecimal("3.5"),
                 new BigDecimal("0.1"), status, "CONSOLE", "qa");
     }

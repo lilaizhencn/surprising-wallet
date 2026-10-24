@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -23,7 +24,7 @@ import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WalletSystemConfigRepository;
 
@@ -55,9 +56,9 @@ public class WalletConfigOverviewService {
     /** RPC 节点仓储。 */
     private final ChainRpcNodeRepository rpcNodeRepository;
     /**
-     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     * 保存 {@code audits}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final CustodyRepository custodyRepository;
+    private final CustodyAuditRepository audits;
     /**
      * 提供密钥配置状态，概览接口不读取或返回私钥材料。
      */
@@ -76,7 +77,7 @@ public class WalletConfigOverviewService {
                                        TokenConfigRepository tokenConfigRepository,
                                        ChainAssetRepository chainAssetRepository,
                                        ChainRpcNodeRepository rpcNodeRepository,
-                                       CustodyRepository custodyRepository,
+                                       CustodyAuditRepository audits,
                                        WalletKeyMaterialProvider keyMaterial,
                                        @Value("${sw.app.env.name:dev}")
                                        String environment) {
@@ -85,7 +86,7 @@ public class WalletConfigOverviewService {
         this.tokenConfigRepository = tokenConfigRepository;
         this.chainAssetRepository = chainAssetRepository;
         this.rpcNodeRepository = rpcNodeRepository;
-        this.custodyRepository = custodyRepository;
+        this.audits = audits;
         this.keyMaterial = keyMaterial;
         this.environment = normalizeEnvironment(environment);
     }
@@ -179,7 +180,7 @@ public class WalletConfigOverviewService {
                         + "\"transferEnabled\":%s}",
                 command.walletEnabled(), command.scanEnabled(), command.withdrawEnabled(),
                 command.collectionEnabled(), command.transferEnabled());
-        custodyRepository.audit(null, "PLATFORM_USER", actor.actorId().toString(),
+        audits.insert(UUID.randomUUID(), null, "PLATFORM_USER", actor.actorId().toString(),
                 "WALLET_GLOBAL_SWITCHES.UPDATE", "WALLET_GLOBAL_SWITCHES", "global",
                 sourceIp, details);
         return summary(actor);

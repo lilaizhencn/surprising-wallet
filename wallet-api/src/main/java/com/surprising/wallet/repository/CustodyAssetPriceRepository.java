@@ -1,11 +1,14 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.model.custody.AssetPriceRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.sql.Timestamp;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 
 /** custody_asset_price 单表仓储。 */
@@ -20,18 +23,16 @@ public class CustodyAssetPriceRepository {
     }
 
     /** 查询全部资产价格。 */
-    public List<PriceRow> list() {
+    public List<AssetPriceRecord> list() {
         return jdbc.query("""
                 select asset_symbol, usd_price, source, observed_at, updated_at
                   from custody_asset_price
                  order by asset_symbol
-                """, (rs, rowNum) -> toPriceRow(rs.getString("asset_symbol"),
-                rs.getBigDecimal("usd_price"), rs.getString("source"),
-                rs.getTimestamp("observed_at"), rs.getTimestamp("updated_at")));
+                """, CustodyAssetPriceRepository::mapPrice);
     }
 
     /** 新增或更新资产价格。 */
-    public PriceRow upsert(String symbol, BigDecimal price, String source, Instant observedAt) {
+    public AssetPriceRecord upsert(String symbol, BigDecimal price, String source, Instant observedAt) {
         return jdbc.queryForObject("""
                 insert into custody_asset_price(asset_symbol, usd_price, source, observed_at, updated_at)
                 values (?, ?, ?, ?, now())
@@ -41,27 +42,16 @@ public class CustodyAssetPriceRepository {
                     observed_at = excluded.observed_at,
                     updated_at = now()
                 returning asset_symbol, usd_price, source, observed_at, updated_at
-                """, (rs, rowNum) -> toPriceRow(rs.getString("asset_symbol"),
-                rs.getBigDecimal("usd_price"), rs.getString("source"),
-                rs.getTimestamp("observed_at"), rs.getTimestamp("updated_at")),
+                """, CustodyAssetPriceRepository::mapPrice,
                 symbol, price, source, Timestamp.from(observedAt));
     }
 
-    /** 组装资产价格记录。 */
-    private static PriceRow toPriceRow(String symbol, BigDecimal price, String source,
-                                       Timestamp observedAt, Timestamp updatedAt) {
-        return new PriceRow(symbol, price, source,
+    private static AssetPriceRecord mapPrice(ResultSet rs, int rowNum) throws SQLException {
+        Timestamp observedAt = rs.getTimestamp("observed_at");
+        Timestamp updatedAt = rs.getTimestamp("updated_at");
+        return new AssetPriceRecord(rs.getString("asset_symbol"), rs.getBigDecimal("usd_price"), rs.getString("source"),
                 observedAt == null ? null : observedAt.toInstant(),
                 updatedAt == null ? null : updatedAt.toInstant());
     }
 
-    /** 资产价格数据库记录。 */
-    public record PriceRow(
-            String assetSymbol,
-            BigDecimal usdPrice,
-            String source,
-            Instant observedAt,
-            Instant updatedAt
-    ) {
-    }
 }

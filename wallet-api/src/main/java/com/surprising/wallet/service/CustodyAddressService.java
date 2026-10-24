@@ -32,7 +32,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantTableRepository;
 
 /**
  * 管理租户地址的确定性分配、版本和查询。
@@ -43,7 +43,7 @@ public class CustodyAddressService {
     private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
     static final long DEFAULT_ADDRESS_VERSION = 0L;
     private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;
-    private final CustodyRepository custodyRepository;
+    private final CustodyTenantTableRepository tenants;
     private final ChainAddressRepository chainRepository;
     private final CustodyAddressRepository addressRepository;
     private final CustodyGasAccountRepository gasAccounts;
@@ -56,13 +56,13 @@ public class CustodyAddressService {
 
     private final Evm7702CollectionRepository evm7702Repository;
 
-    public CustodyAddressService(CustodyRepository custodyRepository, ChainAddressRepository chainRepository,
+    public CustodyAddressService(CustodyTenantTableRepository tenants, ChainAddressRepository chainRepository,
                                  BlockchainRuntimeService runtime, CustodyTenantChainService tenantChains,
                                  ObjectMapper objectMapper, Evm7702CollectionRepository evm7702Repository,
                                  CustodyAddressRepository addressRepository, CustodyGasAccountRepository gasAccounts,
                                  CustodyDerivationSubjectRepository subjects, CustodyAuditRepository audits,
                                  LedgerBalanceRepository balances) {
-        this.custodyRepository = custodyRepository;
+        this.tenants = tenants;
         this.chainRepository = chainRepository;
         this.runtime = runtime;
         this.tenantChains = tenantChains;
@@ -111,7 +111,8 @@ public class CustodyAddressService {
         String label = optional(command.label(), 160, "label");
         String metadataJson = metadataJson(command.metadata());
 
-        TenantRecord tenant = custodyRepository.requireTenant(principal.tenantId());
+        TenantRecord tenant = tenants.findById(principal.tenantId())
+                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
         if (!"ACTIVE".equals(tenant.status())) {
             throw new CustodyForbiddenException("tenant is not active");
         }
@@ -287,13 +288,6 @@ public class CustodyAddressService {
                 sourceIp,
                 json(details));
         return toView(saved);
-    }
-    /**
-     * 获取或查询 {@code assets} 对应的数据，并向调用方返回当前业务状态。
-     */
-    public List<Map<String, Object>> assets(CustodyPrincipal principal) {
-        requireScope(principal, "assets:read");
-        return custodyRepository.tenantAssetOverview(principal.tenantId());
     }
     /**
      * 编码 {@code toView} 对应的数据，生成链上或接口所需的表示。

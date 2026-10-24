@@ -1,6 +1,6 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.service.WithdrawalSettlementService;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.math.BigDecimal;
@@ -131,7 +131,6 @@ class CustodyTenantIsolationIntegrationTest {
         UUID gasAccountId = UUID.randomUUID();
         UUID withdrawalId = UUID.randomUUID();
         String orderNo = "tenant-gas-" + UUID.randomUUID();
-        CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
 
         jdbc.update("""
                 insert into custody_gas_account(
@@ -152,13 +151,13 @@ class CustodyTenantIsolationIntegrationTest {
                 values (?, ?, 1, 'ETH', 'ETH', ?, ?, ?, 1, 0, 'FROZEN')
                 """, gasTenant, orderNo, accountId, accountId,
                 "0x0000000000000000000000000000000000000002");
-        repository.insertCustodyWithdrawal(
-                withdrawalId, gasTenant, custodyAddressId, orderNo, null, null,
+        new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
+                withdrawalId, gasTenant, custodyAddressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, gasTenant).orElseThrow().getId().longValue(), orderNo, null, null,
                 "ETH", "ETH", accountId, BigDecimal.ONE, BigDecimal.ZERO,
                 "FROZEN", "CONSOLE", "qa");
 
         assertEquals(0, BigDecimal.ZERO.compareTo(
-                repository.requireGasAccount(gasTenant, gasAccountId).availableBalance()));
+                com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc).requireGasAccount(gasTenant, gasAccountId).availableBalance()));
         assertThrows(IllegalStateException.class, () -> com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
                 gasTenant, "WITHDRAWAL", withdrawalId, new BigDecimal("0.1")));
         assertEquals(0, new BigDecimal("5").compareTo(jdbc.queryForObject("""
