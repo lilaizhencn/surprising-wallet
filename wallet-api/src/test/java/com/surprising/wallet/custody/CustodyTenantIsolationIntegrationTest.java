@@ -154,7 +154,7 @@ class CustodyTenantIsolationIntegrationTest {
         new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
                 withdrawalId, gasTenant, custodyAddressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, gasTenant).orElseThrow().getId().longValue(), orderNo, null, null,
                 "ETH", "ETH", accountId, BigDecimal.ONE, BigDecimal.ZERO,
-                "FROZEN", "CONSOLE", "qa");
+                "FROZEN", "CONSOLE", "qa", "user:42", "ADDRESS");
 
         assertEquals(0, BigDecimal.ZERO.compareTo(
                 com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc).requireGasAccount(gasTenant, gasAccountId).availableBalance()));

@@ -58,6 +58,16 @@ public class CustodyAddressRepository {
                and (? = '' or position(? in lower(concat_ws(' ', address, subject, label))) > 0)
             """;
     /** JDBC 模板。 */
+    public boolean existsOtherNetwork(String chain,String network) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from custody_address where chain=? and network<>?)",Boolean.class,chain,network));
+    }
+
+    /** Exact ownership filter, applied before history pagination. */
+    public List<UUID> findSubjectIds(UUID tenantId, String chain, String subject) {
+        return jdbc.queryForList("select id from custody_address where tenant_id=? and subject=? and (?='' or chain=?)",
+                UUID.class, tenantId, subject, chain, chain);
+    }
+
     private final JdbcTemplate jdbc;
 
     /** 构造托管地址仓储。 */

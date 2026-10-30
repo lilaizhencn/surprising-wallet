@@ -111,7 +111,7 @@ paths:
                     subject: { type: string }
                     addressVersion: { type: integer, format: int64 }
                     assetSymbol: { type: string }
-                    availableBalance: { type: number }
+                    availableBalance: { type: string }
         default: { $ref: '#/components/responses/Error' }
   /custody/api/v1/assets:
     get:
@@ -133,6 +133,10 @@ paths:
       summary: List confirmed tenant deposits
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
       parameters:
+        - name: subject
+          in: query
+          description: Exact subject equality, applied before pagination (for example user:42).
+          schema: { type: string }
         - $ref: '#/components/parameters/Status'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -151,6 +155,14 @@ paths:
       summary: List tenant withdrawals
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
       parameters:
+        - name: externalReference
+          in: query
+          description: Exact external reference equality.
+          schema: { type: string }
+        - name: subject
+          in: query
+          description: Exact subject equality, applied before pagination (for example user:42).
+          schema: { type: string }
         - $ref: '#/components/parameters/Status'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -167,7 +179,7 @@ paths:
       tags: [Public API]
       summary: Create a withdrawal
       description: >-
-        Idempotency-Key is retained for seven days for withdrawal creation. The destination
+        Idempotency-Key and its accepted or permanently refused outcome never expire. Retries replay before mutable configuration, balance or reorg guards. Only an identity-bound resolve refusal or refundable terminal record permits returning principal. HTTP errors and timeouts alone do not prove rejection. The destination
         is a validated external chain address and does not need to be an address
         previously allocated by this wallet service.
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
@@ -184,6 +196,38 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Withdrawal' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/api/v1/withdrawals/resolve:
+    post:
+      tags: [Public API]
+      summary: Resolve or permanently refuse an unaccepted withdrawal
+      description: >-
+        Use exactly the original creation body and Idempotency-Key. This operation serializes
+        against creation: ACCEPTED returns the original accepted withdrawal; REJECTED is a
+        permanent refusal, and creation with this key can never subsequently succeed.
+        A changed request hash is an error and never a refund receipt.
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWithdrawal' }
+      responses:
+        '200':
+          description: Permanent identity-bound submission decision
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, idempotencyKey, requestHash, externalReference]
+                properties:
+                  status: { type: string, enum: [ACCEPTED, REJECTED] }
+                  idempotencyKey: { type: string }
+                  requestHash: { type: string }
+                  externalReference: { type: [string, 'null'] }
+                  withdrawal: { $ref: '#/components/schemas/Withdrawal' }
         default: { $ref: '#/components/responses/Error' }
   /custody/console/v1/auth/login:
     post:
@@ -1481,9 +1525,9 @@ components:
         chain: { type: string }
         assetSymbol: { type: string }
         nativeAsset: { type: boolean }
-        availableBalance: { type: number }
-        lockedBalance: { type: number }
-        totalBalance: { type: number }
+        availableBalance: { type: string }
+        lockedBalance: { type: string }
+        totalBalance: { type: string }
         addressCount: { type: integer, format: int64 }
     TenantToken:
       type: object
@@ -1533,16 +1577,18 @@ components:
         assetSymbol: { type: string }
         txHash: { type: string }
         logIndex: { type: integer, format: int64 }
-        amount: { type: number }
+        amount: { type: string }
         status: { type: string }
         creditedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CreateWithdrawal:
       type: object
-      required: [custodyAddressId, chain, assetSymbol, toAddress, amount, confirmed]
+      required: [fundingSource, subject, chain, assetSymbol, toAddress, amount, confirmed]
       properties:
-        custodyAddressId: { type: string, format: uuid }
+        fundingSource: { type: string, enum: [ADDRESS, TENANT_POOL] }
+        subject: { type: string, minLength: 1, maxLength: 160, description: Independent withdrawal beneficiary; never inferred from the funding address. }
+        custodyAddressId: { type: [string, 'null'], format: uuid, description: Required for ADDRESS; must be null for TENANT_POOL. }
         chain: { type: string }
         assetSymbol: { type: string }
         toAddress:
@@ -1558,6 +1604,7 @@ components:
     Withdrawal:
       type: object
       properties:
+        fundingSource: { type: string, enum: [ADDRESS, TENANT_POOL] }
         id: { type: string, format: uuid }
         custodyAddressId: { type: string, format: uuid }
         orderNo: { type: string }
@@ -1565,8 +1612,13 @@ components:
         chain: { type: string }
         assetSymbol: { type: string }
         toAddress: { type: string }
-        amount: { type: number }
-        fee: { type: number }
+        amount: { type: string }
+        fee: { type: string, description: Principal-account extra reserve; new withdrawals use zero. This is not the actual network fee. }
+        refundable: { type: boolean, description: True only for a terminal failure whose frozen principal has been released atomically. }
+        networkFee: { type: [string, 'null'], description: Actual observed chain fee; null until known. }
+        networkFeeAsset: { type: [string, 'null'] }
+        networkFeeSource: { type: [string, 'null'] }
+        gasStatus: { type: [string, 'null'] }
         status: { type: string }
         txHash: { type: [string, 'null'] }
         errorMessage: { type: [string, 'null'] }
@@ -1599,10 +1651,10 @@ components:
         address: { type: string }
         memo: { type: [string, 'null'] }
         childIndex: { type: integer, format: int64, const: 1 }
-        availableBalance: { type: number }
-        lockedBalance: { type: number }
-        totalBalance: { type: number }
-        lowBalanceThreshold: { type: number }
+        availableBalance: { type: string }
+        lockedBalance: { type: string }
+        totalBalance: { type: string }
+        lowBalanceThreshold: { type: string }
         lowBalance: { type: boolean }
         status: { type: string, enum: [ACTIVE, DISABLED] }
         createdAt: { type: string, format: date-time }
@@ -1625,7 +1677,7 @@ components:
         orderNo: { type: string }
         chain: { type: string }
         nativeSymbol: { type: string }
-        reservedAmount: { type: number }
+        reservedAmount: { type: string }
         actualAmount: { type: [number, 'null'] }
         status:
           type: string

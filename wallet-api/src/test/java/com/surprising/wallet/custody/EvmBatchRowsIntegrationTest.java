@@ -98,7 +98,7 @@ class EvmBatchRowsIntegrationTest {
         UUID custodyWithdrawal = UUID.randomUUID();
         var custody = new CustodyWithdrawalRepository(jdbc);
         custody.insert(custodyWithdrawal, tenant, owned.custodyId(), order.getId(), number, "typed-reference",
-                "typed-key", "ETH", "ETH", RECIPIENT, amount, BigDecimal.ZERO, "FROZEN", "API_KEY", "row-test");
+                "typed-key", "ETH", "ETH", RECIPIENT, amount, BigDecimal.ZERO, "FROZEN", "API_KEY", "row-test", "user:42", "ADDRESS");
         assertEquals(custodyWithdrawal, custody.listByOrder(tenant, order.getId()).getFirst().id());
         assertTrue(custody.listByOrder(UUID.randomUUID(), order.getId()).isEmpty());
         UUID parent = batch(false);

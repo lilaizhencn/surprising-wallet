@@ -144,6 +144,14 @@ public class AccountChainWorkflowService {
     }
 
     private void processWithdrawals(AccountChainProfile profile) {
+        if ("evm".equalsIgnoreCase(profile.getFamily())) {
+            withdrawalOrderRepository.markStaleSigningUnknown(profile.getChain(), Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            withdrawalOrderRepository.recoverUnsignedEvm(profile.getChain());
+            for (var pending : withdrawalOrderRepository.listByStatus(profile.getChain(),"BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try { evmTransactionService.recover(new EvmSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),EvmSubmissionService.Kind.WITHDRAWAL),profile.getChain()); }
+                catch (RuntimeException error) { log.warn("EVM withdrawal recovery pending: {}",pending.getOrderNo()); }
+            }
+        }
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
             return;
         }
@@ -176,6 +184,14 @@ public class AccountChainWorkflowService {
         }
     }
     private void processCollections(AccountChainProfile profile) {
+        if ("evm".equalsIgnoreCase(profile.getFamily())) {
+            collectionRecordRepository.markStaleSigningUnknown(profile.getChain(),Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            collectionRecordRepository.recoverUnsignedEvm(profile.getChain());
+            for (var pending : collectionRecordRepository.listByStatus(profile.getChain(),"BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try { evmTransactionService.recover(new EvmSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),EvmSubmissionService.Kind.COLLECTION),profile.getChain()); }
+                catch (RuntimeException error) { log.warn("EVM collection recovery pending: {}",pending.getCollectionNo()); }
+            }
+        }
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
             return;
         }
@@ -193,7 +209,7 @@ public class AccountChainWorkflowService {
                         record.getTenantId(),
                         record.getChain(),
                         record.getCollectionNo(),
-                        "FAILED",
+                        "BROADCAST_UNKNOWN",
                         null,
                         e.getMessage(),
                         null);
@@ -215,7 +231,10 @@ public class AccountChainWorkflowService {
     private void processWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         ChainAddressRecord from = assets.requireAddress(tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
-        if (withdrawalClaimService.claim(tenantId, order.getChain(), order.getOrderNo(), from.getAddress()) != 1) {
+        int claimed = "evm".equalsIgnoreCase(profile.getFamily())
+                ? withdrawalClaimService.claimEvm(tenantId,order.getChain(),order.getOrderNo(),from.getAddress())
+                : withdrawalClaimService.claim(tenantId,order.getChain(),order.getOrderNo(),from.getAddress());
+        if (claimed != 1) {
             return;
         }
         try {
@@ -237,10 +256,10 @@ public class AccountChainWorkflowService {
         String chain = profile.getChain();
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             if (assets.isNative(profile, order.getAssetSymbol())) {
-                return evmTransactionService.sendNative(chain, from, order.getToAddress(), order.getAmount());
+                return evmTransactionService.sendNative(new EvmSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),EvmSubmissionService.Kind.WITHDRAWAL), chain, from, order.getToAddress(), order.getAmount());
             }
             TokenDefinition token = assets.requireToken(profile, order.getAssetSymbol());
-            return evmTransactionService.sendToken(chain, from, token, order.getToAddress(), order.getAmount());
+            return evmTransactionService.sendToken(new EvmSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),EvmSubmissionService.Kind.WITHDRAWAL), chain, from, token, order.getToAddress(), order.getAmount());
         }
         return switch (chain) {
             case "SOLANA" -> {
@@ -333,7 +352,7 @@ public class AccountChainWorkflowService {
             case "XMR" -> moneroTransactionService.confirmWithdrawal(tenantId, profile,
                     order.getOrderNo(), order.getTxHash(), order.getToAddress(), order.getAmount());
             case "NEAR" -> nearTransactionService.confirmWithdrawal(tenantId,
-                    order.getOrderNo(), order.getTxHash(), order.getDebitAccountId());
+                    order.getOrderNo(), order.getTxHash(), order.getFromAddress());
             case "HYPERCORE" -> hyperCoreTransactionService.confirmWithdrawal(tenantId,
                     order.getOrderNo(), order.getTxHash());
             case "TRON" -> tronWorkflow.confirmWithdrawal(profile, order);
@@ -385,13 +404,13 @@ public class AccountChainWorkflowService {
         }
         ChainAddressRecord from = assets.requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            if (collectionRecordRepository.claimSigning(record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
+            if (collectionRecordRepository.claimSigningEvm(record.getTenantId(), record.getChain(), record.getCollectionNo()) != 1) {
                 return;
             }
             String txHash = assets.isNative(profile, record.getAssetSymbol())
-                    ? evmTransactionService.sendNative(record.getChain(), from, record.getToAddress(), record.getAmount())
+                    ? evmTransactionService.sendNative(new EvmSubmissionService.Operation(record.getTenantId(),record.getCollectionNo(),EvmSubmissionService.Kind.COLLECTION), record.getChain(), from, record.getToAddress(), record.getAmount())
                     : evmTransactionService.sendToken(
-                            record.getChain(),
+                            new EvmSubmissionService.Operation(record.getTenantId(),record.getCollectionNo(),EvmSubmissionService.Kind.COLLECTION), record.getChain(),
                             from,
                             assets.requireToken(profile, record.getAssetSymbol()),
                             record.getToAddress(),

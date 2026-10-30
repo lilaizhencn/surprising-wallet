@@ -95,7 +95,8 @@ class WalletTokenValidationIntegrationTest {
                 RuntimeTestSupport.database(jdbc), new ChainProfileRepository(jdbc), new ChainRpcNodeRepository(jdbc),
                 new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
                 new WalletConfigIdentityGuard(new ChainAddressRepository(jdbc), new LedgerBalanceRepository(jdbc),
-                        new DepositRecordRepository(jdbc), new WithdrawalOrderRepository(jdbc), new CollectionRecordRepository(jdbc)),
+                        new DepositRecordRepository(jdbc), new WithdrawalOrderRepository(jdbc), new CollectionRecordRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyAddressRepository(jdbc)),
                 new CustodyAuditRepository(jdbc), mapper, "test", rpc, manager));
         context.refresh();
         service = context.getBean(WalletTokenConfigService.class);

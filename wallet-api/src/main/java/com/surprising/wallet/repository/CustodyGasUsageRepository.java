@@ -41,6 +41,12 @@ public class CustodyGasUsageRepository {
         this.jdbc = jdbc;
     }
 
+    public List<GasUsageRecord> withdrawalFees(UUID tenantId,List<UUID> withdrawalIds) {
+        if(withdrawalIds.isEmpty()) return List.of();
+        return jdbc.query("select * from custody_gas_usage where tenant_id=? and operation_type='WITHDRAWAL' and operation_id=any(?)",
+                CustodyGasUsageRepository::mapUsage,tenantId,new org.springframework.jdbc.support.SqlArrayValue("uuid",withdrawalIds.toArray()));
+    }
+
     /** 查询操作对应的 Gas 使用记录。 */
     public Optional<GasUsageRecord> find(UUID tenantId, String operationType, UUID operationId) {
         return jdbc.query("""

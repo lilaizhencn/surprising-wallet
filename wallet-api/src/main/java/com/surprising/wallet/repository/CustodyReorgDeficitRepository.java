@@ -43,6 +43,10 @@ public class CustodyReorgDeficitRepository {
                 """, tenantId, chain, assetSymbol, accountId).isEmpty();
     }
 
+    public boolean existsOpenAsset(UUID tenantId,String chain,String asset) {
+        return !jdbc.queryForList("select id from custody_reorg_deficit where tenant_id=? and chain=? and asset_symbol=? and status='OPEN' limit 1",tenantId,chain,asset).isEmpty();
+    }
+
     public List<Deficit> lockOpenForAccount(UUID tenantId, String chain, String symbol, String accountId) {
         return jdbc.query("""
                 select id, deficit_amount, recovered_amount from custody_reorg_deficit

@@ -547,6 +547,8 @@ class AccountChainWorkflowServiceTest {
                 signingClaims++;
                 return 1;
             }).when(withdrawalClaimService).claim(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> { signingClaims++; return 1; })
+                    .when(withdrawalClaimService).claimEvm(any(),anyString(),anyString(),anyString());
             Mockito.doAnswer(invocation -> {
                 String arg_chain = invocation.getArgument(0);
                 String arg_orderNo = invocation.getArgument(1);
@@ -711,14 +713,14 @@ class AccountChainWorkflowServiceTest {
                     null,
                     null,
                     mock(WithdrawalSettlementService.class),
-                    mock(EvmNonceRepository.class));
+                    mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class));
         }
 
         /**
          * 验证 {@code sendNative} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         @Override
-        public String sendNative(String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
+        public String sendNative(EvmSubmissionService.Operation operation, String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
             throw new IllegalStateException("rpc accepted maybe but returned error");
         }
     }
@@ -748,7 +750,7 @@ class AccountChainWorkflowServiceTest {
                     null,
                     null,
                     mock(WithdrawalSettlementService.class),
-                    mock(EvmNonceRepository.class));
+                    mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class));
         }
 
         /**

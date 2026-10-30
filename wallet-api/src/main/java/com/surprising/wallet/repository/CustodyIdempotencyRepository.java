@@ -57,7 +57,7 @@ public class CustodyIdempotencyRepository {
     public int complete(UUID tenantId, String key, String operation, int responseStatus, String responseJson) {
         return jdbc.update("""
                 update custody_idempotency_key set response_status = ?, response_body = ?::jsonb
-                 where tenant_id = ? and idempotency_key = ? and operation = ?
+                 where tenant_id = ? and idempotency_key = ? and operation = ? and response_status is null
                 """, responseStatus, responseJson, tenantId, key, operation);
     }
 

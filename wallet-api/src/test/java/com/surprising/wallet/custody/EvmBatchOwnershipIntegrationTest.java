@@ -98,8 +98,8 @@ class EvmBatchOwnershipIntegrationTest {
         UUID custodyWithdrawal = UUID.randomUUID();
         jdbc.update("""
                 insert into custody_withdrawal(id, tenant_id, custody_address_id, withdrawal_order_id,
-                    order_no, chain, asset_symbol, to_address, amount, status, created_by_type)
-                values (?, ?, ?, ?, 'ownership-withdrawal', 'ETH', 'ETH', ?, 1, 'SENT', 'CONSOLE')
+                    order_no, chain, asset_symbol, to_address, amount, status, created_by_type,subject,funding_source)
+                values (?, ?, ?, ?, 'ownership-withdrawal', 'ETH', 'ETH', ?, 1, 'SENT', 'CONSOLE','user:17','ADDRESS')
                 """, custodyWithdrawal, tenant, custodyAddress, id, ADDRESS);
         jdbc.update("""
                 insert into evm_withdrawal_batch_item(id, tenant_id, batch_id, item_index, withdrawal_order_id,

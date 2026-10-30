@@ -117,7 +117,7 @@ class WalletRpcAuthenticationTest {
             assertEquals(0, rejected.get());
             assertThrows(IllegalArgumentException.class, () -> gateway.execute(
                     new EvmAssetRecoveryChainGateway.ExecutionRequest("TRON", "TRX", null, 6,
-                            java.math.BigDecimal.ONE, null, "unused")));
+                            java.math.BigDecimal.ONE, null, "unused", java.util.UUID.randomUUID())));
             assertEquals(3, authenticated.get());
         }
     }

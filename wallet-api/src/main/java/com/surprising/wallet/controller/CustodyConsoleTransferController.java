@@ -85,4 +85,17 @@ public class CustodyConsoleTransferController {
                 CustodyRequestSupport.requirePrincipal(request), body, "CONSOLE", idempotencyKey,
                 CustodyRequestSupport.clientIp(request));
     }
+
+    @GetMapping("/withdrawals/submission")
+    public java.util.List<CustodyTransactionQueryService.WithdrawalView> submission(
+            @RequestParam String reference, HttpServletRequest request) {
+        return history.withdrawalSubmission(CustodyRequestSupport.requirePrincipal(request),reference);
+    }
+
+    @PostMapping("/withdrawals/resolve")
+    public CustodyWithdrawalService.SubmissionResolution resolve(
+            @RequestHeader("Idempotency-Key") String key, @RequestBody CreateWithdrawalCommand body,
+            HttpServletRequest request) {
+        return transfers.resolve(CustodyRequestSupport.requirePrincipal(request),body,key,CustodyRequestSupport.clientIp(request));
+    }
 }

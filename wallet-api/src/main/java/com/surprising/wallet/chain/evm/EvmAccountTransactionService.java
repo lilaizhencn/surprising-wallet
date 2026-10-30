@@ -8,7 +8,8 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.EvmNonceRepository;
+import com.surprising.wallet.service.EvmSubmissionService;
+import com.surprising.wallet.service.EvmSubmissionService.Operation;
 import com.surprising.wallet.repository.EvmTransactionRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
@@ -66,32 +67,36 @@ public class EvmAccountTransactionService {
     private final EvmTransactionBuilder transactionBuilder;
     private final EvmHttpServiceFactory httpServices;
     private final WithdrawalSettlementService settlements;
-    private final EvmNonceRepository nonces;
+    private final EvmSubmissionService submissions;
+    private final com.surprising.wallet.repository.CustodyAssetRecoveryRepository recoveries;
 
     public String sendNative(
-            String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
+            Operation operation, String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         AccountChainProfile profile = profile(chain);
         int decimals = nativeDecimals(profile);
         BigInteger value = toAtomic(amount, decimals);
-        return send(profile, from, toAddress, value, "0x", nativeSymbol(profile),
+        return send(operation, profile, from, toAddress, value, "0x", nativeSymbol(profile),
                 null, amount, NATIVE_GAS_FLOOR, decimals);
     }
 
     public String sendToken(
-            String chain, ChainAddressRecord from, TokenDefinition token,
+            Operation operation, String chain, ChainAddressRecord from, TokenDefinition token,
             String toAddress, BigDecimal amount) {
         AccountChainProfile profile = profile(chain);
         String data = transactionBuilder.buildErc20TransferPayload(toAddress, amount, token);
-        return send(profile, from, token.getContractAddress(), BigInteger.ZERO, data,
+        return send(operation, profile, from, token.getContractAddress(), BigInteger.ZERO, data,
                 token.getSymbol(), token.getContractAddress(), amount, TOKEN_GAS_FLOOR,
                 nativeDecimals(profile));
     }
 
     private String send(
-            AccountChainProfile profile, ChainAddressRecord from, String transactionTo,
+            Operation operation, AccountChainProfile profile, ChainAddressRecord from, String transactionTo,
             BigInteger value, String data, String symbol, String contract,
             BigDecimal amount, BigInteger gasFloor, int nativeDecimals) {
+        if (!operation.tenantId().equals(from.getTenantId())) throw new IllegalArgumentException("EVM sender tenant differs from operation");
         return withWeb3(profile, (web3j, http) -> {
+            var existing = submissions.existing(operation, profile.getChain());
+            if (existing != null) return broadcastPrepared(web3j, existing);
             EvmFeeSupport.FeeQuote quote = EvmFeeSupport.quote(web3j, profile);
             BigInteger chainNonce = pendingNonce(web3j, from.getAddress());
             BigInteger estimatedGas = estimateGas(
@@ -105,30 +110,19 @@ public class EvmAccountTransactionService {
                     web3j, profile, from.getAddress(), provisionalSigned, gasLimit, quote);
             EvmFeeSupport.requireBalance(
                     web3j, from.getAddress(), value.add(provisionalFee), "EVM sender");
-            BigInteger nonce = nonces.reserve(
-                    profile.getChain(), normalize(from.getAddress()), chainNonce);
-            String signedRaw = nonce.equals(chainNonce)
-                    ? provisionalSigned
-                    : sign(profile, rawTransaction(
-                            profile, nonce, quote, gasLimit, transactionTo, value, data), credentials);
-            BigInteger reservedFeeAtomic = nonce.equals(chainNonce)
-                    ? provisionalFee
-                    : reservedFee(
-                            web3j, profile, from.getAddress(), signedRaw, gasLimit, quote);
-            if (!nonce.equals(chainNonce)) {
-                EvmFeeSupport.requireBalance(
-                        web3j, from.getAddress(), value.add(reservedFeeAtomic), "EVM sender");
-            }
-            String txHash = broadcast(web3j, signedRaw);
-            String localHash = Hash.sha3(signedRaw);
-            if (!localHash.equalsIgnoreCase(txHash)) {
-                throw new IllegalStateException("RPC transaction hash differs from local signed hash");
-            }
-            record(profile.getChain(), txHash, from.getAddress(), transactionTo, symbol, contract,
-                    amount, EvmFeeSupport.atomicToNative(
-                            reservedFeeAtomic, nativeDecimals, RoundingMode.UP),
-                    nonce.longValueExact(), "SENT", signedRaw);
-            return txHash;
+            var prepared = submissions.prepare(operation, profile.getChain(), normalize(from.getAddress()), chainNonce, nonce -> {
+                String signedRaw = nonce.equals(chainNonce) ? provisionalSigned
+                        : sign(profile, rawTransaction(profile, nonce, quote, gasLimit, transactionTo, value, data), credentials);
+                BigInteger reservedFeeAtomic = nonce.equals(chainNonce) ? provisionalFee
+                        : reservedFee(web3j, profile, from.getAddress(), signedRaw, gasLimit, quote);
+                if (!nonce.equals(chainNonce)) EvmFeeSupport.requireBalance(web3j, from.getAddress(), value.add(reservedFeeAtomic), "EVM sender");
+                return EvmTransactionRecord.builder().chain(profile.getChain()).txHash(Hash.sha3(signedRaw))
+                        .fromAddress(normalize(from.getAddress())).toAddress(normalize(transactionTo)).assetSymbol(symbol)
+                        .contractAddress(contract).amount(amount)
+                        .fee(EvmFeeSupport.atomicToNative(reservedFeeAtomic,nativeDecimals,RoundingMode.UP))
+                        .nonce(nonce.longValueExact()).confirmations(0).status("PREPARED").rawPayload(signedRaw).build();
+            });
+            return broadcastPrepared(web3j, prepared);
         });
     }
 
@@ -168,11 +162,9 @@ public class EvmAccountTransactionService {
         if (receipt == null) {
             return false;
         }
-        if (!receipt.isStatusOK()) {
-            throw new IllegalStateException("EVM transaction failed: " + txHash);
-        }
         markConfirmed(chain, txHash, receipt);
-        return settlements.confirm(tenantId, chain, orderNo, txHash);
+        return receipt.isStatusOK() ? settlements.confirm(tenantId, chain, orderNo, txHash)
+                : settlements.fail(tenantId, chain, orderNo, txHash, "EVM receipt confirmed failure");
     }
 
     public boolean confirmCollection(
@@ -182,10 +174,10 @@ public class EvmAccountTransactionService {
         if (receipt == null) {
             return false;
         }
-        if (!receipt.isStatusOK()) {
-            throw new IllegalStateException("EVM collection transaction failed: " + txHash);
-        }
         markConfirmed(chain, txHash, receipt);
+        if (!receipt.isStatusOK()) {
+            return collectionRecordRepository.updateStatus(tenantId,chain,collectionNo,"FAILED",txHash,"EVM receipt confirmed failure",null) == 1;
+        }
         return collectionRecordRepository.markConfirmed(tenantId, chain, collectionNo, txHash) == 1;
     }
 
@@ -202,6 +194,10 @@ public class EvmAccountTransactionService {
             if (receipt == null || receipt.getBlockNumber() == null) {
                 return Optional.empty();
             }
+            if (receipt.getTransactionHash() == null || !txHash.equalsIgnoreCase(receipt.getTransactionHash())
+                    || receipt.getBlockHash() == null) throw new IllegalStateException("EVM receipt identity is incomplete");
+            var canonical = web3j.ethGetBlockByNumber(org.web3j.protocol.core.DefaultBlockParameter.valueOf(receipt.getBlockNumber()),false).send().getBlock();
+            if (canonical == null || !receipt.getBlockHash().equalsIgnoreCase(canonical.getHash())) return Optional.empty();
             BigInteger latest = web3j.ethBlockNumber().send().getBlockNumber();
             BigInteger confirmations = latest.subtract(receipt.getBlockNumber()).add(BigInteger.ONE);
             int required = Math.max(1, profile.getWithdrawConfirmations());
@@ -232,7 +228,7 @@ public class EvmAccountTransactionService {
                             fee.total(), nativeDecimals(profile), RoundingMode.UP))
                     .blockHeight(receipt.getBlockNumber().longValueExact())
                     .confirmations(profile.getWithdrawConfirmations())
-                    .status("CONFIRMED")
+                    .status(receipt.isStatusOK() ? "CONFIRMED" : "FAILED")
                     .rawPayload(null)
                     .build());
             return null;
@@ -291,15 +287,31 @@ public class EvmAccountTransactionService {
         return Numeric.toHexString(signed);
     }
 
-    private String broadcast(Web3j web3j, String signedRaw) throws Exception {
-        EthSendTransaction sent = web3j.ethSendRawTransaction(signedRaw).send();
+    private String broadcastPrepared(Web3j web3j, EvmTransactionRecord prepared) throws Exception {
+        String hash = prepared.getTxHash();
+        if (!Hash.sha3(prepared.getRawPayload()).equalsIgnoreCase(hash)) throw new IllegalStateException("prepared EVM hash mismatch");
+        EthSendTransaction sent = web3j.ethSendRawTransaction(prepared.getRawPayload()).send();
         if (sent.hasError()) {
-            throw new IllegalStateException(sent.getError().getMessage());
+            var known = web3j.ethGetTransactionByHash(hash).send();
+            if (!known.hasError() && known.getTransaction().isPresent()) return hash;
+            throw new IllegalStateException("EVM broadcast outcome remains unknown");
         }
-        if (sent.getTransactionHash() == null || sent.getTransactionHash().isBlank()) {
-            throw new IllegalStateException("eth_sendRawTransaction returned no transaction hash");
+        if (sent.getTransactionHash() == null || !hash.equalsIgnoreCase(sent.getTransactionHash())) {
+            throw new IllegalStateException("RPC transaction hash differs from committed signed hash");
         }
-        return sent.getTransactionHash();
+        return hash;
+    }
+
+    /** Re-broadcast only the committed bytes, with the original nonce, independently of new-work switches. */
+    public boolean recover(Operation operation, String chain) {
+        var existing = submissions.existing(operation,chain);
+        if (existing == null) return false;
+        String hash = withWeb3(profile(chain),(web3j,http) -> broadcastPrepared(web3j,existing));
+        return switch (operation.kind()) {
+            case WITHDRAWAL -> withdrawalOrderRepository.recoverPreparedSent(operation.tenantId(),chain,operation.reference(),hash) == 1;
+            case COLLECTION -> collectionRecordRepository.recoverPreparedSent(operation.tenantId(),chain,operation.reference(),hash) == 1;
+            case RECOVERY -> recoveries.recoverPreparedBroadcast(operation.tenantId(),UUID.fromString(operation.reference()),hash) == 1;
+        };
     }
 
     private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
@@ -312,28 +324,9 @@ public class EvmAccountTransactionService {
                 .send().getTransactionCount();
     }
 
-    private void record(
-            String chain, String hash, String from, String to, String symbol, String contract,
-            BigDecimal amount, BigDecimal fee, long nonce, String status, String rawPayload) {
-        evmTransactionRepository.upsert(EvmTransactionRecord.builder()
-                .chain(chain)
-                .txHash(hash)
-                .fromAddress(normalize(from))
-                .toAddress(normalize(to))
-                .assetSymbol(symbol)
-                .contractAddress(contract)
-                .amount(amount)
-                .fee(fee)
-                .nonce(nonce)
-                .confirmations(0)
-                .status(status)
-                .rawPayload(rawPayload)
-                .build());
-    }
-
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodeService.withFailover(profile.getChain(), profile.getNetwork(), node -> {
-            HttpService http = httpServices.create(node.getRpcUrl());
+            HttpService http = httpServices.create(node.getRpcUrl(), rpcNodeService.authHeaders(node));
             Web3j web3j = Web3j.build(http);
             try {
                 return request.apply(web3j, http);

@@ -33,7 +33,7 @@ public final class WalletConfigTestSupport {
 
     private static WalletConfigIdentityGuard identityGuard(JdbcTemplate jdbc) {
         return new WalletConfigIdentityGuard(new ChainAddressRepository(jdbc), new LedgerBalanceRepository(jdbc),
-                new DepositRecordRepository(jdbc), new WithdrawalOrderRepository(jdbc), new CollectionRecordRepository(jdbc));
+                new DepositRecordRepository(jdbc), new WithdrawalOrderRepository(jdbc), new CollectionRecordRepository(jdbc),new CustodyAddressRepository(jdbc));
     }
 
     private static tools.jackson.databind.ObjectMapper mapper() {

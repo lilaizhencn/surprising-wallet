@@ -49,6 +49,44 @@ public class LedgerBalanceRepository {
         this.jdbc = jdbc;
     }
 
+    public BigDecimal ensureAndLockOwned(UUID tenantId,String chain,String asset,String account) {
+        return jdbc.queryForObject("""
+                insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance)
+                values (?,?,?,?,0,0,0)
+                on conflict(chain,asset_symbol,account_id) do update set updated_at=ledger_balance.updated_at
+                  where ledger_balance.tenant_id=excluded.tenant_id
+                returning available_balance
+                """,BigDecimal.class,tenantId,chain,asset,account);
+    }
+
+    /** Debit only the required portion of tenant principal; a caller must reject any incomplete total. */
+    public List<PoolContribution> contributeToPool(UUID tenantId,String chain,String asset,
+                                                 BigDecimal required,List<String> excludedAccounts) {
+        return jdbc.query("""
+                with available as (
+                    select id,account_id,available_balance,
+                           sum(available_balance) over (order by available_balance desc,id
+                               rows between unbounded preceding and current row)-available_balance as allocated_before
+                      from ledger_balance
+                     where tenant_id=? and chain=? and asset_symbol=? and available_balance>0
+                       and not (account_id=any(?))
+                ), allocations as (
+                    select id,account_id,least(available_balance,?-allocated_before) as amount
+                      from available where allocated_before<?
+                )
+                update ledger_balance balance
+                   set available_balance=balance.available_balance-allocation.amount,
+                       total_balance=balance.total_balance-allocation.amount,updated_at=now()
+                  from allocations allocation
+                 where balance.id=allocation.id and balance.tenant_id=?
+                   and balance.available_balance>=allocation.amount
+                returning balance.id,balance.account_id,allocation.amount
+                """,(rs,n)->new PoolContribution(rs.getLong("id"),rs.getString("account_id"),rs.getBigDecimal("amount")),
+                tenantId,chain,asset,new SqlArrayValue("varchar",excludedAccounts.toArray()),required,required,tenantId);
+    }
+
+    public record PoolContribution(long balanceId,String accountId,BigDecimal amount) { }
+
     /** 判断指定链是否存在账本数据。 */
     public boolean existsByChain(String chain) {
         return !jdbc.queryForList("""

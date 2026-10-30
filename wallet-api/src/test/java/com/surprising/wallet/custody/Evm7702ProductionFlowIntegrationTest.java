@@ -232,7 +232,7 @@ class Evm7702ProductionFlowIntegrationTest {
                         new ChainAssetRepository(jdbc),
                         new ChainProfileRepository(jdbc),
                         new TokenConfigRepository(jdbc),
-                        new LedgerBalanceRepository(jdbc));
+                        new LedgerBalanceRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.poolFunding(jdbc));
         withdrawalService = new CustodyWithdrawalService(
 
 
@@ -247,7 +247,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 objectMapper,
                 com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
                 new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
-                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc), new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc));
+                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc), new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.poolFunding(jdbc));
         transactionContext = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
         transactionContext.register(Transactions.class);
         transactionContext.registerBean(org.springframework.transaction.PlatformTransactionManager.class,
@@ -734,7 +734,7 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodyWithdrawalService.CreateWithdrawalCommand command =
                 new CustodyWithdrawalService.CreateWithdrawalCommand(
                         source.custodyAddressId(), chain, symbol, recipient,
-                        amount.toPlainString(), suffix, true);
+                        amount.toPlainString(), suffix, true, "user:42", CustodyWithdrawalService.FundingSource.ADDRESS);
         CustodyWithdrawalService.WithdrawalView created = withdrawalService.create(
                 principal, command, "API", idempotencyKey, "127.0.0.1");
         CustodyWithdrawalService.WithdrawalView replay = withdrawalService.create(

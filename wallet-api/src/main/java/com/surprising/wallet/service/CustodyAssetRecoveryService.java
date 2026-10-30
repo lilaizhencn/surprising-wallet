@@ -190,7 +190,7 @@ public class CustodyAssetRecoveryService {
             String recoveryTxHash = gateway.execute(new EvmAssetRecoveryChainGateway.ExecutionRequest(
                     existing.actualChain(), existing.assetSymbol(), existing.tokenContract(),
                     existing.tokenDecimals() == null ? 18 : existing.tokenDecimals(),
-                    existing.verifiedAmount(), source, existing.recoveryAddress()));
+                    existing.verifiedAmount(), source, existing.recoveryAddress(),existing.id()));
             RecoveryRecord result = repository.broadcasted(id, recoveryTxHash, principal.actorId());
             audits.insert(UUID.randomUUID(), existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                     "ASSET_RECOVERY.EXECUTE", "ASSET_RECOVERY", id.toString(), sourceIp,
@@ -211,6 +211,7 @@ public class CustodyAssetRecoveryService {
         return toView(result);
     }
     public void confirmBroadcastRecoveries() {
+        repository.recoverExecutions();
         for (RecoveryRecord recovery : repository.broadcastRecoveries(100)) {
             try {
                 RecoveryRecord result = confirm(recovery);
@@ -231,6 +232,7 @@ public class CustodyAssetRecoveryService {
         try {
             if (!gateway.confirmed(
                     recovery.actualChain(), recovery.recoveryTxHash())) {
+                gateway.rebroadcast(recovery.tenantId(),recovery.actualChain(),recovery.id());
                 return recovery;
             }
         } catch (EvmAssetRecoveryChainGateway.PermanentlyFailedTransactionException e) {

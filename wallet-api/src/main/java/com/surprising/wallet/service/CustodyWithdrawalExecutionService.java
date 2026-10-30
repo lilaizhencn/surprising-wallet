@@ -34,6 +34,7 @@ public class CustodyWithdrawalExecutionService {
     private final TokenConfigRepository tokenConfigRepository;
     /** ledger_balance 单表仓储。 */
     private final LedgerBalanceRepository ledgerBalanceRepository;
+    private final CustodyPoolFundingService pool;
 
     public CustodyWithdrawalExecutionService(
             WithdrawalOrderRepository withdrawalOrderRepository,
@@ -43,7 +44,7 @@ public class CustodyWithdrawalExecutionService {
             ChainAssetRepository chainAssetRepository,
             ChainProfileRepository chainProfileRepository,
             TokenConfigRepository tokenConfigRepository,
-            LedgerBalanceRepository ledgerBalanceRepository) {
+            LedgerBalanceRepository ledgerBalanceRepository,CustodyPoolFundingService pool) {
         this.withdrawalOrderRepository = withdrawalOrderRepository;
         this.collectionPlanningService = collectionPlanningService;
         this.runtimeConfig = runtimeConfig;
@@ -52,22 +53,24 @@ public class CustodyWithdrawalExecutionService {
         this.chainProfileRepository = chainProfileRepository;
         this.tokenConfigRepository = tokenConfigRepository;
         this.ledgerBalanceRepository = ledgerBalanceRepository;
+        this.pool = pool;
     }
 
     public ExecutionResult execute(CustodyAddressRecord custodyAddress, ChainAddressRecord account,
-                                   String symbol, String toAddress, BigDecimal amount, String orderPrefix) {
+                                   String symbol, String toAddress, BigDecimal amount, String orderPrefix,CustodyWithdrawalService.FundingSource fundingSource) {
         UUID tenantId = custodyAddress.tenantId();
         String chain = custodyAddress.chain();
         runtimeConfig.requireTaskEnabled(
                 chain, WalletRuntimeConfigService.TASK_WITHDRAW, "custody withdrawal create");
-        BigDecimal feeReserve = requireFeeReserve(chain, symbol);
+        requireWithdrawalAsset(custodyAddress, symbol, amount);
+        BigDecimal feeReserve = BigDecimal.ZERO;
         toAddress = validateExternalAddress(chain, toAddress);
         BigDecimal frozenAmount = amount.add(feeReserve);
-        SpendAccount spend = requireTenantSpendAccount(
-                custodyAddress, account, symbol, frozenAmount);
-        String sourceAddress = withdrawalSourceAddress(tenantId, chain, spend);
-        String orderNo = normalizeOrderPrefix(orderPrefix) + "-" + System.currentTimeMillis()
-                + "-" + randomSuffix();
+        String orderNo=normalizeOrderPrefix(orderPrefix)+"-"+System.currentTimeMillis()+"-"+randomSuffix();
+        SpendAccount spend=fundingSource==CustodyWithdrawalService.FundingSource.TENANT_POOL
+                ? new SpendAccount(pool.fund(tenantId,custodyAddress,symbol,frozenAmount,orderNo),account.getAddress())
+                : requireTenantSpendAccount(custodyAddress,account,symbol,frozenAmount);
+        String sourceAddress=withdrawalSourceAddress(tenantId,chain,spend);
 
         long orderId = withdrawalOrderRepository.createForTenant(
                 tenantId,
@@ -96,25 +99,37 @@ public class CustodyWithdrawalExecutionService {
         withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
         return new ExecutionResult(orderId, orderNo, status, amount, feeReserve, toAddress);
     }
-    private BigDecimal requireFeeReserve(String chain, String symbol) {
+    private void requireWithdrawalAsset(CustodyAddressRecord custody, String symbol, BigDecimal amount) {
+        String chain=custody.chain();
+        chainProfileRepository.lockChain(chain);
         ChainAsset asset = chainAssetRepository.findActive(chain, symbol)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "asset withdrawal is not enabled: " + chain + "/" + symbol));
         boolean nativeAsset = Boolean.TRUE.equals(asset.getNativeAsset());
         AccountChainProfile profile = chainProfileRepository.listEnabledForWithdrawal(chain).stream()
+                .filter(candidate -> custody.network().equalsIgnoreCase(candidate.getNetwork()))
                 .filter(candidate -> nativeAsset
                         || tokenConfigRepository.findEnabled(chain,
                                 String.valueOf(candidate.getNetwork()), symbol).isPresent())
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "asset withdrawal is not enabled: " + chain + "/" + symbol));
-        int decimals = asset.getDecimals() == null ? 18 : asset.getDecimals();
-        BigDecimal networkFee = "XMR".equals(chain)
-                ? atomicToDecimal(profile.getDefaultFee(), decimals)
-                    .max(atomicToDecimal(profile.getDustThreshold(), decimals))
-                    .max(new BigDecimal("0.0001")).stripTrailingZeros()
-                : BigDecimal.ZERO;
-        return networkFee;
+        if (asset.getDecimals() == null || asset.getDecimals() < 0 || asset.getDecimals() > 36) {
+            throw new IllegalStateException("withdrawal asset precision is unavailable");
+        }
+        int decimals = asset.getDecimals();
+        if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("withdrawal amount must be positive");
+        try { amount.setScale(decimals,java.math.RoundingMode.UNNECESSARY); }
+        catch (ArithmeticException invalid) { throw new IllegalArgumentException("withdrawal exceeds chain asset precision",invalid); }
+        try {
+            if (amount.setScale(18,java.math.RoundingMode.UNNECESSARY).precision() > 78) {
+                throw new ArithmeticException("withdrawal exceeds stored amount range");
+            }
+        } catch (ArithmeticException invalid) {
+            throw new IllegalArgumentException("withdrawal amount cannot be stored without rounding",invalid);
+        }
+        // Customer principal contains no network fee; all chain fees belong to custody's Gas accounting.
+
     }
 
     private SpendAccount requireTenantSpendAccount(CustodyAddressRecord custody, ChainAddressRecord address,
@@ -156,10 +171,6 @@ public class CustodyWithdrawalExecutionService {
             throw new IllegalArgumentException("invalid " + chain + " address");
         }
         return value;
-    }
-    private static BigDecimal atomicToDecimal(Object value, int decimals) {
-        return value == null ? BigDecimal.ZERO
-                : new BigDecimal(String.valueOf(value)).movePointLeft(decimals);
     }
     private static String randomSuffix() {
         return Integer.toUnsignedString(RANDOM.nextInt(), 36).toLowerCase(Locale.ROOT);

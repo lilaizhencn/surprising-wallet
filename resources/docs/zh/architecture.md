@@ -304,3 +304,29 @@ TRON SDK 不再向调用方公开：原生币与部署先分别限流读取 Soli
 - 归集规划复用本次 profile、原生币精度和费用预留；每个实际资金发送动作仍检查运行时开关。业务审计和 RPC 参数交由 Jackson 序列化。
 
 本次不新增表、字段、状态或初始化配置，唯一数据库基线无需变更。SQL 调整仅包括配置行锁与提现插入返回 ID。
+
+
+## 交易所充提边界与普通 EVM 持久发送
+
+`CustodyWithdrawalService` 在读取地址、网络开关、赤字和余额前重放永久幂等受理记录。`resolve` 是写操作：与创建竞争同一幂等主键，只能返回已提交的受理结果，或提交不可再创建的拒绝凭据；它不是以查询缺失为依据退款。`custody_idempotency_key` 的 WITHDRAWAL.CREATE 记录无过期时间，接受/拒绝和相关审计原子提交。历史 API 使用独立 subject 精确过滤，单表仓储在分页前应用地址主键集合，全文搜索不承担用户隔离。
+
+普通 EVM 由 `EvmAccountTransactionService` 执行 RPC、签名及同字节广播；新增 `EvmSubmissionService` 只拥有 nonce、evm_tx 签名字节和业务单据 tx_hash 的独立提交事务。提现和归集必须携带租户与业务引用。恢复不能创建另一份付款，只有采用 durable_submission 协议且没有哈希的未发送领取允许重新排队。`WithdrawalSettlementService` 对失败回执同样按原哈希、租户和状态锁定单据，原子释放本金并记录 funds_released；Gas 按失败回执实际费用单独结算。
+
+数据库基线同步增加普通发送协议标记和本金释放凭据；没有新增钱包业务表或跨表 Repository。交易端平台手续费和收入凭据由 exchange 维护，不能与钱包的链费、Gas 预留或批次费用重复计收。
+
+资产找回也使用同一 EVM 持久发送事务，原找回主键绑定签名字节和 recovery_tx_hash；EXECUTING 中有哈希的操作进入 BROADCAST 对账，无哈希且已采用持久协议的过期领取才回到待执行。链上失败须先验证规范区块和确认数，再结束找回，不清空哈希或以新 nonce 重付。外部提现引用在租户内唯一，精确 externalReference 查询用于交易端终态对账。
+
+客户本金不再包含 XMR 等链的网络费预留；Gas 统一在独立账户预留与结算，避免本金账与 Gas 账重复计费。提现生命周期 Webhook 以提现创建者来源（API_KEY / CONSOLE）决定是否投递，不以付款来源地址的创建方式决定。
+
+已有地址或资金记录的链不能停用其网络身份，也不能修改 chainId、原生币或信封/费用解释；停止新业务请使用 scan / withdrawal / collection / transfer 开关。已有地址会锁定其网络，其他网络不可接管同一 chain 的历史资金。新提现在同一链配置锁下校验地址网络、资产精度并创建订单，避免停用/切网与受理竞争。金额响应使用十进制字符串，防止 JavaScript 解码历史时损失最小单位。
+
+HTTP 的 BigDecimal 金额统一输出十进制字符串（不使用科学计数法），只在 Web 消息转换器内处理；链 RPC 使用独立原始数值协议。CustodyTransactionQueryService 从 Gas 用量表分别读取实际链费、原生资产与结算状态，不能用平台费或预留额替代。
+
+
+### 租户本金池提现
+
+交易所使用 `fundingSource=TENANT_POOL`、`custodyAddressId=null` 和独立 `subject=user:<用户 ID>`。Core 可用余额决定用户权益；custody 不再要求提现用户拥有同币种充值地址余额。控制台地址出款使用 `ADDRESS` 并明确指定受益人，不能动用 Gas 余额。
+
+`CustodyWithdrawalService → CustodyPoolFundingService → LedgerBalanceRepository / CustodyGasAccountRepository / CustodyAddressRepository / ChainAddressRepository / CustodyLedgerEntryRepository`。资金池按租户、链、资产创建唯一虚拟账户，锁池后只划入本次不足部分；单表条件借记来源、池贷记、逐来源不可变流水、订单冻结、Gas 预留和永久受理回执同事务提交，任一步失败全部回滚。所有状态的 Gas 账户均排除在本金来源之外。物理出款沿用租户归集地址，账本扣款账户独立于链签名地址。
+
+确认扣除池冻结本金；明确失败在同事务释放回池并写 `funds_released`，未知广播不释放。任何该租户同链同资产的已观察重组赤字都阻止新提现与领取，已受理原单仍先返回永久回执。提现历史直接按订单 `subject` 精确筛选后分页，不能从出资地址推断提现用户。新指纹绑定来源类型、请求地址（池为 null）、受益人、链、币种、收款地址、原金额和外部引用；恢复不得更换任一身份。

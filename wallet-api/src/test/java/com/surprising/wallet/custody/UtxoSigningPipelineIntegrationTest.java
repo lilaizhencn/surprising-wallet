@@ -275,6 +275,30 @@ class UtxoSigningPipelineIntegrationTest {
         assertThrows(DataAccessException.class, () -> signing.create(foreign, "FOREIGN"));
     }
 
+    @Test void unsignedFailureReleasesPrincipalAndItsRefundProofExactlyOnce() {
+        var original=prepare("BTC",false);
+        var failure=UtxoSigningResult.failure(new UtxoSigningTask(original.id(),original.request()),"synthetic unsigned rejection");
+        broadcasts.apply(failure);
+        broadcasts.apply(failure);
+        assertEquals("FAILED",orderStatus("BTC"));
+        assertTrue(jdbc.queryForObject("select funds_released from withdrawal_order where tenant_id=? and order_no='WD-PIPELINE'",Boolean.class,TENANT));
+        var balance=balances.find(TENANT,"BTC","BTC",account("BTC")).orElseThrow();
+        assertEquals(0,balance.getLockedBalance().signum());
+        assertEquals(0,BigDecimal.ONE.compareTo(balance.getAvailableBalance()));
+        verifyNoInteractions(runtime);
+    }
+
+    @Test void unsignedFailureWithMissingDebitIdentityCannotGuessAnAccountOrIssueRefundProof() {
+        var original=prepare("BTC",false);
+        jdbc.update("update withdrawal_order set debit_account_id=null where tenant_id=? and order_no='WD-PIPELINE'",TENANT);
+        var failure=UtxoSigningResult.failure(new UtxoSigningTask(original.id(),original.request()),"synthetic unsigned rejection");
+        assertThrows(IllegalStateException.class,()->broadcasts.apply(failure));
+        assertEquals("SIGNING",orderStatus("BTC"));
+        assertFalse(jdbc.queryForObject("select funds_released from withdrawal_order where tenant_id=? and order_no='WD-PIPELINE'",Boolean.class,TENANT));
+        assertTrue(balances.find(TENANT,"BTC","BTC",account("BTC")).orElseThrow().getLockedBalance().signum()>0);
+        assertEquals("LOCKED",inputStatus("BTC"));
+    }
+
     private UtxoSigningTransaction prepare(String chain, boolean dustOutput) {
         int coinType = switch (chain) { case "BTC" -> 0; case "LTC" -> 2; case "DOGE" -> 3; default -> 145; };
         var asset = new UtxoSigningRequest.Asset(chain, BitcoinLikeNetwork.REGTEST, 1, 8, coinType);

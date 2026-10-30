@@ -7,6 +7,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /** Explicit construction of custody fixtures; application classes keep one injected constructor. */
 public final class CustodyTestSupport {
+    public static com.surprising.wallet.service.CustodyPoolFundingService poolFunding(org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.CustodyPoolFundingService(
+                new com.surprising.wallet.repository.LedgerBalanceRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+                new com.surprising.wallet.repository.ChainAddressRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyLedgerEntryRepository(jdbc));
+    }
+
     private CustodyTestSupport() { }
 
     public static com.surprising.wallet.service.CustodyTenantChainService tenantChains(JdbcTemplate jdbc,
@@ -70,7 +79,8 @@ public final class CustodyTestSupport {
                 new CustodyWithdrawalRepository(jdbc), new CustodyDepositRepository(jdbc), new CustodyTenantChainTableRepository(jdbc),
                 new ChainProfileRepository(jdbc), addresses, gas(jdbc, addresses, runtime), assets(jdbc), webhooks(jdbc),
                 new com.surprising.wallet.service.CustodyTransactionQueryService(new CustodyDepositRepository(jdbc),
-                        new CustodyWithdrawalRepository(jdbc), new CustodyAddressRepository(jdbc), new WithdrawalOrderRepository(jdbc)));
+                        new CustodyWithdrawalRepository(jdbc), new CustodyAddressRepository(jdbc), new WithdrawalOrderRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc)));
     }
 
     public static com.surprising.wallet.model.CustodyPrincipal platformAdmin() {

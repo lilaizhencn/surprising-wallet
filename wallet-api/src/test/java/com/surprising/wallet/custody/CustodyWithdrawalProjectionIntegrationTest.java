@@ -207,7 +207,7 @@ class CustodyWithdrawalProjectionIntegrationTest {
         UUID withdrawalId = UUID.randomUUID();
         new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(withdrawalId, tenantId, addressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find(chain, orderNo, tenantId).orElseThrow().getId().longValue(), orderNo,
                 null, null, chain, "USDT", "destination", new BigDecimal("3"), new BigDecimal("0.25"),
-                "FROZEN", "API_KEY", "projection-test");
+                "FROZEN", "API_KEY", "projection-test", "user:"+subject,"ADDRESS");
         return new Projection(withdrawalId, tenantId, addressId, chain, orderNo, account);
     }
 

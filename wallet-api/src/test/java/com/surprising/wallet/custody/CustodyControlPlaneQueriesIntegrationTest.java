@@ -149,6 +149,11 @@ class CustodyControlPlaneQueriesIntegrationTest {
         var row = context.getBean(CustodyAssetDashboardService.class).dashboard(CustodyTestSupport.tenantAdmin(TENANT)).assets().stream().filter(value -> "ETH".equals(value.chain()) && "ETH".equals(value.assetSymbol())).findFirst().orElseThrow();
         assertEquals(0, new BigDecimal("7").compareTo(row.totalBalance()));
         assertEquals(1, row.addressCount());
+        String pool=com.surprising.wallet.service.CustodyPoolFundingService.accountId(TENANT,"ETH","ETH");
+        jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,'ETH','ETH',?,1,1,2)",TENANT,pool);
+        var pooled=context.getBean(CustodyAssetDashboardService.class).dashboard(CustodyTestSupport.tenantAdmin(TENANT)).assets().stream().filter(value -> "ETH".equals(value.chain()) && "ETH".equals(value.assetSymbol())).findFirst().orElseThrow();
+        assertEquals(0,new BigDecimal("9").compareTo(pooled.totalBalance()));
+        assertEquals(1,pooled.addressCount());
     }
 
     @Test
@@ -185,9 +190,9 @@ class CustodyControlPlaneQueriesIntegrationTest {
         var crypto = new com.surprising.wallet.service.CustodyCryptoService(properties);
         var execution = org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyWithdrawalExecutionService.class);
         var idempotency = new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc);
-        assertTrue(idempotency.begin(TENANT, "waiting-request", "WITHDRAWAL.CREATE", crypto.sha256(addressId + "\nETH\nETH\nrecipient\n1\nclient-ref"), java.time.Instant.now().plusSeconds(300)));
-        var service = new com.surprising.wallet.service.CustodyWithdrawalService(execution, context.getBean(CustodyGasService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyTenantChainService.class), crypto, new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper(), CustodyTestSupport.events(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), idempotency, new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc));
-        var failure = assertThrows(IllegalStateException.class, () -> service.create(CustodyTestSupport.tenantAdmin(TENANT), new com.surprising.wallet.service.CustodyWithdrawalService.CreateWithdrawalCommand(addressId, "ETH", "ETH", "recipient", "1", "client-ref", true), "API", "waiting-request", "127.0.0.1"));
+        assertTrue(idempotency.begin(TENANT, "waiting-request", "WITHDRAWAL.CREATE", crypto.sha256("ADDRESS\n" + addressId + "\nuser:42\nETH\nETH\nrecipient\n1\nclient-ref"), null));
+        var service = new com.surprising.wallet.service.CustodyWithdrawalService(execution, context.getBean(CustodyGasService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyTenantChainService.class), crypto, new com.surprising.wallet.config.custody.CustodyJacksonConfiguration().custodyObjectMapper(), CustodyTestSupport.events(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), idempotency, new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), CustodyTestSupport.poolFunding(jdbc));
+        var failure = assertThrows(IllegalStateException.class, () -> service.create(CustodyTestSupport.tenantAdmin(TENANT), new com.surprising.wallet.service.CustodyWithdrawalService.CreateWithdrawalCommand(addressId, "ETH", "ETH", "recipient", "1", "client-ref", true, "user:42", com.surprising.wallet.service.CustodyWithdrawalService.FundingSource.ADDRESS), "API", "waiting-request", "127.0.0.1"));
         assertTrue(failure.getMessage().contains("still processing"), failure.getMessage());
         org.mockito.Mockito.verifyNoInteractions(execution);
         assertEquals(0, jdbc.queryForObject("select count(*) from custody_withdrawal where tenant_id=?", Integer.class, TENANT));

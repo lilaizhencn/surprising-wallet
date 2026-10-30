@@ -72,7 +72,7 @@ class CustodyGasAccountingIntegrationTest {
         operationId = UUID.randomUUID();
         new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(operationId, TENANT, customerAddress, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, TENANT).orElseThrow().getId().longValue(), orderNo,
                 null, null, "ETH", "USDT", "destination", new BigDecimal("3"), BigDecimal.ZERO,
-                "SENT", "API_KEY", "gas-test");
+                "SENT", "API_KEY", "gas-test", "user:42", "ADDRESS");
     }
 
     @AfterEach void close() { if (context != null) context.close(); }
@@ -131,6 +131,15 @@ class CustodyGasAccountingIntegrationTest {
         assertBalance("0.96", "0", "0.96");
         assertEquals(0, new BigDecimal("0.04").compareTo(jdbc.queryForObject(
                 "select amount from custody_ledger_entry", BigDecimal.class)));
+    }
+
+    @Test void aFailedOnChainExecutionSettlesActualGasInsteadOfReleasingItsReservation() {
+        reserve();expireReservation();
+        jdbc.update("update withdrawal_order set status='FAILED',funds_released=true where tenant_id=? and order_no=?",TENANT,orderNo);
+        jdbc.update("insert into evm_tx(chain,tx_hash,from_address,to_address,asset_symbol,amount,fee,confirmations,status) values ('ETH','gas-test-hash','customer','destination','USDT',3,0.04,12,'FAILED')");
+        reconciliation.reconcile();reconciliation.reconcile();
+        assertEquals("SETTLED",usageStatus());assertBalance("0.96","0","0.96");
+        assertEquals(1,count("custody_ledger_entry"));
     }
 
     @Test void settlementReceiptFailureRollsBackTheBalanceAndReservation() {
@@ -200,7 +209,7 @@ class CustodyGasAccountingIntegrationTest {
             UUID pendingId = UUID.randomUUID();
             new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(pendingId, TENANT, customerAddress, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", pendingOrder, TENANT).orElseThrow().getId().longValue(), pendingOrder,
                     null, null, "ETH", "USDT", "destination", new BigDecimal("3"), BigDecimal.ZERO,
-                    "SENT", "API_KEY", "gas-test");
+                    "SENT", "API_KEY", "gas-test", "user:42", "ADDRESS");
             accounting.reserve(TENANT, "WITHDRAWAL", pendingId, new BigDecimal("0.001"));
         }
         expireReservation();

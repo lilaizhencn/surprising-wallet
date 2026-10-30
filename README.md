@@ -202,3 +202,12 @@ The canonical initialization SQL is applied only once to a new, explicitly provi
 ### Logs and monitoring
 
 Application logs rotate daily or at 20 MB and are compressed: INFO/WARN archives keep up to 14 days/512 MB, ERROR archives up to 30 days/128 MB. A Python/systemd monitor checks resources, services, HTTPS, PostgreSQL, PGMQ and errors every minute, sending Telegram alerts, recovery notices and a daily summary. Monitoring runs independently of the wallet JVM on the same host and sends directly to Telegram. A full host outage prevents this local monitor from sending alerts. See [operations and monitoring](resources/docs/zh/operations-monitoring.md) for installation, thresholds and rollback.
+
+
+### 提现与交易端资金闭环
+
+提现创建的永久幂等受理在可变条件前重放；`POST /custody/api/v1/withdrawals/resolve` 只能返回已接受请求或永久拒绝尚未受理的键，不能依赖 HTTP 错误或查询缺失退款。普通 EVM 广播前持久化 nonce、签名字节与业务哈希，故障仅重播同一笔交易；确认失败释放本金并独立结算实际 Gas。完整流程见 [系统代码流程](resources/docs/zh/system-code-flow.md)。
+
+升级存量数据库使用 `resources/docs/db/wallet-withdrawal-closure-upgrade.sql`，必须先停止新提现/签名。旧未知广播不能自动改为失败；缺失受理凭据仍保留原业务单保护，不允许生成错误退款证明。HTTP 金额统一为无损十进制字符串；提现在冻结前验证链精度及 NUMERIC(78,18) 存储范围。
+
+资金池提现：交易所经 Core 可用余额授权后，以租户同链同资产本金池出款，独立保存提现用户。Gas 余额不参与本金；平台费用按原报价内扣，仅确认后入账。托管控制台地址出款须明确提现用户标识。

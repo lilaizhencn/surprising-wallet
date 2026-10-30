@@ -89,9 +89,8 @@ public class CustodyWithdrawalReconciliationService {
             String eventType = eventType(order.getStatus());
             if (eventType != null) {
                 UUID eventId = UUID.randomUUID();
-                var address = addresses.require(tenantId, row.custodyAddressId());
                 events.publish(eventId, tenantId, eventType, "WITHDRAWAL", row.orderNo(),
-                        payload(eventId, eventType, row, order), "API".equals(address.source()));
+                        payload(eventId, eventType, row, order), "API_KEY".equals(row.createdByType()));
             }
             return true;
         }));
@@ -114,6 +113,8 @@ public class CustodyWithdrawalReconciliationService {
         data.put("externalReference", row.externalReference());
         data.put("orderNo", row.orderNo());
         data.put("chain", row.chain());
+        data.put("subject",row.subject());
+        data.put("fundingSource",row.fundingSource());
         data.put("asset", order.getAssetSymbol());
         data.put("toAddress", order.getToAddress());
         data.put("amount", order.getAmount());

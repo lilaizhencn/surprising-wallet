@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="3015" viewBox="0 0 1180 2840">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="3440" viewBox="0 0 1180 3440">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -313,4 +313,15 @@
   <text x="50" y="2882" style="font:13px sans-serif;fill:#1e293b">Token：读取配置 → 事务外 RPC / ABI 验证 → 行锁复核快照 → Token / 资产 / 审计</text>
   <text x="50" y="2916" style="font:13px sans-serif;fill:#1e293b">提现：归属 / 赤字 → 幂等 → 复用地址 / 订单返回 ID → 条件冻结 / Gas / 事件 / 审计</text>
   <text x="50" y="2950" style="font:13px sans-serif;fill:#1e293b">找回：托管 ID + 原始地址 → 检查歧义 → 调整实际链 → EVM 执行 / 确认</text>
+  <rect x="30" y="3010" width="1040" height="195" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="50" y="3040" style="font:13px sans-serif;fill:#1e293b">CREATE / RESOLVE → same permanent key → accepted response OR irreversible refusal (never both)</text>
+  <text x="50" y="3080" style="font:13px sans-serif;fill:#1e293b">EVM claim → nonce + signed raw + owned tx_hash COMMIT → RPC; timeout → same raw / nonce recovery</text>
+  <text x="50" y="3120" style="font:13px sans-serif;fill:#1e293b">Confirmed failed receipt → actual Gas + atomic principal release → refundable proof → Core refund</text>
+  <text x="50" y="3160" style="font:13px sans-serif;fill:#1e293b">Exact subject → withdrawal.subject / deposit owned address IDs → SQL filter → page → details</text>
+<desc>resolve checks existing accepted business orders even when a receipt is missing; withdrawal precision must be lossless in NUMERIC(78,18).</desc>
+<rect x="30" y="3230" width="1040" height="180" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="50" y="3260" class="label">Core 用户授权 → TENANT_POOL + 独立 subject → CustodyPoolFundingService</text>
+  <text x="50" y="3295" style="font:13px sans-serif">锁租户同链同资产池 → 排除所有 Gas 账户 → 条件借记来源 / 池贷记 / 不可变流水</text>
+  <text x="50" y="3330" style="font:13px sans-serif">池本金冻结 + 订单 + Gas + 永久回执同事务；物理签名地址与账本扣款账户独立</text>
+  <text x="50" y="3365" style="font:13px sans-serif">确认扣冻结；明确失败释放回池；未知不退款；提现 subject 直接筛选后分页</text>
 </svg>

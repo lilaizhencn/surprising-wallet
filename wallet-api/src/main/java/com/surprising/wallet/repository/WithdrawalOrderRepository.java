@@ -38,14 +38,14 @@ public class WithdrawalOrderRepository {
     public List<HistoryOrder> findHistoryOrders(UUID tenantId, List<Long> ids) {
         if (ids.isEmpty()) return List.of();
         return jdbc.query("""
-                select id, tx_hash, status, error_message from withdrawal_order
+                select id, tx_hash, status, error_message, funds_released from withdrawal_order
                  where tenant_id = ? and id = any (?)
                 """, (rs, rowNum) -> new HistoryOrder(rs.getLong("id"), rs.getString("tx_hash"),
-                        rs.getString("status"), rs.getString("error_message")),
+                        rs.getString("status"), rs.getString("error_message"),rs.getBoolean("funds_released")),
                 tenantId, new SqlArrayValue("bigint", ids.toArray()));
     }
 
-    public record HistoryOrder(long id, String txHash, String status, String errorMessage) { }
+    public record HistoryOrder(long id, String txHash, String status, String errorMessage, boolean fundsReleased) { }
 
     /** 判断指定链是否存在提现订单。 */
     public boolean existsByChain(String chain) {
@@ -146,6 +146,16 @@ public class WithdrawalOrderRepository {
                 """, fromAddress, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
     }
 
+    public int claimSigningEvm(UUID tenantId, String chain, String orderNo, String fromAddress) {
+        return jdbc.update("update withdrawal_order set status='SIGNING',durable_submission=true,from_address=coalesce(?,from_address),updated_at=now() where tenant_id=? and chain=? and order_no=? and status in ('FROZEN','RETRYING')",
+                fromAddress,tenantId,chain,orderNo);
+    }
+
+    public int recoverUnsignedEvm(String chain) {
+        // Under this protocol, no hash means no signed bytes could have been broadcast. The row lock fences late workers.
+        return jdbc.update("update withdrawal_order set status='FROZEN',error_message=null,updated_at=now() where chain=? and durable_submission and status='BROADCAST_UNKNOWN' and tx_hash is null",chain);
+    }
+
     /** 更新非租户提现为签名中。 */
     public int claimSigning(String chain, String orderNo, String fromAddress) {
         return jdbc.update("""
@@ -163,7 +173,7 @@ public class WithdrawalOrderRepository {
                     error_message = 'signing state expired before a tx hash was recorded; manual chain audit required',
                     lease_owner = null, lease_until = null, updated_at = ?
                  where tenant_id is not null and chain = ? and status = 'SIGNING'
-                   and tx_hash is null and updated_at < ?
+                   and updated_at < ?
                 """, Timestamp.from(Instant.now()), chain, Timestamp.from(before));
     }
 
@@ -173,8 +183,8 @@ public class WithdrawalOrderRepository {
         return jdbc.update("""
                 update withdrawal_order set status = 'SENT', from_address = coalesce(?, from_address),
                     tx_hash = ?, error_message = null, lease_owner = null, lease_until = null, updated_at = ?
-                 where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
-                """, fromAddress, txHash, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
+                 where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING' and (tx_hash is null or tx_hash = ?)
+                """, fromAddress, txHash, Timestamp.from(Instant.now()), tenantId, chain, orderNo, txHash);
     }
 
     /** 标记非租户提现已发送。 */
@@ -193,7 +203,7 @@ public class WithdrawalOrderRepository {
         return jdbc.update("""
                 update withdrawal_order set status = 'BROADCAST_UNKNOWN', from_address = coalesce(?, from_address),
                     error_message = ?, lease_owner = null, lease_until = null, updated_at = ?
-                 where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
+                 where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING'
                 """, fromAddress, errorMessage, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
     }
 
@@ -206,6 +216,18 @@ public class WithdrawalOrderRepository {
                 """, fromAddress, errorMessage, Timestamp.from(Instant.now()), chain, orderNo);
     }
 
+    /** Signed bytes and this hash are committed together before any broadcast. */
+    public int bindPrepared(UUID tenantId, String chain, String orderNo, String txHash) {
+        requireTransactionHash(txHash);
+        return jdbc.update("update withdrawal_order set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and order_no=? and status='SIGNING' and tx_hash is null",
+                txHash,tenantId,chain,orderNo);
+    }
+
+    public int recoverPreparedSent(UUID tenantId, String chain, String orderNo, String txHash) {
+        return jdbc.update("update withdrawal_order set status='SENT',error_message=null,updated_at=now() where tenant_id=? and chain=? and order_no=? and status in ('SIGNING','BROADCAST_UNKNOWN') and tx_hash=?",
+                tenantId,chain,orderNo,txHash);
+    }
+
     /** 更新租户提现状态。 */
     public int updateStatus(UUID tenantId, String chain, String orderNo, String status,
                             String fromAddress, String txHash, String errorMessage) {
@@ -213,7 +235,7 @@ public class WithdrawalOrderRepository {
                 update withdrawal_order set status = ?, from_address = coalesce(?, from_address),
                     tx_hash = coalesce(?, tx_hash), error_message = ?, lease_owner = null,
                     lease_until = null, updated_at = now()
-                 where tenant_id = ? and chain = ? and order_no = ?
+                 where tenant_id = ? and chain = ? and order_no = ? and status not in ('CONFIRMED','FAILED','REJECTED','CANCELLED')
                 """, status, fromAddress, txHash, errorMessage, tenantId, chain, orderNo);
     }
 
@@ -223,7 +245,7 @@ public class WithdrawalOrderRepository {
         return jdbc.update("""
                 update withdrawal_order set status = ?, from_address = coalesce(?, from_address),
                     tx_hash = coalesce(?, tx_hash), error_message = ?, updated_at = now()
-                 where chain = ? and order_no = ?
+                 where chain = ? and order_no = ? and status not in ('CONFIRMED','FAILED','REJECTED','CANCELLED')
                 """, status, fromAddress, txHash, errorMessage, chain, orderNo);
     }
 
@@ -231,7 +253,7 @@ public class WithdrawalOrderRepository {
     public int markUtxoAttemptConfirming(UUID tenantId, String chain, String orderNo, String txHash) {
         return jdbc.update("""
                 update withdrawal_order set status = 'CONFIRMING', tx_hash = ?, error_message = null,
-                    updated_at = now() where tenant_id = ? and chain = ? and order_no = ?
+                    updated_at = now() where tenant_id = ? and chain = ? and order_no = ? and status not in ('CONFIRMED','FAILED','REJECTED','CANCELLED')
                     and chain in ('BTC', 'BCH', 'LTC', 'DOGE')
                     and status in ('SIGNING', 'SENT', 'CONFIRMING', 'BROADCAST_UNKNOWN')
                 """, txHash, tenantId, chain, orderNo);
@@ -346,15 +368,20 @@ public class WithdrawalOrderRepository {
     /** 按主键更新提现订单为失败。 */
     public int markFailed(UUID tenantId, long id, String error) {
         return jdbc.update("""
-                update withdrawal_order set status = 'FAILED', error_message = ?, updated_at = now()
+                update withdrawal_order set status = 'FAILED', funds_released=true, error_message = ?, updated_at = now()
                  where tenant_id = ? and id = ? and status = 'SENT'
                 """, error, tenantId, id);
+    }
+
+    public int failSettled(UUID tenantId, String chain, String orderNo, String txHash, String error) {
+        return jdbc.update("update withdrawal_order set status='FAILED',funds_released=true,error_message=?,updated_at=now() where tenant_id=? and chain=? and order_no=? and tx_hash=? and status in ('SENT','CONFIRMING')",
+                error,tenantId,chain,orderNo,txHash);
     }
 
     /** 将没有广播交易的提现订单标记为最终失败并保持交易哈希为空。 */
     public int markPreBroadcastFailed(UUID tenantId, long id, String error) {
         return jdbc.update("""
-                update withdrawal_order set status = 'FAILED', tx_hash = null,
+                update withdrawal_order set status = 'FAILED', funds_released=true, tx_hash = null,
                     error_message = ?, updated_at = now()
                  where tenant_id = ? and id = ? and tx_hash is null
                    and status in ('FROZEN', 'RETRYING', 'SIGNING')

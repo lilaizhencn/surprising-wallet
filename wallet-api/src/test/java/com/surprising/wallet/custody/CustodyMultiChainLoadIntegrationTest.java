@@ -330,7 +330,7 @@ class CustodyMultiChainLoadIntegrationTest {
                 "external-" + account.index(), "load-idempotency-" + account.index(),
                 account.chain().name(), account.symbol(),
                 address(account.chain(), account.index() + 20_000), WITHDRAW_AMOUNT, BigDecimal.ZERO,
-                "FROZEN", "API_KEY", "load-test");
+                "FROZEN", "API_KEY", "load-test", "user:42", "ADDRESS");
         String txHash = "load-withdraw-" + account.index();
         chains.withdrawalOrderRepository.updateStatus(
                 tenantId,

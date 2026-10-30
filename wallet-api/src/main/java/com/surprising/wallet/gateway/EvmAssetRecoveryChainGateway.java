@@ -71,6 +71,7 @@ public class EvmAssetRecoveryChainGateway {
         requireEvmChain(request.chain());
         if (request.tokenContract() == null) {
             return transactions.sendNative(
+                    new com.surprising.wallet.service.EvmSubmissionService.Operation(request.source().getTenantId(),request.recoveryId().toString(),com.surprising.wallet.service.EvmSubmissionService.Kind.RECOVERY),
                     request.chain(), request.source(), request.recoveryAddress(), request.amount());
         }
         TokenDefinition token = TokenDefinition.builder()
@@ -83,7 +84,13 @@ public class EvmAssetRecoveryChainGateway {
                 .active(true)
                 .build();
         return transactions.sendToken(
+                new com.surprising.wallet.service.EvmSubmissionService.Operation(request.source().getTenantId(),request.recoveryId().toString(),com.surprising.wallet.service.EvmSubmissionService.Kind.RECOVERY),
                 request.chain(), request.source(), token, request.recoveryAddress(), request.amount());
+    }
+
+    public void rebroadcast(java.util.UUID tenantId, String chain, java.util.UUID recoveryId) {
+        transactions.recover(new com.surprising.wallet.service.EvmSubmissionService.Operation(tenantId,recoveryId.toString(),
+                com.surprising.wallet.service.EvmSubmissionService.Kind.RECOVERY),chain);
     }
 
     public boolean confirmed(String chain, String txHash) {
@@ -94,10 +101,6 @@ public class EvmAssetRecoveryChainGateway {
             if (receipt == null || receipt.getBlockNumber() == null) {
                 return false;
             }
-            if (!receipt.isStatusOK()) {
-                throw new PermanentlyFailedTransactionException(
-                        "recovery transaction failed on chain");
-            }
             EthBlock.Block canonical = web3j.ethGetBlockByNumber(
                     org.web3j.protocol.core.DefaultBlockParameter.valueOf(receipt.getBlockNumber()),
                     false).send().getBlock();
@@ -106,8 +109,9 @@ public class EvmAssetRecoveryChainGateway {
             }
             BigInteger latest = web3j.ethBlockNumber().send().getBlockNumber();
             BigInteger confirmations = latest.subtract(receipt.getBlockNumber()).add(BigInteger.ONE);
-            return confirmations.compareTo(BigInteger.valueOf(
-                    Math.max(1, profile.getWithdrawConfirmations()))) >= 0;
+            if (confirmations.compareTo(BigInteger.valueOf(Math.max(1,profile.getWithdrawConfirmations()))) < 0) return false;
+            if (!receipt.isStatusOK()) throw new PermanentlyFailedTransactionException("recovery transaction failed on the canonical chain");
+            return true;
         });
     }
 
@@ -297,6 +301,6 @@ public class EvmAssetRecoveryChainGateway {
     /** 执行请求，包含找回资产的完整参数 */
     public record ExecutionRequest(
             String chain, String assetSymbol, String tokenContract, int tokenDecimals,
-            BigDecimal amount, ChainAddressRecord source, String recoveryAddress) {
+            BigDecimal amount, ChainAddressRecord source, String recoveryAddress, java.util.UUID recoveryId) {
     }
 }

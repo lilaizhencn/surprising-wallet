@@ -26,6 +26,13 @@ import java.util.Map;
  */
 @RestControllerAdvice(basePackages = "com.surprising.wallet")
 public class CustodyExceptionHandler {
+    @ExceptionHandler(CustodyWithdrawalRefusedException.class)
+    public ResponseEntity<Map<String, Object>> refused(CustodyWithdrawalRefusedException refusal) {
+        return ResponseEntity.unprocessableEntity().body(Map.of("rejection", Map.of(
+                "status", "REJECTED", "idempotencyKey", refusal.idempotencyKey(),
+                "requestHash", refusal.requestHash())));
+    }
+
     /**
      * 未授权异常统一转为 401，返回标准错误码与消息。
      */

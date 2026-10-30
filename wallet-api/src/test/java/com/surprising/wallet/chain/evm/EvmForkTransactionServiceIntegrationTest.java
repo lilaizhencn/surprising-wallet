@@ -85,6 +85,11 @@ class EvmForkTransactionServiceIntegrationTest {
         context.registerBean(WithdrawalOrderRepository.class, () -> repository.withdrawalOrderRepository);
         context.registerBean(LedgerBalanceRepository.class, () -> repository.ledgerBalanceRepository);
         context.registerBean(WithdrawalSettlementService.class);
+        context.registerBean(com.surprising.wallet.repository.CollectionRecordRepository.class, () -> repository.collectionRecordRepository);
+        context.registerBean(com.surprising.wallet.repository.EvmTransactionRepository.class, () -> repository.evmTransactionRepository);
+        context.registerBean(com.surprising.wallet.repository.EvmNonceRepository.class, () -> new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
+        context.registerBean(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class, () -> new com.surprising.wallet.repository.CustodyAssetRecoveryRepository(jdbc));
+        context.registerBean(com.surprising.wallet.service.EvmSubmissionService.class);
         context.refresh();
         try {
             List<String> accounts = web3j.ethAccounts().send().getAccounts();
@@ -118,11 +123,13 @@ class EvmForkTransactionServiceIntegrationTest {
                     new EvmTransactionBuilder(),
                     httpServices,
                     context.getBean(WithdrawalSettlementService.class),
-                    new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
+                    context.getBean(com.surprising.wallet.service.EvmSubmissionService.class),
+                    new com.surprising.wallet.repository.CustodyAssetRecoveryRepository(jdbc));
 
             sendUnlockedNative(web3j, accounts.getFirst(), from.getAddress(), new BigDecimal("2"));
+            var nativeOperation = prepareOperation(repository,jdbc,localProfile,from,localProfile.getNativeSymbol(),accounts.get(1),new BigDecimal("0.25"),new BigDecimal("0.01"));
             String nativeHash = service.sendNative(
-                    chain.name(), from, accounts.get(1), new BigDecimal("0.25"));
+                    nativeOperation, chain.name(), from, accounts.get(1), new BigDecimal("0.25"));
             TransactionReceipt nativeReceipt = waitReceipt(web3j, nativeHash);
             assertTrue(nativeReceipt.isStatusOK(), "service native transaction must succeed");
             assertSentTransaction(jdbc, chain, nativeHash, localProfile.getNativeSymbol(), null);
@@ -134,8 +141,9 @@ class EvmForkTransactionServiceIntegrationTest {
             TokenDefinition token = configuredTokens.getFirst();
             sendUnlockedTokenCall(web3j, accounts.getFirst(), token.getContractAddress(),
                     encodeMint(from.getAddress(), new BigDecimal("100"), token.getDecimals()));
+            var tokenOperation = prepareOperation(repository,jdbc,localProfile,from,token.getSymbol(),accounts.get(2),new BigDecimal("25"),new BigDecimal("0.5"));
             String tokenHash = service.sendToken(
-                    chain.name(), from, token, accounts.get(2), new BigDecimal("25"));
+                    tokenOperation, chain.name(), from, token, accounts.get(2), new BigDecimal("25"));
             TransactionReceipt tokenReceipt = waitReceipt(web3j, tokenHash);
             assertTrue(tokenReceipt.isStatusOK(), "service token transaction must succeed");
             assertSentTransaction(jdbc, chain, tokenHash, token.getSymbol(), token.getContractAddress());
@@ -160,6 +168,22 @@ class EvmForkTransactionServiceIntegrationTest {
         }
     }
 
+    private static com.surprising.wallet.service.EvmSubmissionService.Operation prepareOperation(
+            ChainRepositoryFixture repository,JdbcTemplate jdbc,AccountChainProfile profile,ChainAddressRecord from,
+            String symbol,String recipient,BigDecimal amount,BigDecimal fee) {
+        String account="service-customer-"+profile.getChain();
+        String orderNo="service-confirm-"+profile.getChain()+"-"+symbol;
+        BigDecimal debit=amount.add(fee);
+        jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,?,?,?,?,0,?)",
+                TENANT,profile.getChain(),symbol,account,debit.add(BigDecimal.ONE),debit.add(BigDecimal.ONE));
+        repository.withdrawalOrderRepository.createForTenant(TENANT,orderNo,from.getUserId(),profile.getChain(),symbol,
+                from.getAddress(),account,recipient,amount,fee);
+        assertTrue(repository.ledgerBalanceRepository.freeze(profile.getChain(),symbol,account,debit,TENANT));
+        assertEquals(1,repository.withdrawalOrderRepository.updateStatus(TENANT,profile.getChain(),orderNo,"FROZEN",from.getAddress(),null,null));
+        assertEquals(1,repository.withdrawalOrderRepository.claimSigningEvm(TENANT,profile.getChain(),orderNo,from.getAddress()));
+        return new com.surprising.wallet.service.EvmSubmissionService.Operation(TENANT,orderNo,com.surprising.wallet.service.EvmSubmissionService.Kind.WITHDRAWAL);
+    }
+
     /** Exercise the real receipt path and normal Spring settlement transaction, including a replay. */
     private static void confirmAndAssertOrderDebit(EvmAccountTransactionService service,
             ChainRepositoryFixture repository, JdbcTemplate jdbc, AccountChainProfile profile,
@@ -167,15 +191,6 @@ class EvmForkTransactionServiceIntegrationTest {
             BigDecimal amount, BigDecimal customerFee) throws Exception {
         String account = "service-customer-" + profile.getChain();
         String orderNo = "service-confirm-" + profile.getChain() + "-" + symbol;
-        BigDecimal debit = amount.add(customerFee);
-        jdbc.update("""
-                insert into ledger_balance(tenant_id, chain, asset_symbol, account_id,
-                    available_balance, locked_balance, total_balance) values (?, ?, ?, ?, ?, 0, ?)
-                """, TENANT, profile.getChain(), symbol, account, debit.add(BigDecimal.ONE), debit.add(BigDecimal.ONE));
-        long orderId = repository.withdrawalOrderRepository.createForTenant(TENANT, orderNo, from.getUserId(),
-                profile.getChain(), symbol, from.getAddress(), account, recipient, amount, customerFee);
-        assertTrue(orderId > 0);
-        assertTrue(repository.ledgerBalanceRepository.freeze(profile.getChain(), symbol, account, debit, TENANT));
         assertEquals(1, repository.withdrawalOrderRepository.updateStatus(TENANT, profile.getChain(), orderNo,
                 "SENT", from.getAddress(), hash, null));
         var mining = new HttpService(LOCAL_RPC);
@@ -204,6 +219,7 @@ class EvmForkTransactionServiceIntegrationTest {
      */
     private static ChainAddressRecord addressRecord(AccountChainProfile profile, ChainType chain) {
         return ChainAddressRecord.builder()
+                .tenantId(TENANT)
                 .chain(chain.name())
                 .assetSymbol(profile.getNativeSymbol())
                 .userId(93001L + chain.ordinal())

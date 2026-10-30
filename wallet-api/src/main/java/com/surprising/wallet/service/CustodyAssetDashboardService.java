@@ -146,7 +146,8 @@ public class CustodyAssetDashboardService {
         Map<AssetKey, Amounts> result = new LinkedHashMap<>();
         for (LedgerBalanceRecord balance : balances.listOwned(tenant)) {
             AccountKey account = new AccountKey(balance.getChain(), balance.getAccountId());
-            if (gas.contains(account) || requireOwner && !owners.containsKey(account)) {
+            boolean tenantPool = CustodyPoolFundingService.accountId(tenant, balance.getChain(), balance.getAssetSymbol()).equals(balance.getAccountId());
+            if (gas.contains(account) || requireOwner && !owners.containsKey(account) && !tenantPool) {
                 continue;
             }
             var amount = result.computeIfAbsent(new AssetKey(balance.getChain(), balance.getAssetSymbol()), ignored -> new Amounts());

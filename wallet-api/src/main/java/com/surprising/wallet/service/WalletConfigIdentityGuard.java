@@ -17,6 +17,7 @@ public class WalletConfigIdentityGuard {
     private final DepositRecordRepository depositRecordRepository;
     private final WithdrawalOrderRepository withdrawalOrderRepository;
     private final CollectionRecordRepository collectionRecordRepository;
+    private final com.surprising.wallet.repository.CustodyAddressRepository custodyAddresses;
 
     public void requireUnusedChain(String chain) {
         if (chainAddressRepository.existsByChain(chain)
@@ -25,6 +26,12 @@ public class WalletConfigIdentityGuard {
                 || withdrawalOrderRepository.existsByChain(chain)
                 || collectionRecordRepository.existsByChain(chain)) {
             throw new IllegalStateException("chain identity, network, runtime currency and BIP44 coin type are locked after addresses or transactions exist");
+        }
+    }
+
+    public void requireNetwork(String chain, String network) {
+        if (custodyAddresses.existsOtherNetwork(chain,network)) {
+            throw new IllegalStateException("chain network is pinned by existing custody addresses; a different network cannot take over their funds");
         }
     }
 

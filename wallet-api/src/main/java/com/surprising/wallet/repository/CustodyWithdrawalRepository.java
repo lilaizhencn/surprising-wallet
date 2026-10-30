@@ -16,7 +16,7 @@ import java.util.Objects;
 @Repository
 public class CustodyWithdrawalRepository {
     private static final String STATUS_COLUMNS = "id, tenant_id, custody_address_id, withdrawal_order_id, order_no, "
-            + "external_reference, chain, status";
+            + "external_reference, chain, status, created_by_type, subject, funding_source";
 
     public List<StatusRow> listReconciliationCandidates(UUID afterId, int limit) {
         return jdbc.query("select " + STATUS_COLUMNS + """
@@ -34,11 +34,11 @@ public class CustodyWithdrawalRepository {
     private static StatusRow mapStatusRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
         return new StatusRow(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
                 rs.getObject("custody_address_id", UUID.class), rs.getLong("withdrawal_order_id"),
-                rs.getString("order_no"), rs.getString("external_reference"), rs.getString("chain"), rs.getString("status"));
+                rs.getString("order_no"), rs.getString("external_reference"), rs.getString("chain"), rs.getString("status"),rs.getString("created_by_type"),rs.getString("subject"),rs.getString("funding_source"));
     }
 
     public record StatusRow(UUID id, UUID tenantId, UUID custodyAddressId, long withdrawalOrderId,
-                            String orderNo, String externalReference, String chain, String status) { }
+                            String orderNo, String externalReference, String chain, String status, String createdByType,String subject,String fundingSource) { }
     public java.util.Optional<GasOperationReference> lockGasOperation(UUID tenantId, UUID id) {
         return jdbc.query("select chain, order_no from custody_withdrawal where tenant_id=? and id=? for update",
                 (rs, rowNum) -> new GasOperationReference(
@@ -46,6 +46,8 @@ public class CustodyWithdrawalRepository {
     }
     private static final String HISTORY_WHERE = """
              where tenant_id = ?
+               and (? = '' or subject = ?)
+               and (? = '' or external_reference = ?)
                and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
                and (? = '' or position(? in lower(concat_ws(' ', order_no, external_reference, to_address))) > 0
                     or withdrawal_order_id = any (?))
@@ -56,6 +58,13 @@ public class CustodyWithdrawalRepository {
     /** 构造托管提现仓储。 */
     public CustodyWithdrawalRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    public boolean existsSubmission(UUID tenantId, String key, String externalReference) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(select 1 from custody_withdrawal
+                 where tenant_id=? and (idempotency_key=? or external_reference=?))
+                """, Boolean.class, tenantId, key, externalReference));
     }
 
     /** 按订单查询托管提现单表字段。 */
@@ -76,14 +85,14 @@ public class CustodyWithdrawalRepository {
     public int insert(UUID id, UUID tenantId, UUID custodyAddressId, long withdrawalOrderId,
                       String orderNo, String externalReference, String idempotencyKey, String chain,
                       String assetSymbol, String toAddress, java.math.BigDecimal amount,
-                      java.math.BigDecimal fee, String status, String createdByType, String createdById) {
+                      java.math.BigDecimal fee, String status, String createdByType, String createdById,String subject,String fundingSource) {
         return jdbc.update("""
                 insert into custody_withdrawal(id, tenant_id, custody_address_id, withdrawal_order_id,
                     order_no, external_reference, idempotency_key, chain, asset_symbol, to_address,
-                    amount, fee, status, created_by_type, created_by_id)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    amount, fee, status, created_by_type, created_by_id,subject,funding_source)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)
                 """, id, tenantId, custodyAddressId, withdrawalOrderId, orderNo, externalReference,
-                idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status, createdByType, createdById);
+                idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status, createdByType, createdById,subject,fundingSource);
     }
 
     /** 查询租户托管提现记录。 */
@@ -92,7 +101,7 @@ public class CustodyWithdrawalRepository {
         return jdbc.queryForList("""
                 select id, tenant_id, custody_address_id, withdrawal_order_id, order_no, external_reference,
                        chain, asset_symbol, to_address, amount, fee, status, created_by_type, created_by_id,
-                       created_at, updated_at
+                       created_at, updated_at, subject, funding_source
                   from custody_withdrawal where tenant_id = ?
                    and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
                  order by created_at desc, id limit ? offset ?
@@ -115,7 +124,7 @@ public class CustodyWithdrawalRepository {
         args.add(Math.max(offset, 0));
         return jdbc.query("""
                 select id, custody_address_id, withdrawal_order_id, order_no, external_reference,
-                       chain, asset_symbol, to_address, amount, fee, status, created_by_type,
+                       chain, asset_symbol, to_address, amount, fee, status, created_by_type,subject,funding_source,
                        created_at, updated_at from custody_withdrawal
                 """ + HISTORY_WHERE + " order by created_at desc, id limit ? offset ?",
                 (rs, rowNum) -> new HistoryEntry(rs.getObject("id", UUID.class),
@@ -123,7 +132,7 @@ public class CustodyWithdrawalRepository {
                         rs.getString("order_no"), rs.getString("external_reference"), rs.getString("chain"),
                         rs.getString("asset_symbol"), rs.getString("to_address"), rs.getBigDecimal("amount"),
                         rs.getBigDecimal("fee"), rs.getString("status"), rs.getString("created_by_type"),
-                        rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()),
+                        rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant(),rs.getString("subject"),rs.getString("funding_source")),
                 args.toArray());
     }
 
@@ -135,6 +144,8 @@ public class CustodyWithdrawalRepository {
     private static ArrayList<Object> historyArgs(HistoryQuery query) {
         var args = new ArrayList<Object>();
         args.add(query.tenantId());
+        args.add(query.subject());args.add(query.subject());
+        args.add(query.externalReference()); args.add(query.externalReference());
         args.add(query.chain()); args.add(query.chain());
         args.add(query.assetSymbol()); args.add(query.assetSymbol());
         args.add(query.status()); args.add(query.status());
@@ -144,9 +155,10 @@ public class CustodyWithdrawalRepository {
     }
 
     public record HistoryQuery(UUID tenantId, String chain, String assetSymbol, String status,
-                               String search, List<Long> matchingOrderIds) {
+                               String search, List<Long> matchingOrderIds, String subject, String externalReference) {
         public HistoryQuery {
             Objects.requireNonNull(tenantId, "tenantId");
+            subject = subject==null ? "" : subject;
             matchingOrderIds = List.copyOf(matchingOrderIds);
         }
     }
@@ -154,7 +166,7 @@ public class CustodyWithdrawalRepository {
     public record HistoryEntry(UUID id, UUID custodyAddressId, long withdrawalOrderId, String orderNo,
                                String externalReference, String chain, String assetSymbol, String toAddress,
                                BigDecimal amount, BigDecimal fee, String status, String createdByType,
-                               Instant createdAt, Instant updatedAt) { }
+                               Instant createdAt, Instant updatedAt,String subject,String fundingSource) { }
 
 
     /** 更新托管提现记录状态。 */

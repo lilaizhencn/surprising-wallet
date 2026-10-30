@@ -68,7 +68,8 @@ class CustodyOperationsIntegrationTest {
                 new com.surprising.wallet.repository.CustodyDepositRepository(jdbc),
                 new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc),
                 new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
-                new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc));
+                new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc));
     }
 
     /**
@@ -527,7 +528,7 @@ class CustodyOperationsIntegrationTest {
             new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
                     withdrawalId, tenantId, customerAddressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo, null, null,
                     "ETH", "USDT", accountId, new BigDecimal("0.25"),
-                    BigDecimal.ZERO, "FROZEN", "CONSOLE", "qa");
+                    BigDecimal.ZERO, "FROZEN", "CONSOLE", "qa", "user:42", "ADDRESS");
             com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
                     tenantId, "WITHDRAWAL", withdrawalId, new BigDecimal("0.1"));
             jdbc.update("""
@@ -600,7 +601,7 @@ class CustodyOperationsIntegrationTest {
             new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(withdrawalId, tenantId, address.id(), new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo,
                     "failed-withdrawal-ref", null, "ETH", "USDT", "0x" + UUID.randomUUID()
                             .toString().replace("-", "") + "12345678",
-                    new BigDecimal("0.25"), BigDecimal.ZERO, "SIGNING", "API_KEY", "qa");
+                    new BigDecimal("0.25"), BigDecimal.ZERO, "SIGNING", "API_KEY", "qa", "user:42", "ADDRESS");
 
             assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc,
                     new CustodyJacksonConfiguration().custodyObjectMapper()).project(tenantId, withdrawalId));
@@ -675,7 +676,7 @@ class CustodyOperationsIntegrationTest {
             new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
                     withdrawalId, tenantId, addressId, new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo, null, null,
                     "ETH", "ETH", accountId, new BigDecimal("0.25"),
-                    BigDecimal.ZERO, "CONFIRMED", "CONSOLE", "qa");
+                    BigDecimal.ZERO, "CONFIRMED", "CONSOLE", "qa", "user:42", "ADDRESS");
             com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc).reserve(
                     tenantId, "WITHDRAWAL", withdrawalId, new BigDecimal("0.1"));
 
@@ -1224,7 +1225,7 @@ class CustodyOperationsIntegrationTest {
         new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc).insert(
                 UUID.randomUUID(), tenantId, address.id(), new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc).find("ETH", orderNo, tenantId).orElseThrow().getId().longValue(), orderNo, externalReference, null,
                 "ETH", "USDT", destination, new BigDecimal("3.5"),
-                new BigDecimal("0.1"), status, "CONSOLE", "qa");
+                new BigDecimal("0.1"), status, "CONSOLE", "qa", "user:42", "ADDRESS");
     }
 
     private static CustodyPrincipal historyPrincipal(UUID tenantId) {

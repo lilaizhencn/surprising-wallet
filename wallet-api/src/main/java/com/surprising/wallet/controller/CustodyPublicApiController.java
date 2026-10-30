@@ -124,12 +124,13 @@ public class CustodyPublicApiController {
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "") String subject,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return history.deposits(
+        return history.depositsForSubject(
                 CustodyRequestSupport.requirePrincipal(request),
-                chain, assetSymbol, status, search, limit, offset);
+                chain, assetSymbol, status, search, subject, limit, offset);
     }
 
     /**
@@ -141,12 +142,14 @@ public class CustodyPublicApiController {
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "") String subject,
+            @RequestParam(defaultValue = "") String externalReference,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return history.withdrawals(
+        return history.withdrawalsForSubject(
                 CustodyRequestSupport.requirePrincipal(request),
-                chain, assetSymbol, status, search, limit, offset);
+                chain, assetSymbol, status, search, subject, externalReference, limit, offset);
     }
 
     /**
@@ -161,6 +164,16 @@ public class CustodyPublicApiController {
         return transfers.create(
                 CustodyRequestSupport.requirePrincipal(request), body, "API", idempotencyKey,
                 CustodyRequestSupport.clientIp(request));
+    }
+
+    /** Serialize cancellation of an unaccepted submission against creation using the same permanent key. */
+    @PostMapping("/withdrawals/resolve")
+    public CustodyWithdrawalService.SubmissionResolution resolveWithdrawal(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody CustodyWithdrawalService.CreateWithdrawalCommand body,
+            HttpServletRequest request) {
+        return transfers.resolve(CustodyRequestSupport.requirePrincipal(request), body,
+                idempotencyKey, CustodyRequestSupport.clientIp(request));
     }
 
     /**

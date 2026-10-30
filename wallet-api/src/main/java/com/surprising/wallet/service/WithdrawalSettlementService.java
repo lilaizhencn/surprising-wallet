@@ -49,4 +49,21 @@ public class WithdrawalSettlementService {
         }
         return true;
     }
+    /** Only a confirmed failure receipt permits releasing the frozen principal. */
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean fail(UUID tenantId, String chain, String orderNo, String txHash, String reason) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
+        if (txHash == null || txHash.isBlank()) throw new IllegalArgumentException("failure receipt hash is required");
+        var order = orders.lockForSettlement(tenantId,chain,orderNo).orElseThrow();
+        if ("FAILED".equals(order.getStatus())) return false;
+        if (!Set.of("SENT","CONFIRMING").contains(order.getStatus()) || !txHash.equals(order.getTxHash())) {
+            throw new IllegalStateException("failure receipt differs from owned sent withdrawal");
+        }
+        if (!balances.release(chain,order.getAssetSymbol(),order.getDebitAccountId(),order.getAmount().add(order.getFee()),tenantId)) {
+            throw new IllegalStateException("failed withdrawal locked principal is inconsistent");
+        }
+        if (orders.failSettled(tenantId,chain,orderNo,txHash,reason) != 1) throw new IllegalStateException("failed withdrawal transition lost");
+        return true;
+    }
+
 }

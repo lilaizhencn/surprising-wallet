@@ -38,11 +38,23 @@ public class EvmTransactionRepository {
                 tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), now, now);
     }
 
+    public Optional<EvmTransactionRecord> findSigned(String chain, String txHash) {
+        return jdbc.query("""
+                select tx_hash,from_address,to_address,asset_symbol,contract_address,amount,fee,nonce,status,raw_payload
+                  from evm_tx where chain=? and tx_hash=? and raw_payload is not null
+                """, (rs,n) -> EvmTransactionRecord.builder().chain(chain).txHash(rs.getString("tx_hash"))
+                .fromAddress(rs.getString("from_address")).toAddress(rs.getString("to_address"))
+                .assetSymbol(rs.getString("asset_symbol")).contractAddress(rs.getString("contract_address"))
+                .amount(rs.getBigDecimal("amount")).fee(rs.getBigDecimal("fee")).nonce(rs.getLong("nonce"))
+                .status(rs.getString("status")).rawPayload(rs.getString("raw_payload")).build(), chain,txHash)
+                .stream().findFirst();
+    }
+
     /** 查询已确认交易的网络费用。 */
     public Optional<BigDecimal> findConfirmedFee(String chain, String txHash) {
         List<BigDecimal> rows = jdbc.queryForList("""
                 select fee from evm_tx
-                 where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                 where chain = ? and tx_hash = ? and status in ('CONFIRMED','FAILED')
                  limit 1
                 """, BigDecimal.class, chain, txHash);
         return rows.stream().findFirst();

@@ -73,7 +73,14 @@ public class CustodyGasReconciliationService {
                     .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
             accounting.settle(tenantId, "WITHDRAWAL", withdrawalId, fee.amount(), fee.pricingSource(), order.getTxHash());
         } else if (Set.of("FAILED", "REJECTED", "CANCELLED").contains(order.getStatus())) {
-            accounting.release(tenantId, "WITHDRAWAL", withdrawalId, "withdrawal ended as " + order.getStatus());
+            if (order.getTxHash() == null || order.getTxHash().isBlank()) {
+                accounting.release(tenantId, "WITHDRAWAL", withdrawalId, "withdrawal ended before broadcast");
+            } else {
+                // A failed on-chain execution still burns Gas. An absent fee receipt remains reserved for reconciliation.
+                var fee = evmTransactions.findConfirmedFee(order.getChain(),order.getTxHash())
+                        .orElseThrow(() -> new IllegalStateException("failed withdrawal actual network fee receipt is unavailable"));
+                accounting.settle(tenantId,"WITHDRAWAL",withdrawalId,fee,"CHAIN_FAILED_RECEIPT",order.getTxHash());
+            }
         }
     }
 

@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -17,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.exception.CustodyWithdrawalRefusedException;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyTenantTableRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
@@ -43,6 +43,7 @@ public class CustodyWithdrawalService {
     private final CustodyReorgDeficitRepository deficits;
     private final CustodyIdempotencyRepository idempotency;
     private final CustodyWithdrawalRepository withdrawals;
+    private final CustodyPoolFundingService pool;
     private final CustodyAuditRepository audits;
     private final CustodyWithdrawalExecutionService executionService;
     private final CustodyGasService gasService;
@@ -63,7 +64,7 @@ public class CustodyWithdrawalService {
                                     CustodyGasAccountRepository gasAccounts,
                                     CustodyTenantTableRepository tenants, ChainAddressRepository chainAddresses,
                                     CustodyReorgDeficitRepository deficits, CustodyIdempotencyRepository idempotency,
-                                    CustodyWithdrawalRepository withdrawals, CustodyAuditRepository audits) {
+                                    CustodyWithdrawalRepository withdrawals, CustodyAuditRepository audits, CustodyPoolFundingService pool) {
         this.tenants = tenants;
         this.chainAddresses = chainAddresses;
         this.deficits = deficits;
@@ -78,6 +79,7 @@ public class CustodyWithdrawalService {
         this.events = events;
         this.addresses = addresses;
         this.gasAccounts = gasAccounts;
+        this.pool = pool;
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -85,21 +87,27 @@ public class CustodyWithdrawalService {
                                  String source, String idempotencyKey, String sourceIp) {
         requireScope(principal, "withdrawals:write");
         String normalizedSource = normalizeSource(source);
-        if (!Boolean.TRUE.equals(command.confirmed())) {
-            throw new IllegalArgumentException(
-                    "withdrawal requires explicit confirmation");
+        command=normalized(command);
+        String chain=command.chain(),symbol=command.assetSymbol(),toAddress=command.toAddress(),amount=command.amount();
+        String externalReference=command.externalReference();
+        String requestHash=requestHash(command);
+        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
+        WithdrawalView replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
+        if (replay != null) return replay;
+        TenantRecord tenant = tenants.findById(principal.tenantId())
+                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
+        // The unique row serializes create against resolution. A refusal permanently fences this key.
+        if (!idempotency.begin(principal.tenantId(), normalizedIdempotencyKey, CREATE_OPERATION, requestHash, null)) {
+            replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
+            if (replay != null) return replay;
+            throw new IllegalStateException("a withdrawal request with this idempotency key is still processing");
         }
-        if (command.custodyAddressId() == null) {
-            throw new IllegalArgumentException("custodyAddressId is required");
-        }
-        CustodyAddressRecord address = addresses.require(
-                principal.tenantId(), command.custodyAddressId());
-        if (gasAccounts.existsForAddress(principal.tenantId(), command.custodyAddressId())) {
+        CustodyAddressRecord address=command.fundingSource()==FundingSource.TENANT_POOL
+                ? pool.source(principal.tenantId(),chain) : addresses.require(principal.tenantId(),command.custodyAddressId());
+        if (command.fundingSource()==FundingSource.ADDRESS && gasAccounts.existsForAddress(principal.tenantId(), command.custodyAddressId())) {
             throw new IllegalArgumentException(
                     "gas reserve addresses cannot be used as customer withdrawal sources");
         }
-        String chain = requireUpper(command.chain(), "chain", 32);
-        String symbol = requireUpper(command.assetSymbol(), "assetSymbol", 32);
         if (!address.chain().equals(chain)) {
             throw new IllegalArgumentException("custody address belongs to a different chain");
         }
@@ -107,40 +115,16 @@ public class CustodyWithdrawalService {
         tenantChains.requireWithdrawalEnabled(principal.tenantId(), chain, symbol);
         var account = chainAddresses.findOwned(principal.tenantId(), address.chainAddressId())
                 .orElseThrow(() -> new IllegalArgumentException("custody chain address not found"));
-        if (deficits.existsOpen(principal.tenantId(), chain, symbol, account.getAccountId())) {
+        if (deficits.existsOpenAsset(principal.tenantId(), chain, symbol)) {
             throw new IllegalStateException(
-                    "withdrawals are paused because this account has an unresolved deposit reorg deficit");
-        }
-        String toAddress = required(command.toAddress(), "toAddress", 160);
-        String amount = required(command.amount(), "amount", 120);
-        String externalReference = optional(command.externalReference(), 160);
-        String requestHash = crypto.sha256(
-                address.id() + "\n" + chain + "\n" + symbol + "\n"
-                        + toAddress + "\n" + amount + "\n" + externalReference);
-
-        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
-        WithdrawalView replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
-        if (replay != null) {
-            return replay;
-        }
-        if (!idempotency.begin(
-                principal.tenantId(), normalizedIdempotencyKey, CREATE_OPERATION,
-                requestHash, Instant.now().plus(Duration.ofDays(7)))) {
-            replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
-            if (replay != null) {
-                return replay;
-            }
-            throw new IllegalStateException(
-                    "a withdrawal request with this idempotency key is still processing");
+                    "withdrawals are paused because this tenant asset has an unresolved deposit reorg deficit");
         }
 
-        TenantRecord tenant = tenants.findById(principal.tenantId())
-                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
         String tenantOrderSlug = tenant.slug().substring(0, Math.min(tenant.slug().length(), 32));
         String orderPrefix = "CW-" + tenantOrderSlug + "-"
                 + address.id().toString().substring(0, 8);
         CustodyWithdrawalExecutionService.ExecutionResult result = executionService.execute(
-                address, account, symbol, toAddress, new BigDecimal(amount), orderPrefix);
+                address, account, symbol, toAddress, new BigDecimal(amount), orderPrefix, command.fundingSource());
         UUID withdrawalId = UUID.randomUUID();
         String orderNo = result.orderNo();
         String status = result.status();
@@ -162,7 +146,7 @@ public class CustodyWithdrawalService {
                 feeValue,
                 status,
                 "API".equals(normalizedSource) ? "API_KEY" : "CONSOLE",
-                principal.actorId().toString());
+                principal.actorId().toString(),command.subject(),command.fundingSource().name());
         gasService.reserveWithdrawal(
                 tenant.id(), withdrawalId, chain, symbol);
 
@@ -170,11 +154,11 @@ public class CustodyWithdrawalService {
         WithdrawalView view = new WithdrawalView(
                 withdrawalId, address.id(), orderNo, externalReference,
                 chain, symbol, broadcastAddress, amountValue, feeValue,
-                status, null, null, normalizedSource, Instant.now());
+                status, null, null, normalizedSource, Instant.now(), command.subject(),command.fundingSource());
         events.publish(
                 eventId, tenant.id(), "WITHDRAWAL.CREATED", "WITHDRAWAL", orderNo,
                 eventPayload(eventId, "WITHDRAWAL.CREATED", view),
-                "API".equals(address.source()));
+                "API".equals(normalizedSource));
         audits.insert(UUID.randomUUID(),
                 tenant.id(), principal.actorType().name(), principal.actorId().toString(),
                 "WITHDRAWAL.CREATE", "CUSTODY_WITHDRAWAL", withdrawalId.toString(), sourceIp,
@@ -184,10 +168,78 @@ public class CustodyWithdrawalService {
                         "assetSymbol", symbol,
                         "amount", amountValue,
                         "source", normalizedSource)));
-        idempotency.complete(
-                tenant.id(), normalizedIdempotencyKey, CREATE_OPERATION, 202, json(view));
+        if (idempotency.complete(tenant.id(), normalizedIdempotencyKey, CREATE_OPERATION, 202, json(view)) != 1) {
+            throw new IllegalStateException("withdrawal acceptance receipt changed before commit");
+        }
         return view;
     }
+
+    /** Irrevocably refuse an unaccepted key, or return its committed acceptance. Never infer absence from a GET. */
+    @Transactional(rollbackFor = Throwable.class)
+    public SubmissionResolution resolve(CustodyPrincipal principal, CreateWithdrawalCommand command,
+                                        String idempotencyKey, String sourceIp) {
+        requireScope(principal, "withdrawals:write");
+        command=normalized(command);
+        String key=requireIdempotencyKey(idempotencyKey);
+        String external=command.externalReference();
+        String hash=requestHash(command);
+        tenants.findById(principal.tenantId()).orElseThrow(() -> new IllegalArgumentException("tenant not found"));
+        if (idempotency.begin(principal.tenantId(), key, CREATE_OPERATION, hash, null)) {
+            if (withdrawals.existsSubmission(principal.tenantId(),key,external)) {
+                throw new IllegalStateException("accepted withdrawal is missing its permanent receipt; reconciliation is required");
+            }
+            var refusal = new SubmissionResolution("REJECTED", key, hash, external, null);
+            if (idempotency.complete(principal.tenantId(), key, CREATE_OPERATION, 422, json(refusal)) != 1) {
+                throw new IllegalStateException("withdrawal refusal receipt changed before commit");
+            }
+            audits.insert(UUID.randomUUID(), principal.tenantId(), principal.actorType().name(),
+                    principal.actorId().toString(), "WITHDRAWAL.REFUSE_UNACCEPTED", "IDEMPOTENCY_KEY", key,
+                    sourceIp, json(Map.of("requestHash", hash, "externalReference", external == null ? "" : external)));
+            return refusal;
+        }
+        try {
+            var accepted = replay(principal.tenantId(), key, hash);
+            if (accepted == null) throw new IllegalStateException("withdrawal receipt is still processing");
+            return new SubmissionResolution("ACCEPTED", key, hash, external, accepted);
+        } catch (CustodyWithdrawalRefusedException refused) {
+            return new SubmissionResolution("REJECTED", key, hash, external, null);
+        }
+    }
+
+    private CreateWithdrawalCommand normalized(CreateWithdrawalCommand command) {
+        if(command==null || !Boolean.TRUE.equals(command.confirmed()) || command.fundingSource()==null) {
+            throw new IllegalArgumentException("explicit funding source and withdrawal confirmation are required");
+        }
+        if((command.fundingSource()==FundingSource.ADDRESS && command.custodyAddressId()==null)
+                || (command.fundingSource()==FundingSource.TENANT_POOL && command.custodyAddressId()!=null)) {
+            throw new IllegalArgumentException("address funding requires a source address; tenant pool selects its own source");
+        }
+        return new CreateWithdrawalCommand(command.custodyAddressId(),requireUpper(command.chain(),"chain",32),
+                requireUpper(command.assetSymbol(),"assetSymbol",32),required(command.toAddress(),"toAddress",160),
+                normalizedAmount(command.amount()),optional(command.externalReference(),160),true,
+                required(command.subject(),"subject",160),command.fundingSource());
+    }
+
+    private String requestHash(CreateWithdrawalCommand command) {
+        return crypto.sha256(command.fundingSource()+"\n"+command.custodyAddressId()+"\n"+command.subject()+"\n"
+                +command.chain()+"\n"+command.assetSymbol()+"\n"+command.toAddress()+"\n"+command.amount()+"\n"
+                +(command.externalReference()==null?"null":command.externalReference()));
+    }
+
+    private static String normalizedAmount(String value) {
+        try {
+            BigDecimal amount = new BigDecimal(required(value, "amount", 120));
+            if (amount.signum() <= 0 || amount.scale() > 36 || amount.precision() > 78) {
+                throw new IllegalArgumentException("withdrawal amount exceeds the supported precision or range");
+            }
+            return value.trim();
+        } catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException("amount must be a positive decimal", invalid);
+        }
+    }
+
+    public record SubmissionResolution(String status, String idempotencyKey, String requestHash,
+                                       String externalReference, WithdrawalView withdrawal) { }
 
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
         IdempotencyRecord existing = idempotency.find(tenantId, key, CREATE_OPERATION)
@@ -200,6 +252,9 @@ public class CustodyWithdrawalService {
         }
         if (existing.responseJson() == null) {
             return null;
+        }
+        if (Integer.valueOf(422).equals(existing.responseStatus())) {
+            throw new CustodyWithdrawalRefusedException(key, requestHash);
         }
         try {
             return objectMapper.readValue(existing.responseJson(), WithdrawalView.class);
@@ -214,6 +269,8 @@ public class CustodyWithdrawalService {
         data.put("externalReference", view.externalReference());
         data.put("orderNo", view.orderNo());
         data.put("chain", view.chain());
+        data.put("subject",view.subject());
+        data.put("fundingSource",view.fundingSource());
         data.put("asset", view.assetSymbol());
         data.put("toAddress", view.toAddress());
         data.put("amount", view.amount());
@@ -250,14 +307,14 @@ public class CustodyWithdrawalService {
     }
     private static String required(String value, String field, int max) {
         String result = value == null ? "" : value.trim();
-        if (result.isBlank() || result.length() > max) {
+        if (result.isBlank() || result.length() > max || result.chars().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException(field + " is required and must not exceed " + max + " characters");
         }
         return result;
     }
     private static String optional(String value, int max) {
         String result = value == null ? "" : value.trim();
-        if (result.length() > max) {
+        if (result.length() > max || result.chars().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException("externalReference must not exceed " + max + " characters");
         }
         return result.isBlank() ? null : result;
@@ -276,6 +333,8 @@ public class CustodyWithdrawalService {
         }
     }
 
+    public enum FundingSource { ADDRESS, TENANT_POOL }
+
     public record CreateWithdrawalCommand(
             UUID custodyAddressId,
             String chain,
@@ -283,7 +342,9 @@ public class CustodyWithdrawalService {
             String toAddress,
             String amount,
             String externalReference,
-            Boolean confirmed
+            Boolean confirmed,
+            String subject,
+            FundingSource fundingSource
     ) {
     }
 
@@ -295,13 +356,15 @@ public class CustodyWithdrawalService {
             String chain,
             String assetSymbol,
             String toAddress,
-            BigDecimal amount,
-            BigDecimal fee,
+            @com.fasterxml.jackson.annotation.JsonFormat(shape=com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) BigDecimal amount,
+            @com.fasterxml.jackson.annotation.JsonFormat(shape=com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) BigDecimal fee,
             String status,
             String txHash,
             String errorMessage,
             String source,
-            Instant createdAt
+            Instant createdAt,
+            String subject,
+            FundingSource fundingSource
     ) {
     }
 }

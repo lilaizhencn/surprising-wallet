@@ -129,14 +129,21 @@ public class WalletChainConfigService {
                                        ChainCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
         AccountChainProfile current = requireChain(id);
+        chainProfileRepository.lockChain(current.getChain());
         ChainValues values = mergeChain(current, command);
         validateChainValues(values);
         if (!current.getChain().equalsIgnoreCase(values.chain())
                 || !current.getNetwork().equalsIgnoreCase(values.network())
                 || current.getRuntimeCurrencyId() != values.runtimeCurrencyId()
-                || current.getBip44CoinType() != values.bip44CoinType()) {
+                || current.getBip44CoinType() != values.bip44CoinType()
+                || !java.util.Objects.equals(current.getChainId(),values.chainId())
+                || !java.util.Objects.equals(upper(current.getNativeSymbol()), upper(values.nativeSymbol()))
+                || !java.util.Objects.equals(upper(current.getFamily()), upper(values.family()))
+                || !java.util.Objects.equals(upper(current.getGasPolicy()), upper(values.gasPolicy()))
+                || !java.util.Objects.equals(upper(current.getFeeModel()), upper(values.feeModel()))) {
             identityGuard.requireUnusedChain(current.getChain());
         }
+        if (Boolean.TRUE.equals(current.getEnabled()) && !values.enabled()) identityGuard.requireUnusedChain(current.getChain());
         if (values.enabled()) {
             validateCanEnable(values.chain(), values.network(), id);
         }
@@ -170,6 +177,8 @@ public class WalletChainConfigService {
                 || command.transferEnabled() == null) {
             throw new IllegalArgumentException("all chain switches are required");
         }
+        chainProfileRepository.lockChain(current.getChain());
+        if (Boolean.TRUE.equals(current.getEnabled()) && !command.enabled()) identityGuard.requireUnusedChain(current.getChain());
         if (command.enabled()) {
             validateCanEnable(current.getChain(), current.getNetwork(), id);
         }
@@ -191,6 +200,7 @@ public class WalletChainConfigService {
             throw new IllegalStateException("production environment can enable only a production network");
         }
         chainProfileRepository.lockChain(chain);
+        identityGuard.requireNetwork(chain,network);
         if (chainProfileRepository.hasOtherEnabledNetwork(chain, currentId)) {
             throw new IllegalStateException("only one network can be enabled per chain at a time");
         }

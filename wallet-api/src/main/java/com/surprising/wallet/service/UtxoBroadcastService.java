@@ -106,13 +106,17 @@ public class UtxoBroadcastService {
             for (var payment : request.payments()) {
                 var order = orders.find(chain, payment.reference(), request.tenantId()).orElseThrow();
                 String account = order.getDebitAccountId();
-                if (account == null || account.isBlank()) account = Long.toString(payment.userId());
+                if (account == null || account.isBlank()) throw new IllegalStateException("withdrawal debit account is missing; principal requires reconciliation");
                 if (!balances.release(chain, chain, account, payment.amount().add(payment.customerFee()), request.tenantId())) {
                     throw new IllegalStateException("unable to release failed withdrawal balance");
                 }
+                if (orders.markPreBroadcastFailed(request.tenantId(), order.getId(), error) != 1) {
+                    throw new IllegalStateException("unsigned withdrawal failure state changed");
+                }
             }
+        } else {
+            updateBusiness(request, "FAILED", null, error);
         }
-        updateBusiness(request, "FAILED", null, error);
     }
 
     private void updateBusiness(UtxoSigningRequest request, String status, String hash, String error) {

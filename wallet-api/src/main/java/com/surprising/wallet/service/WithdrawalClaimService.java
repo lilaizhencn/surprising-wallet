@@ -17,10 +17,18 @@ public class WithdrawalClaimService {
 
     @Transactional(rollbackFor = Throwable.class)
     public int claim(UUID tenantId, String chain, String orderNo, String fromAddress) {
+        return claim(tenantId,chain,orderNo,fromAddress,false);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public int claimEvm(UUID tenantId, String chain, String orderNo, String fromAddress) {
+        return claim(tenantId,chain,orderNo,fromAddress,true);
+    }
+
+    private int claim(UUID tenantId, String chain, String orderNo, String fromAddress, boolean durable) {
         Objects.requireNonNull(tenantId, "withdrawal tenantId is required");
         var order = orders.find(chain, orderNo, tenantId).orElse(null);
-        if (order == null || (order.getDebitAccountId() != null && deficits.existsOpen(
-                tenantId, chain, order.getAssetSymbol(), order.getDebitAccountId()))) return 0;
-        return orders.claimSigning(tenantId, chain, orderNo, fromAddress);
+        if (order == null || deficits.existsOpenAsset(tenantId,chain,order.getAssetSymbol())) return 0;
+        return durable ? orders.claimSigningEvm(tenantId,chain,orderNo,fromAddress) : orders.claimSigning(tenantId, chain, orderNo, fromAddress);
     }
 }

@@ -151,10 +151,23 @@ public class CustodyAssetRecoveryRepository {
     public boolean claimExecution(UUID id) {
         return jdbc.update("""
                         update custody_asset_recovery
-                           set status = 'EXECUTING', failure_reason = null, updated_at = now()
+                           set status = 'EXECUTING', durable_submission=true, failure_reason = null, updated_at = now()
                          where id = ? and status = 'APPROVED'
                         """, id) == 1;
     }
+    public Optional<RecoveryRecord> lockForSubmission(UUID tenant, UUID id) {
+        return jdbc.query("select * from custody_asset_recovery where tenant_id=? and id=? for update",this::map,tenant,id)
+                .stream().findFirst();
+    }
+
+    public int bindPrepared(UUID tenant, UUID id, String hash) {
+        return jdbc.update("update custody_asset_recovery set recovery_tx_hash=?,updated_at=now() where tenant_id=? and id=? and status='EXECUTING' and recovery_tx_hash is null",hash,tenant,id);
+    }
+
+    public int recoverPreparedBroadcast(UUID tenant, UUID id, String hash) {
+        return jdbc.update("update custody_asset_recovery set status='BROADCAST',updated_at=now() where tenant_id=? and id=? and recovery_tx_hash=? and status in ('EXECUTING','BROADCAST')",tenant,id,hash);
+    }
+
     public RecoveryRecord broadcasted(UUID id, String recoveryTxHash, UUID executor) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -180,13 +193,18 @@ public class CustodyAssetRecoveryRepository {
     public RecoveryRecord broadcastFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery
-                           set status = 'APPROVED', failure_reason = ?, updated_at = now()
+                           set status = 'REJECTED', failure_reason = ?, updated_at = now()
                          where id = ? and status = 'BROADCAST'
                         """, reason, id) != 1) {
             throw new IllegalStateException("only a broadcast recovery can be marked failed");
         }
         return require(id);
     }
+    public void recoverExecutions() {
+        jdbc.update("update custody_asset_recovery set status='BROADCAST',updated_at=now() where status='EXECUTING' and recovery_tx_hash is not null");
+        jdbc.update("update custody_asset_recovery set status='APPROVED',updated_at=now() where status='EXECUTING' and durable_submission and recovery_tx_hash is null and updated_at < now()-interval '10 minutes'");
+    }
+
     public List<RecoveryRecord> broadcastRecoveries(int limit) {
         return jdbc.query("""
                         select * from custody_asset_recovery
@@ -197,7 +215,7 @@ public class CustodyAssetRecoveryRepository {
     public RecoveryRecord executionFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery
-                           set status = 'APPROVED', failure_reason = ?, updated_at = now()
+                           set status = case when recovery_tx_hash is null then 'APPROVED' else 'BROADCAST' end, failure_reason = ?, updated_at = now()
                          where id = ? and status = 'EXECUTING'
                         """, reason, id) != 1) {
             throw new IllegalStateException("asset recovery execution state changed unexpectedly");

@@ -28,6 +28,7 @@ public class CustodyDepositRepository {
     }
     private static final String HISTORY_WHERE = """
              where tenant_id = ?
+               and (not ? or custody_address_id = any (?))
                and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
                and (? = '' or position(? in lower(tx_hash)) > 0 or custody_address_id = any (?))
             """;
@@ -95,6 +96,8 @@ public class CustodyDepositRepository {
     private static ArrayList<Object> historyArgs(HistoryQuery query) {
         var args = new ArrayList<Object>();
         args.add(query.tenantId());
+        args.add(query.subjectFiltered());
+        args.add(new SqlArrayValue("uuid", query.subjectAddressIds().toArray()));
         args.add(query.chain()); args.add(query.chain());
         args.add(query.assetSymbol()); args.add(query.assetSymbol());
         args.add(query.status()); args.add(query.status());
@@ -104,9 +107,10 @@ public class CustodyDepositRepository {
     }
 
     public record HistoryQuery(UUID tenantId, String chain, String assetSymbol, String status,
-                               String search, List<UUID> matchingAddressIds) {
+                               String search, List<UUID> matchingAddressIds, boolean subjectFiltered, List<UUID> subjectAddressIds) {
         public HistoryQuery {
             Objects.requireNonNull(tenantId, "tenantId");
+            subjectAddressIds = List.copyOf(subjectAddressIds);
             matchingAddressIds = List.copyOf(matchingAddressIds);
         }
     }

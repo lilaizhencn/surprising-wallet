@@ -54,18 +54,19 @@ class CustodyWithdrawalAddressValidationTest {
         var assets = mock(ChainAssetRepository.class);
         var profiles = mock(ChainProfileRepository.class);
         when(assets.findActive(chain, chain)).thenReturn(Optional.of(com.surprising.wallet.chain.model.ChainAsset.builder().nativeAsset(true).decimals(18).build()));
-        when(profiles.listEnabledForWithdrawal(chain)).thenReturn(List.of(AccountChainProfile.builder().nativeSymbol(chain).build()));
+        when(profiles.listEnabledForWithdrawal(chain)).thenReturn(List.of(AccountChainProfile.builder().network("fixture").nativeSymbol(chain).build()));
         var chains = ChainRepositoryFixture.mocked();
         var balances = mock(LedgerBalanceRepository.class);
         var service = new CustodyWithdrawalExecutionService(chains.withdrawalOrderRepository, chains.collectionPlanningService, mock(WalletRuntimeConfigService.class),
-                runtime, assets, profiles, mock(TokenConfigRepository.class), balances);
+                runtime, assets, profiles, mock(TokenConfigRepository.class), balances, mock(CustodyPoolFundingService.class));
 
         var custody = mock(com.surprising.wallet.chain.model.CustodyAddressRecord.class);
         when(custody.tenantId()).thenReturn(UUID.randomUUID());
         when(custody.chain()).thenReturn(chain);
+        when(custody.network()).thenReturn("fixture");
         var error = assertThrows(IllegalArgumentException.class, () -> service.execute(
                 custody, mock(com.surprising.wallet.common.chain.ChainAddressRecord.class),
-                chain, "not-an-address", BigDecimal.ONE, "WITHDRAW"));
+                chain, "not-an-address", BigDecimal.ONE, "WITHDRAW", CustodyWithdrawalService.FundingSource.ADDRESS));
 
         assertEquals("invalid " + chain + " address", error.getMessage());
         verifyNoInteractions(chains.dependencies());
