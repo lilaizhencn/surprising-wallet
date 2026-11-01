@@ -1,327 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="3440" viewBox="0 0 1180 3440">
-  <style>
-    .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
-    .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
-    .box     { fill: #ffffff; stroke: #64748b; stroke-width: 1.5; rx: 8; }
-    .seed    { fill: #fef2f2; stroke: #dc2626; stroke-width: 2; rx: 8; }
-    .key     { fill: #fff7ed; stroke: #ea580c; stroke-width: 2; rx: 8; }
-    .addr    { fill: #fefce8; stroke: #ca8a04; stroke-width: 2; rx: 8; }
-    .dep     { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 8; }
-    .collect { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 8; }
-    .withdraw { fill: #faf5ff; stroke: #9333ea; stroke-width: 2; rx: 8; }
-    .sig     { fill: #fdf2f8; stroke: #db2777; stroke-width: 2; rx: 8; }
-    .db      { fill: #f8fafc; stroke: #475569; stroke-width: 1.5; rx: 6; stroke-dasharray: 6,3; }
-    .ext     { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.5; rx: 6; }
-    .arrow   { stroke: #64748b; stroke-width: 1.8; marker-end: url(#arr); fill: none; }
-    .text    { font: 13px sans-serif; fill: #1e293b; }
-    .bold    { font: 13px sans-serif; font-weight: 700; fill: #1e293b; }
-    .small   { font: 11px sans-serif; fill: #64748b; }
-    .phase-bg { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1; rx: 12; }
-  </style>
-  <defs>
-    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
-    </marker>
-  </defs>
-
-  <text x="590" y="34" text-anchor="middle" class="title">Surprising Wallet — 核心流程</text>
-
-  <!-- ====== PHASE 1: 密钥种子管理 ====== -->
-  <rect x="20" y="52" width="1140" height="168" class="phase-bg"/>
-  <text x="40" y="74" class="phase-label">① 按模式加载密钥：all / api / sig1 / sig2；恢复私钥离线</text>
-
-  <rect x="40" y="90" width="150" height="58" class="seed"/>
-  <text x="115" y="114" text-anchor="middle" class="bold">本方 Seed + 公钥</text>
-  <text x="115" y="132" text-anchor="middle" class="small">Base64 · 启动校验</text>
-  <text x="115" y="147" text-anchor="middle" class="small">环境变量注入</text>
-
-  <line x1="190" y1="119" x2="220" y2="119" class="arrow"/>
-
-  <rect x="220" y="90" width="150" height="58" class="seed"/>
-  <text x="295" y="114" text-anchor="middle" class="bold">Ed25519 Seed</text>
-  <text x="295" y="132" text-anchor="middle" class="small">SOL · TON · APT · SUI</text>
-  <text x="295" y="147" text-anchor="middle" class="small">SLIP-0010 派生</text>
-
-  <path d="M190,110 V84 H510 V90" class="arrow"/>
-
-  <rect x="400" y="90" width="220" height="58" class="key"/>
-  <text x="510" y="112" text-anchor="middle" class="bold">BIP32 Root #1 (sig1)</text>
-  <text x="510" y="132" text-anchor="middle" class="small">BTC/BCH/LTC/DOGE · wallet-sig1</text>
-
-  <path d="M190,110 V84 H755 V90" class="arrow"/>
-
-  <rect x="645" y="90" width="220" height="58" class="key"/>
-  <text x="755" y="112" text-anchor="middle" class="bold">BIP32 Root #2 (sig2)</text>
-  <text x="755" y="132" text-anchor="middle" class="small">sig2 UTXO · API 账户链独立签名</text>
-
-  <path d="M190,110 V84 H1000 V90" class="arrow"/>
-
-  <rect x="890" y="90" width="220" height="58" class="key"/>
-  <text x="1000" y="112" text-anchor="middle" class="bold">BIP32 Root #3 (recovery)</text>
-  <text x="1000" y="132" text-anchor="middle" class="small">运行时仅加载恢复扩展公钥</text>
-
-  <!-- 3 roots → BIP44 derivation + 2-of-3 -->
-  <rect x="260" y="162" width="340" height="44" class="key"/>
-  <text x="430" y="182" text-anchor="middle" class="bold">BIP32 派生 m/44/coin/biz/user/index</text>
-  <text x="430" y="198" text-anchor="middle" class="small">user_id · biz · address_index  →  确定性 key pair</text>
-
-  <line x1="510" y1="148" x2="430" y2="162" class="arrow"/>
-  <line x1="755" y1="148" x2="430" y2="162" class="arrow"/>
-  <line x1="1000" y1="148" x2="430" y2="162" class="arrow"/>
-
-  <rect x="650" y="162" width="260" height="44" class="addr"/>
-  <text x="780" y="182" text-anchor="middle" class="bold">2-of-3 多签公钥 → P2WSH 地址</text>
-  <text x="780" y="198" text-anchor="middle" class="small">pub1 + pub2 + pub3  →  SegWit 脚本哈希</text>
-
-  <line x1="600" y1="184" x2="650" y2="184" class="arrow"/>
-
-  <!-- ====== PHASE 2: 创建地址 ====== -->
-  <rect x="20" y="236" width="1140" height="120" class="phase-bg"/>
-  <text x="40" y="258" class="phase-label">② 配置：Chain / RPC / Token 用例 → 身份约束 / 资产同步 / 审计同事务；详情复用快照</text>
-
-  <rect x="40" y="274" width="200" height="52" class="addr"/>
-  <text x="140" y="298" text-anchor="middle" class="bold">租户请求分配地址</text>
-  <text x="140" y="315" text-anchor="middle" class="small">chain + externalReference + version</text>
-
-  <line x1="240" y1="300" x2="275" y2="300" class="arrow"/>
-
-  <rect x="275" y="274" width="220" height="52" class="addr"/>
-  <text x="385" y="298" text-anchor="middle" class="bold">确定性派生 &amp; 幂等</text>
-  <text x="385" y="315" text-anchor="middle" class="small">固定派生索引 · 同 subject 幂等</text>
-
-  <line x1="495" y1="300" x2="530" y2="300" class="arrow"/>
-
-  <rect x="530" y="274" width="200" height="52" class="addr"/>
-  <text x="630" y="298" text-anchor="middle" class="bold">chain_address 写入</text>
-  <text x="630" y="315" text-anchor="middle" class="small">tenant · chain · address · role</text>
-
-  <line x1="730" y1="300" x2="765" y2="300" class="arrow"/>
-
-  <rect x="765" y="274" width="190" height="52" class="ext"/>
-  <text x="860" y="298" text-anchor="middle" class="bold">返回地址给租户</text>
-  <text x="860" y="315" text-anchor="middle" class="small">不发送 Webhook</text>
-
-  <line x1="955" y1="300" x2="990" y2="300" class="arrow"/>
-
-  <rect x="990" y="274" width="145" height="52" class="ext"/>
-  <text x="1062" y="298" text-anchor="middle" class="bold">租户使用</text>
-  <text x="1062" y="315" text-anchor="middle" class="small">展示给用户充值</text>
-
-  <!-- ====== PHASE 3: 充值 ====== -->
-  <rect x="20" y="372" width="1140" height="130" class="phase-bg"/>
-  <text x="40" y="394" class="phase-label">③ 充值入账</text>
-
-  <rect x="40" y="410" width="170" height="56" class="dep"/>
-  <text x="125" y="434" text-anchor="middle" class="bold">链上转入</text>
-  <text x="125" y="452" text-anchor="middle" class="small">EVM Scanner → DepositService</text>
-
-  <line x1="210" y1="438" x2="245" y2="438" class="arrow"/>
-
-  <rect x="245" y="410" width="190" height="56" class="dep"/>
-  <text x="340" y="434" text-anchor="middle" class="bold">DepositService 原子入账</text>
-  <text x="340" y="452" text-anchor="middle" class="small">deposit_record + ledger_balance</text>
-
-  <line x1="435" y1="438" x2="470" y2="438" class="arrow"/>
-
-  <rect x="470" y="410" width="200" height="56" class="dep"/>
-  <text x="570" y="434" text-anchor="middle" class="bold">必需投影 · 缺失归属回滚</text>
-  <text x="570" y="452" text-anchor="middle" class="small">精确地址优先 · 同租户历史版本去重</text>
-
-  <line x1="670" y1="438" x2="705" y2="438" class="arrow"/>
-
-  <rect x="705" y="410" width="200" height="56" class="dep"/>
-  <text x="805" y="434" text-anchor="middle" class="bold">CustodyEventService</text>
-  <text x="805" y="452" text-anchor="middle" class="small">事件/投递同事务 · API 来源才投递</text>
-
-  <line x1="905" y1="438" x2="940" y2="438" class="arrow"/>
-
-  <rect x="940" y="410" width="195" height="56" class="ext"/>
-  <text x="1037" y="434" text-anchor="middle" class="bold">API 地址租户接收通知</text>
-  <text x="1037" y="452" text-anchor="middle" class="small">验签与字段匹配后入账</text>
-
-  <!-- PHASE 3 bottom dotted feedback: reorg detection -->
-  <rect x="380" y="476" width="380" height="24" class="db"/>
-  <text x="570" y="493" text-anchor="middle" class="small">chain_scan_block 高度追踪 · 重组检测 · canonical_status 状态机 (CANONICAL / REORGED)</text>
-
-  <!-- ====== PHASE 4: 归集 ====== -->
-  <rect x="20" y="518" width="1140" height="130" class="phase-bg"/>
-  <text x="40" y="540" class="phase-label">④ 归集（UTXO / EVM EIP-7702）</text>
-
-  <rect x="40" y="556" width="210" height="56" class="collect"/>
-  <text x="145" y="580" text-anchor="middle" class="bold">扫描可归集余额</text>
-  <text x="145" y="598" text-anchor="middle" class="small">BTC 已入账 UTXO · EVM 余额</text>
-
-  <line x1="250" y1="584" x2="285" y2="584" class="arrow"/>
-
-  <rect x="285" y="556" width="210" height="56" class="collect"/>
-  <text x="390" y="580" text-anchor="middle" class="bold">构建归集交易</text>
-  <text x="390" y="598" text-anchor="middle" class="small">BTC 记录/锁币 → 2-of-3</text>
-
-  <line x1="495" y1="584" x2="530" y2="584" class="arrow"/>
-
-  <rect x="530" y="556" width="200" height="56" class="sig"/>
-  <text x="630" y="580" text-anchor="middle" class="bold">类型明确的签名管道</text>
-  <text x="630" y="598" text-anchor="middle" class="small">request → partial → signed result</text>
-
-  <line x1="730" y1="584" x2="765" y2="584" class="arrow"/>
-
-  <rect x="765" y="556" width="190" height="56" class="collect"/>
-  <text x="860" y="580" text-anchor="middle" class="bold">广播 &amp; 确认</text>
-  <text x="860" y="598" text-anchor="middle" class="small">BTC 归集不扣用户账本</text>
-
-  <line x1="955" y1="584" x2="990" y2="584" class="arrow"/>
-
-  <rect x="990" y="556" width="145" height="56" class="ext"/>
-  <text x="1062" y="580" text-anchor="middle" class="bold">确认完成</text>
-  <text x="1062" y="598" text-anchor="middle" class="small">ledger 更新</text>
-
-  <!-- EIP-7702 note -->
-  <rect x="285" y="620" width="680" height="36" class="db"/>
-  <text x="625" y="633" text-anchor="middle" class="small">EIP-7702：无交易/尝试的预广播失败释放未决余额并回调 · 已终态订单只收敛批次项</text>
-  <text x="625" y="648" text-anchor="middle" class="small">统一 RPC 路由/认证/限流 · 可恢复错误回 RETRYING · relayer Gas · type-4/type-2 · 广播恢复</text>
-
-  <!-- ====== PHASE 5: 提现 ====== -->
-  <rect x="20" y="664" width="1140" height="148" class="phase-bg"/>
-  <text x="40" y="686" class="phase-label">⑤ 提现</text>
-
-  <rect x="40" y="702" width="180" height="56" class="withdraw"/>
-  <text x="130" y="726" text-anchor="middle" class="bold">租户发起提现</text>
-  <text x="130" y="744" text-anchor="middle" class="small">API: chain · to · amount</text>
-
-  <line x1="220" y1="730" x2="255" y2="730" class="arrow"/>
-
-  <rect x="255" y="702" width="190" height="56" class="withdraw"/>
-  <text x="350" y="726" text-anchor="middle" class="bold">Gas &amp; 费用预留</text>
-  <text x="350" y="744" text-anchor="middle" class="small">共享地址校验通过后创建订单</text>
-
-  <line x1="445" y1="730" x2="480" y2="730" class="arrow"/>
-
-  <rect x="480" y="702" width="190" height="56" class="withdraw"/>
-  <text x="575" y="726" text-anchor="middle" class="bold">构建 &amp; 签名交易</text>
-  <text x="575" y="744" text-anchor="middle" class="small">UTXO: 单租户批次 · sig1→sig2</text>
-
-  <line x1="670" y1="730" x2="705" y2="730" class="arrow"/>
-
-  <rect x="705" y="702" width="200" height="56" class="withdraw"/>
-  <text x="805" y="726" text-anchor="middle" class="bold">广播 &amp; 等待确认</text>
-  <text x="805" y="744" text-anchor="middle" class="small">原子 nonce · 替换加速 · RBF</text>
-
-  <line x1="905" y1="730" x2="940" y2="730" class="arrow"/>
-
-  <rect x="940" y="702" width="195" height="56" class="withdraw"/>
-  <text x="1037" y="718" text-anchor="middle" class="bold">WithdrawalSettlementService</text>
-  <text x="1037" y="736" text-anchor="middle" class="small">锁订单 → 订单扣款事实</text>
-  <text x="1037" y="752" text-anchor="middle" class="small">状态投影 → API Webhook</text>
-
-  <!-- TRON gas / EIP-7702 batch withdrawal notes -->
-  <rect x="255" y="766" width="400" height="20" class="db"/>
-  <text x="455" y="780" text-anchor="middle" class="small">TRON: 带宽/能量估算 · Gas 预充值 · waiting_gas 状态</text>
-
-  <rect x="705" y="766" width="430" height="20" class="db"/>
-  <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现（能力位接管）：执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
-  <text x="590" y="805" text-anchor="middle" class="small">订单/UTXO/入队凭据/PGMQ 同事务 · 消费/阶段推进/归档同事务 · 失败退避 → 死信 → 审计回放</text>
-
-  <!-- ====== BOTTOM INFRA ====== -->
-  <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>
-
-  <rect x="40" y="840" width="200" height="26" class="db"/>
-  <text x="140" y="858" text-anchor="middle" class="small">PostgreSQL · 入账/消息同事务 · 审计</text>
-
-  <rect x="260" y="840" width="200" height="26" class="db"/>
-  <text x="360" y="858" text-anchor="middle" class="small">PGMQ · 行锁 · 请求校验 · 死信</text>
-
-  <rect x="480" y="840" width="200" height="26" class="db"/>
-  <text x="580" y="858" text-anchor="middle" class="small">API · HMAC 签名 · IP 白名单</text>
-
-  <rect x="700" y="840" width="215" height="26" class="db"/>
-  <text x="807" y="858" text-anchor="middle" class="small">Webhook · 签名 · 持久化 · 重试</text>
-
-  <rect x="935" y="840" width="200" height="26" class="db"/>
-  <text x="1035" y="858" text-anchor="middle" class="small">Console · React · 平台 / 租户</text>
-
-  <!-- ====== LEGEND ====== -->
-  <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">2-of-3：sig1 / sig2 分持私钥 · 恢复私钥离线；API 使用角色公钥 / 显式网络派生地址</text>
-  <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">查询：充提 / 地址 / Gas → 单表筛选 / 计数 / 分页；地址排除 Gas；关联数据批量组合</text>
-  <text x="590" y="952" text-anchor="middle" class="small">链业务 → 单表仓储 / 明确用例；7702：共享 RPC / 费用回执 → 签名 / 广播 / 结算</text>
-  <text x="590" y="974" text-anchor="middle" class="small">Token：启用 profile 的网络 → 单表精确查询 → 类型记录；标准 / 充提门槛只存一份</text>
-<rect x="30" y="985" width="1120" height="108" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-<text x="50" y="1012" style="font:14px sans-serif;fill:#1e293b">租户 Demo：浏览器 → Worker → Durable Object 事务冻结 → HTTPS 钱包 API</text>
-<text x="50" y="1040" style="font:14px sans-serif;fill:#1e293b">钱包 HMAC Webhook → 同一对象 → 事件幂等 → 余额 + 流水原子提交</text>
-<text x="50" y="1068" style="font:14px sans-serif;fill:#1e293b">超时 / 5xx 保持冻结等待回调；测试 Worker 与正式对象隔离</text>
-  <rect x="20" y="1115" width="1140" height="125" class="phase-bg"/>
-  <text x="40" y="1137" class="phase-label">BTC 提现 / 归集 RBF：expectedTxId 幂等 + 同一签名行事务锁</text>
-  <rect x="40" y="1150" width="285" height="65" class="collect"/>
-  <text x="52" y="1172" class="bold">RbfBumpService → sig1 → sig2</text>
-  <text x="52" y="1192" class="small">保留 UTXO 锁；归集输出 = 输入 − 新手续费</text>
-  <line x1="325" y1="1182" x2="365" y2="1182" class="arrow"/>
-  <rect x="365" y="1150" width="355" height="65" class="db"/>
-  <text x="377" y="1172" class="bold">chain_signing_transaction.attempts</text>
-  <text x="377" y="1192" class="small">完整请求 / 签名快照；失败 / UNKNOWN 保留锁</text>
-  <line x1="720" y1="1182" x2="760" y2="1182" class="arrow"/>
-  <rect x="760" y="1150" width="350" height="65" class="dep"/>
-  <text x="772" y="1172" class="bold">原交易 / 替换交易确认 → 仅结算一次</text>
-  <text x="772" y="1192" class="small">提现：冻结扣款/确认同事务；归集不改变用户余额 / Webhook</text>
-  <text x="40" y="1230" class="small">最多 5 次；≤1000 sat/vB；费用 ≤100000 sat 且 ≤输入10%；终态不可重开</text>
-  <rect x="20" y="1260" width="1140" height="150" class="phase-bg"/>
-  <text x="40" y="1285" class="phase-label">Console / API 身份、安全配置与维护：直接单表仓储 + 类型记录</text>
-  <text x="40" y="1312" class="small">Console → AuthService → 用户 / 租户 / 有效会话 → 密码 / 锁定 / 当前状态 / 路由范围校验</text>
-  <text x="40" y="1338" class="small">API → 有效 Key / 租户 → IP → HMAC → nonce 原子占用 → 访问时间；验签失败不占用 nonce</text>
-  <text x="40" y="1364" class="small">Key / IP / 管理员解锁 / 租户停用与审计同事务；重复 nonce 不破坏调用方事务</text>
-  <text x="40" y="1390" class="small">维护直接清理 nonce / 会话 / 幂等键；列表无秘密；密文版本为唯一来源，移除闲置版本列</text>
-  <rect x="20" y="1440" width="1140" height="160" class="phase-bg"/>
-  <text x="40" y="1466" class="phase-label">Webhook：领取 / 回执先提交 → 事务外 HTTP → 按全局代次条件完成</text>
-  <text x="40" y="1494" class="small">公平领取 UPDATE RETURNING → 递增后计数 → 同租户端点 / 事件批量组合 → 尝试回执同事务</text>
-  <text x="40" y="1520" class="small">工作线程 + 全局代次 → 投递状态 + 尝试回执 + 端点时间原子提交；旧任务不写回</text>
-  <text x="40" y="1546" class="small">自动最多 10 次；手动重试重置本轮计数、保留全局编号；终态无下一次时间</text>
-  <text x="40" y="1572" class="small">验证 HTTP → 条件激活 + 审计短事务；类型查询无密文 / 闲置哈希，创建保存操作者</text>
-  <rect x="20" y="1620" width="1140" height="100" class="phase-bg"/>
-  <text x="40" y="1646" class="phase-label">提现对账服务：租户 / 提现 ID → 锁定投影并读当前订单 → 扣款事实 / Gas / 事件共同提交</text>
-  <text x="40" y="1672" class="small">WITHDRAWAL / DEBIT = amount + fee，以托管提现 UUID 幂等；客户余额保持链结算后的值</text>
-  <text x="40" y="1698" class="small">过期 / 并发重放无副作用；流水失败回滚投影 / 事件；Gas 费用只由结算路径按原生币写一次</text>
-  <rect x="20" y="1740" width="1140" height="120" class="phase-bg"/>
-  <text x="40" y="1766" class="phase-label">Gas 记账：锁定所属操作 → 读取已有收据 / 操作链与业务号 → 锁定 Gas 账户 → 资金与收据同事务</text>
-  <text x="40" y="1792" class="small">预留重放不再次冻结；释放 / 结算读取当前记录；超额不足保留锁并记录真实费用为 OVERDUE</text>
-  <text x="40" y="1818" class="small">对账选择 OVERDUE 并按真实费用补结算；旧 WITHDRAWAL 预留先读订单终态与链费用，未知结果不扣款</text>
-  <text x="40" y="1844" class="small">7702 直接调用记账用例；Gas / 提现投影分页扫描；金额同时满足余额 18 位小数与回执 54 位整数上限</text>
-  <rect x="20" y="1900" width="1140" height="100" class="phase-bg"/>
-  <text x="40" y="1926" class="phase-label">统一结算：租户 / 链 / 订单号 / 哈希 → 所属订单行锁 → 状态与哈希 → 按订单币种 / 账户 / 金额加客户费扣款</text>
-  <text x="40" y="1952" class="small">扣款与条件确认共同提交；并发重放读取终态；不接受调用方扣款快照；缺少账户拒绝；不新增表或兼容路径</text>
-  <text x="40" y="1978" class="small">UTXO 上链请求先与锁定订单核对；提现 RBF 仅改变矿工费，客户金额和手续费不变；归集恢复上链尝试的输出 / 矿工费</text>
-  <rect x="30" y="2020" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2050" style="font:13px sans-serif;fill:#1e293b">控制面：租户数据库分页 → 本页三类批量计数 → 同条件总数 / 一致快照</text>
-  <text x="50" y="2086" style="font:13px sans-serif;fill:#1e293b">资产 API → 批量身份与账本 → 按链 / 精确账户排除 Gas → 已观察持仓，关闭链仍可见</text>
-  <text x="50" y="2122" style="font:13px sans-serif;fill:#1e293b">Gas 查询四类批量读取；租户链展示仅读 Gas 定义与地址，不绕回 Gas 服务</text>
-  <text x="50" y="2158" style="font:13px sans-serif;fill:#1e293b">提现创建 → 所属订单 ID → 投影 / Gas / 事件 / 审计 / 幂等响应共同提交，无总门面</text>
-  <rect x="30" y="2250" width="1040" height="155" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2278" style="font:13px sans-serif;fill:#1e293b">EIP-7702：目标 / 未知尝试 / 待确认查询 → 工作流 RPC → 协调器原子推进</text>
-  <text x="50" y="2312" style="font:13px sans-serif;fill:#1e293b">领取 → Nonce / 已签名尝试 / Gas 同事务 → 外部广播 → 提交或 UNKNOWN 同事务</text>
-  <text x="50" y="2346" style="font:13px sans-serif;fill:#1e293b">类型化单表结果 / 原配置版本 → 回执身份 / 订单结算 / Gas 共同提交</text>
-  <text x="50" y="2380" style="font:13px sans-serif;fill:#1e293b">正常 Spring 事务代理验证；拒绝尝试更新时父批次回滚；历史确认不检查中继启用</text>
-  <rect x="30" y="2425" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2453" style="font:13px sans-serif;fill:#1e293b">租户链 API → 单表批量类型记录 → 按链 / 网络公开视图；开关与审计同事务</text>
-  <text x="50" y="2487" style="font:13px sans-serif;fill:#1e293b">开发补币：恢复 / 对账 → 批量候选与排重 → 唯一创建 / 条件领取 → 发送状态 / 审计</text>
-  <text x="50" y="2521" style="font:13px sans-serif;fill:#1e293b">HyperCore 扫描 → 快照业务事务 → 初始行锁 / 观察余额 → 正差额充值 / 账本 / 租户投影</text>
-  <text x="50" y="2555" style="font:13px sans-serif;fill:#1e293b">并发首次扫描只入账一次；投影失败连同快照回滚；元数据 / 操作直达各自单表仓储</text>
-  <rect x="30" y="2610" width="1040" height="190" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2640" style="font:13px sans-serif;fill:#1e293b">账户扫描：Job → DepositWorkflow → 运行时 profile → 各链到期 / 开关 → 具体扫描器</text>
-  <text x="50" y="2676" style="font:13px sans-serif;fill:#1e293b">全局关闭清空节流；链关闭移除本链节流；XMR 保持独立串行任务</text>
-  <text x="50" y="2712" style="font:13px sans-serif;fill:#1e293b">TRON 归集：领取 → 客户端 → 共用发送 / 交易记录 → SENT → 关闭；异常保留已知哈希</text>
-  <text x="50" y="2748" style="font:13px sans-serif;fill:#1e293b">托管地址：一次 profile → 正式引擎 / 持久化记录 → 租户绑定 / 投影；归集使用类型结果</text>
-  <text x="50" y="2784" style="font:13px sans-serif;fill:#1e293b">TRON：参考块按节点限流 → 本地构建 / 签名 → 统一广播；密钥状态按实际材料判断</text>
-  <rect x="30" y="2820" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2848" style="font:13px sans-serif;fill:#1e293b">Console / 找回 → 节点模型 → 共用认证头 → 实际 HTTP / WebSocket / RPC</text>
-  <text x="50" y="2882" style="font:13px sans-serif;fill:#1e293b">Token：读取配置 → 事务外 RPC / ABI 验证 → 行锁复核快照 → Token / 资产 / 审计</text>
-  <text x="50" y="2916" style="font:13px sans-serif;fill:#1e293b">提现：归属 / 赤字 → 幂等 → 复用地址 / 订单返回 ID → 条件冻结 / Gas / 事件 / 审计</text>
-  <text x="50" y="2950" style="font:13px sans-serif;fill:#1e293b">找回：托管 ID + 原始地址 → 检查歧义 → 调整实际链 → EVM 执行 / 确认</text>
-  <rect x="30" y="3010" width="1040" height="195" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="3040" style="font:13px sans-serif;fill:#1e293b">CREATE / RESOLVE → same permanent key → accepted response OR irreversible refusal (never both)</text>
-  <text x="50" y="3080" style="font:13px sans-serif;fill:#1e293b">EVM claim → nonce + signed raw + owned tx_hash COMMIT → RPC; timeout → same raw / nonce recovery</text>
-  <text x="50" y="3120" style="font:13px sans-serif;fill:#1e293b">Confirmed failed receipt → actual Gas + atomic principal release → refundable proof → Core refund</text>
-  <text x="50" y="3160" style="font:13px sans-serif;fill:#1e293b">Exact subject → withdrawal.subject / deposit owned address IDs → SQL filter → page → details</text>
-<desc>resolve checks existing accepted business orders even when a receipt is missing; withdrawal precision must be lossless in NUMERIC(78,18).</desc>
-<rect x="30" y="3230" width="1040" height="180" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
-  <text x="50" y="3260" class="label">Core 用户授权 → TENANT_POOL + 独立 subject → CustodyPoolFundingService</text>
-  <text x="50" y="3295" style="font:13px sans-serif">锁租户同链同资产池 → 排除所有 Gas 账户 → 条件借记来源 / 池贷记 / 不可变流水</text>
-  <text x="50" y="3330" style="font:13px sans-serif">池本金冻结 + 订单 + Gas + 永久回执同事务；物理签名地址与账本扣款账户独立</text>
-  <text x="50" y="3365" style="font:13px sans-serif">确认扣冻结；明确失败释放回池；未知不退款；提现 subject 直接筛选后分页</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1580" viewBox="0 0 1200 1580">
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#475569"/></marker></defs>
+<style>text{font-family:Arial,"Noto Sans SC",sans-serif;fill:#0f172a}.title{font-size:24px;font-weight:bold}.label{font-size:17px;font-weight:bold}.body{font-size:14px}.arrow{stroke:#475569;stroke-width:2;marker-end:url(#arrow)}</style>
+<rect width="1200" height="100%" fill="#f8fafc"/>
+<text x="40" y="45" class="title">Surprising Wallet：核心资金与 MPC 流程</text>
+<text x="40" y="77" class="body">HTTP / Job → Service；仓储单表，远程签名和链 RPC 在资金事务外。</text>
+<g id="address-publication"><rect x="35" y="105" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="134" class="label">地址：固定租户坐标 → 原 key/epoch → 三方 DKG → 公钥激活 → 发布 tenant/key/address</text>
+<text x="55" y="162" class="body">CustodyAddressService / MpcSigningService；公开编码不依赖 Seed</text>
+<text x="55" y="188" class="body">Gas 与中继同样有明确归属；XMR 根和子账户在原三名持有者协同建立</text>
+</g>
+<path d="M600,213 V238" class="arrow"/>
+<g id="deposit"><rect x="35" y="245" width="1130" height="108" rx="12" fill="#f0fdf4" stroke="#94a3b8"/>
+<text x="55" y="274" class="label">充值：规范链事实 → DepositService + 必需 CustodyDepositProjectionService</text>
+<text x="55" y="302" class="body">充值记录 / 余额 / 流水 / 租户投影 / 赤字恢复 / 事件同事务提交；归属缺失整笔回滚</text>
+<text x="55" y="328" class="body">补确认和已观察事实不受新业务开关影响；内部归集 / 退款 / 重扫不得重复入账</text>
+</g>
+<path d="M600,353 V378" class="arrow"/>
+<g id="intent"><rect x="35" y="385" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="414" class="label">出款 / 归集：原业务锁 → 原金额、原来源、nonce/UTXO、费用 → 原 MPC 意图同事务</text>
+<text x="55" y="442" class="body">WithdrawalClaimService 检查赤字；UtxoSelectionService 校验归属并锁输入</text>
+<text x="55" y="468" class="body">CollectionPlanningService 计算可归集金额和租户目标；刷新中的 key 不受理新 SIGN</text>
+</g>
+<path d="M600,493 V518" class="arrow"/>
+<g id="sign-and-select"><rect x="35" y="525" width="1130" height="108" rx="12" fill="#fff7ed" stroke="#94a3b8"/>
+<text x="55" y="554" class="label">事务外真实 MPC → 独立验签 → 绑定结果加密 → 原文 / 本地哈希先提交</text>
+<text x="55" y="582" class="body">固定原租户 / key / epoch / 参与方 / preimage；不得用替代会话重建同一业务</text>
+<text x="55" y="608" class="body">UTXO：wallet_mpc_sign → wallet_sign_done；read_ct 栅栏，完成 / 下一阶段 / 归档同事务</text>
+</g>
+<path d="M600,633 V658" class="arrow"/>
+<g id="broadcast-and-settle"><rect x="35" y="665" width="1130" height="108" rx="12" fill="#f0fdf4" stroke="#94a3b8"/>
+<text x="55" y="694" class="label">查询 / 广播原字节 → 规范完整终态 → WithdrawalSettlementService</text>
+<text x="55" y="722" class="body">归属 / 状态 / 哈希校验、冻结扣款、条件确认、事件同事务；竞争失败全部回滚</text>
+<text x="55" y="748" class="body">确认实际金额与净费用；已知失败按完整证明释放；未知、缺失材料仍保留约束</text>
+</g>
+<path d="M600,773 V798" class="arrow"/>
+<g id="evm7702-formal"><rect x="35" y="805" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="834" class="label">EIP-7702：原批次准备 → 内层 AUTH/OP → 原平台中继 MPC → 原 type-4/type-2</text>
+<text x="55" y="862" class="body">原批次 / relayer nonce / 内层意图先提交；中继意图与原租户 Gas 先提交</text>
+<text x="55" y="888" class="body">链网络领取锁共享；回复丢失 / 新业务停用时恢复原快照，不重新领取和扣费</text>
+</g>
+<path d="M600,913 V938" class="arrow"/>
+<g id="near-mpc-storage-registration"><rect x="35" y="945" width="1130" height="134" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="974" class="label">NEAR：原收款人未注册 → 同租户 MPC Gas 固定 storage_deposit</text>
+<text x="55" y="1002" class="body">原业务 / FUNDING / nonce / Gas 冻结同事务；原文提交后广播</text>
+<text x="55" y="1028" class="body">FINAL / 全 receipt 图 / 规范 header 区分押金与 Gas 退款；注册及 Gas 结算后原 Token 付款</text>
+<text x="55" y="1054" class="body">模板 build 执行退款；明确失败且押金全退才原子结束原业务并释放本金</text>
+</g>
+<path d="M600,1079 V1108" class="arrow"/>
+<g id="monero-and-hypercore"><rect x="35" y="1115" width="1130" height="108" rx="12" fill="#fff7ed" stroke="#94a3b8"/>
+<text x="55" y="1144" class="label">XMR 原生 2-of-3 与 HyperCore 原 owner 动作</text>
+<text x="55" y="1172" class="body">XMR：原两名持有者 / 原审核 / artifact 或 cosigned；缺失私有材料保留未知，不重造随机材料</text>
+<text x="55" y="1198" class="body">HyperCore：原网络 / 固定动作；真实余额与账本核对，认证成功不能替代转账成功</text>
+</g>
+<path d="M600,1223 V1248" class="arrow"/>
+<g id="mpc-network-share-refresh"><rect x="35" y="1255" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="1284" class="label">份额刷新：原 source/target → REFRESHING → fence / 新份额 / 三方 ready</text>
+<text x="55" y="1312" class="body">无未完成 SIGN 才受理；三份原公钥绑定结果才原子激活新 epoch、退役旧 epoch</text>
+<text x="55" y="1338" class="body">重启只恢复原材料和公开就绪检查；旧完成 SIGN 可读，新的旧版本 SIGN 拒绝</text>
+</g>
+<path d="M600,1363 V1388" class="arrow"/>
+<g id="recovery-and-events"><rect x="35" y="1395" width="1130" height="134" rx="12" fill="#fefce8" stroke="#94a3b8"/>
+<text x="55" y="1424" class="label">恢复、重组与事件：原事实保留 → 流水可对账 → 异步 Webhook</text>
+<text x="55" y="1452" class="body">重组撤销或记录赤字；恢复赤字前拒绝新提现领取；费用和本金只结算一次</text>
+<text x="55" y="1478" class="body">CustodyEventService 随业务持久化；API 来源有投递记录，Console 来源仍有事件</text>
+<text x="55" y="1504" class="body">清理后 121 项检查与两轮真实 JVM 启动通过；全链终验与完整备份恢复待完成</text>
+</g>
 </svg>

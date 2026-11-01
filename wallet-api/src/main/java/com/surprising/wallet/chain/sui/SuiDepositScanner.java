@@ -1,218 +1,92 @@
 package com.surprising.wallet.chain.sui;
 
 import com.surprising.wallet.chain.model.SuiTransactionRecord;
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainAddressRepository;
-import com.surprising.wallet.repository.ChainAssetRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
-import com.surprising.wallet.repository.ChainScanHeightRepository;
-import com.surprising.wallet.repository.SuiTransactionRepository;
-import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.common.chain.*;
+import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 
-/**
- * Sui 链充值扫描器，通过检查 checkpoint 交易中的 balance_changes 识别充值事件。
- *
- * <p>扫描策略：遍历指定 checkpoint 范围的所有交易，匹配资金流向平台托管地址
- * 的正向余额变动，自动判断是 SUI 原生币还是 Coin&lt;T&gt; 代币，并记录为充值事件。</p>
- *
- * @see SuiRpcClient
- */
+/** Finalized original protobuf balance changes; typed assets share the published MPC owner address. */
 @Service
 @RequiredArgsConstructor
 public class SuiDepositScanner {
-
-    /** 链标识常量 */
-    private static final String CHAIN = "SUI";
-
-    /** 扫描器名称，用于数据库中的高度持久化 */
-    static final String SCANNER = "sui-balance-change-scanner";
-
-    /** Sui gRPC 客户端 */
+    private static final String CHAIN="SUI",SCANNER="sui-balance-change-scanner";
     private final SuiRpcClient rpc;
-    private final ChainProfileRepository chainProfileRepository;
-    private final TokenConfigRepository tokenConfigRepository;
-    private final ChainScanHeightRepository chainScanHeightRepository;
-    private final ChainAddressRepository chainAddressRepository;
-    private final SuiTransactionRepository suiTransactionRepository;
-    private final DepositService depositService;
-    private final ChainAssetRepository chainAssetRepository;
+    private final ChainProfileRepository profiles;
+    private final TokenConfigRepository tokens;
+    private final ChainScanHeightRepository heights;
+    private final ChainAddressRepository addresses;
+    private final SuiTransactionRepository transactions;
+    private final DepositService deposits;
+    private final ChainAssetRepository assets;
+    private final DepositRecordRepository records;
+    @NonNull private final WalletRuntimeConfigService runtime;
 
-
-    /** 运行时任务开关服务。 */
-    @NonNull
-    private final WalletRuntimeConfigService runtimeConfigService;
     public List<DepositEvent> scanAndCredit() {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
-        AccountChainProfile profile = profile();
-        long latest = rpc.latestCheckpoint();
-        long start = scanStart(profile, latest);
-        long end = Math.min(latest, start + scanBatchSize(profile) - 1L);
-        List<DepositEvent> events = new ArrayList<>();
-        List<AssetScanTarget> targets = new ArrayList<>();
-        Set<String> platformAddresses = platformAddresses();
-        addTargets(targets, "SUI", SuiRpcClient.SUI_COIN_TYPE);
-        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
-            if (token.getContractAddress() != null && Boolean.TRUE.equals(token.getActive())) {
-                addTargets(targets, token.getSymbol(), token.getContractAddress());
+        runtime.requireTaskEnabled(CHAIN,WalletRuntimeConfigService.TASK_SCAN,"sui scanAndCredit");
+        var profile=profiles.findAccountByChain(CHAIN).orElseThrow();long latest=rpc.latestCheckpoint();
+        var tracked=new HashMap<String,ChainAddressRecord>();var internal=new HashSet<String>();
+        for(var address:addresses.listEnabled(CHAIN)) {
+            internal.add(MpcSuiTransactionCodec.canonicalAddress(address.getAddress()));
+            if("SUI".equals(address.getAssetSymbol()) && "DEPOSIT".equals(address.getWalletRole()))tracked.put(MpcSuiTransactionCodec.canonicalAddress(address.getAddress()),address);
+        }
+        var configured=new HashMap<String,Asset>();
+        int nativeDecimals=assets.findDefinition(CHAIN,"SUI").orElseThrow().getDecimals();
+        configured.put(MpcSuiTransactionCodec.canonicalCoinType(SuiRpcClient.SUI_COIN_TYPE),new Asset("SUI",nativeDecimals,null));
+        for(var token:tokens.listDefinitions(CHAIN,profile.getNetwork()))if(Boolean.TRUE.equals(token.getActive()))
+            configured.put(MpcSuiTransactionCodec.canonicalCoinType(token.getContractAddress()),new Asset(token.getSymbol(),token.getDecimals(),token.getContractAddress()));
+        int batch=batch(profile);long start=heights.findSafeHeight(CHAIN,SCANNER).map(height->Math.min(latest,height+1))
+                .orElseGet(()->Math.max(profile.getScanStartHeight()==null?0:profile.getScanStartHeight(),latest-batch+1));
+        long end=Math.min(latest,Math.addExact(start,batch-1L));var found=new ArrayList<DepositEvent>();
+        for(var receipt:rpc.checkpointTransactions(start,end)) {
+            var tx=SuiExecutionReceipt.decode(receipt);
+            if(!tx.getEffects().getStatus().getSuccess())continue;
+            String sender=MpcSuiTransactionCodec.canonicalAddress(tx.getTransaction().getSender());
+            if(internal.contains(sender))continue;
+            if(tx.getCheckpoint()>latest)throw new IllegalStateException("Sui deposit proof checkpoint exceeds finalized ledger");
+            int confirmations=confirmations(latest,tx.getCheckpoint());
+            for(int index=0;index<tx.getBalanceChangesCount();index++) {
+                var change=tx.getBalanceChanges(index);
+                String type;try{type=MpcSuiTransactionCodec.canonicalCoinType(change.getCoinType());}catch(IllegalArgumentException unsupported){continue;}
+                var asset=configured.get(type);if(asset==null)continue;
+                var address=tracked.get(MpcSuiTransactionCodec.canonicalAddress(change.getAddress()));if(address==null)continue;
+                var amount=new BigDecimal(change.getAmount());if(amount.signum()<=0)continue;
+                if(records.existsCanonical(CHAIN,tx.getDigest(),index))continue;
+                var event=new DepositEvent(ChainType.SUI,asset.symbol(),tx.getDigest(),sender,address.getAddress(),amount.movePointLeft(asset.decimals()),
+                        tx.getCheckpoint(),tx.getDigest(),confirmations,asset.contract(),receipt.toString());
+                // DepositService owns balance, mandatory tenant projection, audit and replay in one transaction.
+                deposits.recordAndCredit(event,index,profile.getDepositConfirmations(),address.getAccountId());
+                transactions.upsert(SuiTransactionRecord.builder().chain(CHAIN).txDigest(tx.getDigest()).sender(sender).receiver(address.getAddress())
+                        .assetSymbol(asset.symbol()).coinType(type).amount(event.amount()).feeMist(SuiExecutionReceipt.feeMist(tx))
+                        .checkpoint(tx.getCheckpoint()).status(confirmations>=profile.getDepositConfirmations()?"CONFIRMED":"CONFIRMING")
+                        .executionReceipt(receipt.toString()).build());
+                found.add(event);
             }
         }
-        for (JsonNode transaction : rpc.checkpointTransactions(start, end)) {
-            for (AssetScanTarget target : targets) {
-                scanTransaction(transaction, target.symbol(), target.coinType(), target.address(),
-                        profile, latest, platformAddresses, events);
-            }
-        }
-        long safeHeight = Math.max(0L, end - profile.getDepositConfirmations() + 1L);
-        chainScanHeightRepository.upsert(CHAIN, SCANNER, end, safeHeight);
-        return events;
-    }
-    private void addTargets(List<AssetScanTarget> targets, String symbol, String coinType) {
-        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, symbol)) {
-            if ("DEPOSIT".equals(address.getWalletRole())) {
-                targets.add(new AssetScanTarget(symbol, coinType, address));
-            }
-        }
+        heights.upsert(CHAIN,SCANNER,end,Math.max(0,end-profile.getDepositConfirmations()+1));
+        confirmObserved();return found;
     }
 
-    private void scanTransaction(JsonNode transaction, String symbol, String coinType,
-                                 ChainAddressRecord address, AccountChainProfile profile,
-                                 long bestCheckpoint, Set<String> platformAddresses,
-                                 List<DepositEvent> events) {
-        String sender = SuiHex.normalizeAddress(transaction.path("transaction").path("data").path("sender")
-                .asText("0x0"));
-        if (platformAddresses.contains(sender)) {
-            return;
-        }
-        String digest = transaction.path("digest").asText();
-        long checkpoint = transaction.path("checkpoint").asLong(bestCheckpoint);
-        int confirmations = (int) Math.min(Integer.MAX_VALUE,
-                Math.max(1, bestCheckpoint - checkpoint + 1));
-        JsonNode balanceChanges = transaction.path("balanceChanges");
-        for (int index = 0; index < balanceChanges.size(); index++) {
-            JsonNode change = balanceChanges.get(index);
-            String changeCoinType = change.path("coinType").asText();
-            if (!sameCoinType(coinType, changeCoinType)) {
-                continue;
-            }
-            if (!ownerMatches(change.path("owner"), address.getAddress())) {
-                continue;
-            }
-            BigDecimal rawAmount = new BigDecimal(change.path("amount").asText("0"));
-            if (rawAmount.signum() <= 0) {
-                continue;
-            }
-            BigDecimal amount = rawAmount.movePointLeft(decimals(symbol));
-            DepositEvent event = new DepositEvent(ChainType.SUI, symbol, digest, sender,
-                    address.getAddress(), amount, checkpoint, digest, confirmations,
-                    SuiRpcClient.SUI_COIN_TYPE.equals(coinType) ? null : coinType,
-                    transaction.toString());
-            suiTransactionRepository.upsert(SuiTransactionRecord.builder()
-                    .chain(CHAIN)
-                    .txDigest(digest)
-                    .sender(sender)
-                    .receiver(address.getAddress())
-                    .assetSymbol(symbol)
-                    .coinType(coinType)
-                    .amount(amount)
-                    .gasUsed(totalGas(transaction.path("effects").path("gasUsed")))
-                    .checkpoint(checkpoint)
-                    .status(confirmations >= profile.getDepositConfirmations() ? "CONFIRMED" : "CONFIRMING")
-                    .rawPayload(transaction.toString())
-                    .build());
-            depositService.recordAndCredit(event, index, profile.getDepositConfirmations(), address.getAccountId());
-            events.add(event);
+    /** Previously observed deposits finish even after new scanning or token work is disabled. */
+    public void confirmObserved() {
+        var pending=records.listPending(CHAIN,Integer.MAX_VALUE,500);if(pending.isEmpty())return;
+        var profile=profiles.findAccountByChain(CHAIN).orElseThrow();long latest=rpc.latestCheckpoint();
+        for(var row:pending) {
+            int confirmations=confirmations(latest,row.blockHeight());if(confirmations<=row.confirmations())continue;
+            var event=new DepositEvent(ChainType.SUI,row.assetSymbol(),row.txHash(),row.fromAddress(),row.toAddress(),row.amount(),row.blockHeight(),row.blockHash(),confirmations,row.contractAddress(),row.rawPayload());
+            deposits.recordAndCredit(event,row.logIndex(),profile.getDepositConfirmations(),row.accountId());
+            if(confirmations>=profile.getDepositConfirmations())transactions.confirmDeposit(row.txHash());
         }
     }
-    private boolean ownerMatches(JsonNode owner, String address) {
-        String expected = SuiHex.normalizeAddress(address);
-        if (owner.isTextual()) {
-            return expected.equals(SuiHex.normalizeAddress(owner.asText()));
-        }
-        String value = owner.path("AddressOwner").asText(null);
-        return value != null && expected.equals(SuiHex.normalizeAddress(value));
+    private static int confirmations(long latest,long checkpoint){return (int)Math.min(Integer.MAX_VALUE,Math.max(0,latest-checkpoint+1));}
+    private static int batch(AccountChainProfile profile) {
+        long configured=profile.getScanMaxBlocksPerRun()!=null && profile.getScanMaxBlocksPerRun()>0?profile.getScanMaxBlocksPerRun():profile.getScanBatchSize()==null?50:profile.getScanBatchSize();
+        return (int)Math.min(1000,Math.max(Math.max(1,profile.getDepositConfirmations()),configured));
     }
-    private Set<String> platformAddresses() {
-        Set<String> addresses = new HashSet<>();
-        for (ChainAddressRecord tracked : chainAddressRepository.listEnabled(CHAIN)) {
-            addAddress(addresses, tracked.getAddress());
-            addAddress(addresses, tracked.getOwnerAddress());
-        }
-        return addresses;
-    }
-    private void addAddress(Set<String> addresses, String address) {
-        if (address == null || address.isBlank()) {
-            return;
-        }
-        try {
-            addresses.add(SuiHex.normalizeAddress(address));
-        } catch (RuntimeException ignored) {
-            // Ignore malformed historical records; address creation validates new rows.
-        }
-    }
-    private boolean sameCoinType(String expected, String actual) {
-        return normalizeCoinType(expected).equals(normalizeCoinType(actual));
-    }
-    private String normalizeCoinType(String value) {
-        String[] parts = value.split("::");
-        if (parts.length != 3) {
-            return value;
-        }
-        return SuiHex.normalizeAddress(parts[0]) + "::" + parts[1] + "::" + parts[2];
-    }
-    private int decimals(String symbol) {
-        return chainAssetRepository.findActiveDefinition(CHAIN, symbol)
-                .map(asset -> asset.getDecimals())
-                .orElseGet(() -> chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinition(
-                        CHAIN,
-                        configuredNetworkProfile.getNetwork(),
-                        symbol))
-                        .map(TokenDefinition::getDecimals)
-                        .orElse(9));
-    }
-    private long totalGas(JsonNode gas) {
-        return gas.path("computationCost").asLong(0)
-                + gas.path("storageCost").asLong(0)
-                - gas.path("storageRebate").asLong(0);
-    }
-    private AccountChainProfile profile() {
-        return chainProfileRepository.findAccountByChain(CHAIN)
-                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-    }
-    private long scanStart(AccountChainProfile profile, long latest) {
-        return chainScanHeightRepository.findSafeHeight(CHAIN, SCANNER)
-                .map(height -> Math.min(latest, height + 1L))
-                .orElseGet(() -> {
-                    long configured = profile.getScanStartHeight() == null
-                            ? 0L : Math.max(0L, profile.getScanStartHeight());
-                    return Math.max(configured, latest - scanBatchSize(profile) + 1L);
-                });
-    }
-    private int scanBatchSize(AccountChainProfile profile) {
-        int requiredConfirmations = Math.max(1, profile.getDepositConfirmations());
-        Long maxBlocks = profile.getScanMaxBlocksPerRun();
-        if (maxBlocks != null && maxBlocks > 0L) {
-            return Math.max(requiredConfirmations,
-                    (int) Math.min(Integer.MAX_VALUE, maxBlocks));
-        }
-        Integer batchSize = profile.getScanBatchSize();
-        int configured = batchSize == null || batchSize <= 0 ? 50 : batchSize;
-        return Math.max(requiredConfirmations, configured);
-    }
-    private record AssetScanTarget(String symbol, String coinType, ChainAddressRecord address) {
-    }
+    private record Asset(String symbol,int decimals,String contract) { }
 }

@@ -60,7 +60,7 @@ class Evm7702PayoutCodecTest {
                 batchId, AUTHORITY.getAddress(), EXECUTOR, List.of(item),
                 BigInteger.valueOf(7), BigInteger.valueOf(2_000_000_000L));
         Evm7702PayoutSigner signer = new Evm7702PayoutSigner();
-        byte[] signature = signer.sign(BigInteger.valueOf(31337), request, AUTHORITY);
+        byte[] signature = com.surprising.wallet.testutil.Evm7702TestSigning.signDigest(signer.digest(BigInteger.valueOf(31337), request), AUTHORITY);
         Sign.SignatureData data = new Sign.SignatureData(
                 signature[64], java.util.Arrays.copyOfRange(signature, 0, 32),
                 java.util.Arrays.copyOfRange(signature, 32, 64));

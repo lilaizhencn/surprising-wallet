@@ -196,8 +196,11 @@ public class CustodyAssetRecoveryService {
                     "ASSET_RECOVERY.EXECUTE", "ASSET_RECOVERY", id.toString(), sourceIp,
                     json(Map.of("recoveryTxHash", recoveryTxHash)));
             return toView(result);
+        } catch (com.surprising.wallet.model.mpc.MpcPendingException pending) {
+            return toView(repository.require(id));
         } catch (RuntimeException e) {
-            return toView(repository.executionFailed(id, friendly(e)));
+            gateway.executionError(existing.tenantId(), existing.actualChain(), id, friendly(e));
+            return toView(repository.require(id));
         }
     }
     public RecoveryView confirm(CustodyPrincipal principal, UUID id, String sourceIp) {
@@ -212,6 +215,15 @@ public class CustodyAssetRecoveryService {
     }
     public void confirmBroadcastRecoveries() {
         repository.recoverExecutions();
+        for (var recovery : repository.unsignedExecutions(100)) {
+            try {
+                if (!gateway.rebroadcast(recovery.tenantId(), recovery.actualChain(), recovery.id())) {
+                    gateway.releaseUnsigned(recovery.tenantId(), recovery.actualChain(), recovery.id());
+                }
+            } catch (RuntimeException pending) {
+                // A durable MPC intent may still produce a signature; keep the execution immutable and pending.
+            }
+        }
         for (RecoveryRecord recovery : repository.broadcastRecoveries(100)) {
             try {
                 RecoveryRecord result = confirm(recovery);

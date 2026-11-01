@@ -9,8 +9,6 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
-import com.surprising.wallet.common.key.WalletKeyConfig;
-import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.coordinator.Evm7702CollectionCoordinator;
 import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
@@ -27,7 +25,6 @@ import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WalletSystemConfigRepository;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyGasService;
@@ -39,7 +36,6 @@ import com.surprising.wallet.service.Evm7702CollectionWorkflowService;
 import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -47,8 +43,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,10 +62,8 @@ import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Utf8String;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.abi.datatypes.generated.Uint8;
-import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Hash;
 import org.web3j.crypto.RawTransaction;
-import org.web3j.crypto.TransactionEncoder;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.request.Transaction;
@@ -105,8 +97,7 @@ class Evm7702ProductionFlowIntegrationTest {
     /**
      * 保存 {@code HARDHAT_ADMIN}，用于承载当前测试夹具的配置或运行数据。
      */
-    private static final Credentials HARDHAT_ADMIN = Credentials.create(
-            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
+    private static final String HARDHAT_ADMIN = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
     /**
      * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
@@ -116,10 +107,6 @@ class Evm7702ProductionFlowIntegrationTest {
      * 保存 {@code chainRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
     private ChainRepositoryFixture chainRepository;
-    /**
-     * 保存 {@code keyService}，用于访问当前测试所依赖的仓储、客户端或服务。
-     */
-    private AccountSecp256k1KeyService keyService;
     /**
      * 保存 {@code profile}，用于承载当前测试夹具的配置或运行数据。
      */
@@ -143,6 +130,7 @@ class Evm7702ProductionFlowIntegrationTest {
      * 保存 {@code withdrawalService}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
     private CustodyWithdrawalService withdrawalService;
+    private CustodyWithdrawalService withdrawalTarget;
     /**
      * 保存 {@code withdrawalWorkflow}，记录测试开关、处理状态、确认结果或重试信息。
      */
@@ -163,8 +151,17 @@ class Evm7702ProductionFlowIntegrationTest {
     /**
      * 保存 {@code chainId}，表示测试所覆盖的链、网络、资产或代币配置。
      */
+    private com.surprising.wallet.testutil.MpcNativeTestSupport mpcSupport;
+    private com.surprising.wallet.service.Evm7702SigningService mpc7702;
     private long chainId;
     private EvmHttpServiceFactory httpServices;
+    private com.surprising.wallet.chain.signing.MpcNodes signingNodes;
+    private List<Integer> quorum;
+    private Path nativeRoot;
+    private BroadcastGate broadcastGate;
+    private CustodyCryptoService crypto;
+    private com.surprising.wallet.chain.evm.Evm7702RpcClient evmRpc;
+    private WalletRuntimeConfigService runtimeConfig;
 
     /**
      * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -204,8 +201,6 @@ class Evm7702ProductionFlowIntegrationTest {
                 values (9901, ?, 'local', 'eip7702-test', 'hardhat-prague',
                         'rpc', 'HTTP_JSON_RPC', ?, 1, 0, true)
                 """, chain, RPC);
-        keyService = new AccountSecp256k1KeyService(new WalletKeyMaterialProvider(
-                testKeyset(), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
         profile = chainRepository.chainProfileRepository.findAccountByChain(chain).orElseThrow();
         nativeSymbol = profile.getNativeSymbol();
         depositScanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(
@@ -214,8 +209,20 @@ class Evm7702ProductionFlowIntegrationTest {
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), "eip7702-test", 1);
         CustodySecurityProperties security = new CustodySecurityProperties();
         security.setSecretMasterKey("11".repeat(32));
-        CustodyCryptoService crypto = new CustodyCryptoService(security);
-        WalletRuntimeConfigService runtimeConfig =
+        crypto = new CustodyCryptoService(security);
+        mpcSupport=new com.surprising.wallet.testutil.MpcNativeTestSupport(jdbc);
+        nativeRoot=Path.of(System.getenv("SW_TEST_MPC_DIRECTORY"));
+        var nativeConfig=objectMapper.readTree(Files.readString(nativeRoot.resolve("java-probe.json")));
+        quorum=java.util.stream.StreamSupport.stream(nativeConfig.path("pair").spliterator(),false)
+                .map(JsonNode::asInt).toList();
+        assertEquals(2,quorum.size());assertEquals(2,quorum.stream().distinct().count());
+        signingNodes=Mockito.spy(mpcSupport.nodes);
+        Mockito.doReturn(quorum.stream().map(index->mpcSupport.nodes.parties().get(index)).toList()).when(signingNodes).online();
+        mpc7702=new com.surprising.wallet.service.Evm7702SigningService(new com.surprising.wallet.repository.WalletMpcSignRequestRepository(jdbc),
+                new com.surprising.wallet.repository.ChainAddressRepository(jdbc),new com.surprising.wallet.repository.EvmNonceRepository(jdbc),
+                new com.surprising.wallet.repository.EvmCollectionBatchRepository(jdbc),new com.surprising.wallet.repository.EvmWithdrawalBatchRepository(jdbc),
+                mpcSupport.signing,signingNodes,objectMapper,new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc));
+        runtimeConfig =
                 new WalletRuntimeConfigService(new ChainProfileRepository(jdbc),
                         new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc));
         CustodyTenantChainService tenantChainService = com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, org.mockito.Mockito.mock(com.surprising.wallet.chain.BlockchainRuntimeService.class));
@@ -227,7 +234,7 @@ class Evm7702ProductionFlowIntegrationTest {
                         new BlockchainRuntimeService(
                                 new ChainProfileRepository(jdbc),
                                 new ChainAssetRepository(jdbc),
-                                new ChainAddressRuntime(chainRepository.chainAddressRepository, chainRepository.chainProfileRepository, null),
+                                new ChainAddressRuntime(),
                                 null),
                         new ChainAssetRepository(jdbc),
                         new ChainProfileRepository(jdbc),
@@ -240,8 +247,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 com.surprising.wallet.testutil.CustodyTestSupport.gas(
                         jdbc,
 
-                       Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
-                        Mockito.mock(BlockchainRuntimeService.class)),
+                       Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class)),
                 tenantChainService,
                 crypto,
                 objectMapper,
@@ -253,24 +259,28 @@ class Evm7702ProductionFlowIntegrationTest {
         transactionContext.registerBean(org.springframework.transaction.PlatformTransactionManager.class,
                 () -> new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
         transactionContext.registerBean(Evm7702CollectionCoordinator.class,
-                () -> com.surprising.wallet.testutil.CustodyTestSupport.evmCollections(jdbc));
+                () -> com.surprising.wallet.testutil.CustodyTestSupport.evmCollections(jdbc,mpc7702,crypto));
         transactionContext.registerBean(Evm7702WithdrawalCoordinator.class,
-                () -> com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawals(jdbc));
-        var withdrawalTarget = withdrawalService;
+                () -> com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawals(jdbc,mpc7702,crypto));
+        withdrawalTarget = withdrawalService;
         transactionContext.registerBean(CustodyWithdrawalService.class, () -> withdrawalTarget);
         transactionContext.refresh();
         withdrawalService = transactionContext.getBean(CustodyWithdrawalService.class);
-        var evmRpc = new com.surprising.wallet.chain.evm.Evm7702RpcClient(rpcNodes, httpServices);
+        evmRpc = new com.surprising.wallet.chain.evm.Evm7702RpcClient(rpcNodes, httpServices);
+        broadcastGate=new BroadcastGate();
+        jdbc.update("update chain_rpc_node set rpc_url=? where id=9901",broadcastGate.endpoint());
         workflow = com.surprising.wallet.testutil.CustodyTestSupport.evmCollectionWorkflow(jdbc,
-                transactionContext.getBean(Evm7702CollectionCoordinator.class), evmRpc, keyService, crypto, runtimeConfig);
+                transactionContext.getBean(Evm7702CollectionCoordinator.class), evmRpc, mpc7702, crypto, runtimeConfig);
         withdrawalWorkflow = com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawalWorkflow(jdbc,
-                transactionContext.getBean(Evm7702WithdrawalCoordinator.class), evmRpc, keyService, crypto, runtimeConfig);
+                transactionContext.getBean(Evm7702WithdrawalCoordinator.class), evmRpc, mpc7702, crypto, runtimeConfig);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
                 com.surprising.wallet.testutil.CustodyTestSupport.withdrawalReconciliation(jdbc, objectMapper));
     }
 
     @AfterEach
     void tearDown() {
+        if(broadcastGate!=null)broadcastGate.close();
+        if(mpcSupport!=null)mpcSupport.close();
         if (transactionContext != null) transactionContext.close();
         if (httpServices != null) {
             httpServices.close();
@@ -287,24 +297,24 @@ class Evm7702ProductionFlowIntegrationTest {
         Web3j web3j = Web3j.build(new HttpService(RPC));
         try {
             BigInteger adminNonce = web3j.ethGetTransactionCount(
-                    HARDHAT_ADMIN.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
+                    HARDHAT_ADMIN, DefaultBlockParameterName.PENDING).send().getTransactionCount();
             Deployment usdt = deployMockToken(web3j, adminNonce, "USDT");
             adminNonce = adminNonce.add(BigInteger.ONE);
             Deployment usdc = deployMockToken(web3j, adminNonce, "USDC");
             adminNonce = adminNonce.add(BigInteger.ONE);
 
-            ChainAddressRecord relayerRecord = keyRecord(null, 9_000_001L, 7702, 0L, "EIP7702_RELAYER");
-            Credentials relayer = credentials(relayerRecord);
-            long relayerChainAddressId = insertChainAddress(relayerRecord, null);
+            ChainAddressRecord relayerRecord = keyRecord(mpcSupport.tenant, 9_000_001L, 7702, 0L, "EIP7702_RELAYER");
+            String relayer = relayerRecord.getAddress();
+            long relayerChainAddressId = insertChainAddress(relayerRecord, mpcSupport.tenant);
             Deployment payoutDeployment = deployPayoutDelegate(
-                    web3j, adminNonce, relayer.getAddress());
+                    web3j, adminNonce, relayer);
             String payoutDelegate = payoutDeployment.address();
             adminNonce = adminNonce.add(BigInteger.ONE);
             assertEquals("0x1", sendLegacyCall(web3j, adminNonce, collector,
                     FunctionEncoder.encode(new Function("setRelayer",
-                            List.of(new Address(relayer.getAddress()), new Bool(true)), List.of()))).getStatus());
+                            List.of(new Address(relayer), new Bool(true)), List.of()))).getStatus());
             adminNonce = adminNonce.add(BigInteger.ONE);
-            assertEquals("0x1", sendLegacyNative(web3j, adminNonce, relayer.getAddress(),
+            assertEquals("0x1", sendLegacyNative(web3j, adminNonce, relayer,
                     new BigInteger("5000000000000000000")).getStatus());
             adminNonce = adminNonce.add(BigInteger.ONE);
 
@@ -327,7 +337,7 @@ class Evm7702ProductionFlowIntegrationTest {
                             true, true, 0, 10)
                     """, UUID.randomUUID(), chain, chainId, delegate, delegateHash,
                     collector, collectorHash, payoutDelegate, payoutDelegateHash,
-                    relayerChainAddressId, relayer.getAddress());
+                    relayerChainAddressId, relayer);
             var collectionTargets = workflow.listRuntimeTargets();
             var withdrawalTargets = withdrawalWorkflow.listRuntimeTargets();
             assertEquals(List.of(chain), collectionTargets.stream().map(target -> target.profile().getChain()).toList());
@@ -344,9 +354,10 @@ class Evm7702ProductionFlowIntegrationTest {
             int runNamespace = 10_000 + adminNonce.mod(BigInteger.valueOf(1_000_000)).intValueExact() * 2;
             TenantFixture tenantA = createTenant("tenant-7702-a", runNamespace, 3, 1000L);
             TenantFixture tenantB = createTenant("tenant-7702-b", runNamespace + 1, 2, 2000L);
+            awaitStoppedThird();
             for (AuthorityFixture authority : concat(tenantA.authorities(), tenantB.authorities())) {
                 TransactionReceipt mint = sendLegacyCall(web3j, adminNonce, usdt.address(),
-                        encodeMint(authority.credentials().getAddress(), authority.amountAtomic()));
+                        encodeMint(authority.address(), authority.amountAtomic()));
                 adminNonce = adminNonce.add(BigInteger.ONE);
                 assertEquals("0x1", mint.getStatus());
                 assertEquals(1, depositScanner.scanAndCreditErc20(
@@ -385,13 +396,17 @@ class Evm7702ProductionFlowIntegrationTest {
                      where tenant_id = ? and status = 'FAILED'
                     """, tenantA.tenantId());
 
-            String tenantATx = workflow.processOne(profile).orElseThrow();
+            broadcastGate.loseResponses=true;
+            try { assertThrows(IllegalStateException.class,()->workflow.processOne(profile)); }
+            finally { broadcastGate.loseResponses=false; }
+            String tenantATx=broadcastGate.lastHash;
+            broadcastGate.assertHealthy();
             assertEquals(4, batchCount(tenantA.tenantId()));
             assertEquals(0, batchCount(tenantB.tenantId()));
-            simulateLostBroadcastResponse(tenantA.tenantId());
-            workflow.recoverUnknown(profile);
-            assertEquals("SUBMITTED", jdbc.queryForObject(
-                    "select status from evm_collection_batch where tenant_id = ? and status = 'SUBMITTED'",
+            assertEquals("BROADCAST_UNKNOWN",jdbc.queryForObject("select status from evm_collection_batch where canonical_tx_hash=?",String.class,tenantATx));
+            recoverOriginal(false,tenantATx);
+            assertEquals("CONFIRMED", jdbc.queryForObject(
+                    "select status from evm_collection_batch where tenant_id = ? and status = 'CONFIRMED'",
                     String.class, tenantA.tenantId()));
             assertEquals(tenantATx, jdbc.queryForObject(
                     "select canonical_tx_hash from evm_collection_batch where tenant_id = ? and canonical_tx_hash is not null",
@@ -435,7 +450,7 @@ class Evm7702ProductionFlowIntegrationTest {
             for (int index = 0; index < nativeAuthorities.size(); index++) {
                 AuthorityFixture authority = nativeAuthorities.get(index);
                 TransactionReceipt deposit = sendLegacyNative(
-                        web3j, adminNonce, authority.credentials().getAddress(), nativeAmounts[index]);
+                        web3j, adminNonce, authority.address(), nativeAmounts[index]);
                 adminNonce = adminNonce.add(BigInteger.ONE);
                 assertEquals("0x1", deposit.getStatus());
                 assertEquals(1, depositScanner.scanAndCreditNative(
@@ -464,9 +479,13 @@ class Evm7702ProductionFlowIntegrationTest {
             WithdrawalFixture tokenWithdrawalTwo = createWithdrawal(
                     tenantA, tenantA.authorities().get(1), "USDT", recipientTwo,
                     new BigDecimal("2"), "token-a-2");
-            String tokenPayoutTx = withdrawalWorkflow.processOne(profile).orElseThrow();
-            simulateLostPayoutBroadcastResponse(tenantA.tenantId());
-            withdrawalWorkflow.recoverUnknown(profile);
+            broadcastGate.loseResponses=true;
+            try { assertThrows(IllegalStateException.class,()->withdrawalWorkflow.processOne(profile)); }
+            finally { broadcastGate.loseResponses=false; }
+            String tokenPayoutTx=broadcastGate.lastHash;
+            broadcastGate.assertHealthy();
+            assertEquals("BROADCAST_UNKNOWN",jdbc.queryForObject("select status from evm_withdrawal_batch where canonical_tx_hash=?",String.class,tokenPayoutTx));
+            recoverOriginal(true,tokenPayoutTx);
             jdbc.update("update chain_address set enabled=false where id=?", relayerChainAddressId);
             try {
                 withdrawalWorkflow.confirm(profile);
@@ -532,7 +551,7 @@ class Evm7702ProductionFlowIntegrationTest {
                     tenantB.authorities().get(0), tenantB.authorities().get(1));
             for (AuthorityFixture authority : usdcAuthorities) {
                 TransactionReceipt mint = sendLegacyCall(web3j, adminNonce, usdc.address(),
-                        encodeMint(authority.credentials().getAddress(), authority.amountAtomic()));
+                        encodeMint(authority.address(), authority.amountAtomic()));
                 adminNonce = adminNonce.add(BigInteger.ONE);
                 assertEquals("0x1", mint.getStatus());
                 assertEquals(1, depositScanner.scanAndCreditErc20(
@@ -575,11 +594,11 @@ class Evm7702ProductionFlowIntegrationTest {
                     "0x6000000000000000000000000000000000000008",
                     new BigDecimal("1"), "usdc-b-1");
             assertEquals(BigInteger.ZERO, web3j.ethGetBalance(
-                    tenantB.authorities().get(1).credentials().getAddress(),
+                    tenantB.authorities().get(1).address(),
                     DefaultBlockParameterName.LATEST).send().getBalance());
             WithdrawalFixture tenantBUsdcTwo = createWithdrawal(
                     tenantB, tenantB.authorities().get(1), "USDC",
-                    "0x6000000000000000000000000000000000000009",
+                    tenantA.authorities().get(2).address(),
                     new BigDecimal("2"), "usdc-b-2");
             String tenantBUsdcPayoutTx = withdrawalWorkflow.processOne(profile).orElseThrow();
             withdrawalWorkflow.confirm(profile);
@@ -587,6 +606,11 @@ class Evm7702ProductionFlowIntegrationTest {
             assertNotEquals(tenantAUsdcPayoutTx, tenantBUsdcPayoutTx);
             assertSharedConfirmedPayout(
                     tenantBUsdcPayoutTx, tenantBUsdcOne, tenantBUsdcTwo);
+            long ownedReceiptHeight=waitReceipt(web3j,tenantBUsdcPayoutTx).getBlockNumber().longValueExact();
+            for(int scan=0;scan<3;scan++)depositScanner.scanAndCreditErc20(ChainType.valueOf(chain),RPC,1,ownedReceiptHeight);
+            assertCreditedDeposits("USDC",5);
+            assertEquals(tenantA.tenantId(),jdbc.queryForObject("select tenant_id from deposit_record where tx_hash=? and lower(to_address)=?",
+                    UUID.class,tenantBUsdcPayoutTx,tenantBUsdcTwo.recipient().toLowerCase(java.util.Locale.ROOT)));
             assertEquals(new BigInteger("1000000"), tokenBalance(
                     web3j, tenantAUsdcOne.recipient(), "USDC"));
             assertEquals(new BigInteger("2000000"), tokenBalance(
@@ -625,66 +649,208 @@ class Evm7702ProductionFlowIntegrationTest {
                      where entry.entry_type = 'NETWORK_FEE'
                        and lower(entry.account_id) <> lower(base.account_id)
                     """, Integer.class));
+            writePublicProof(web3j,tenantA,tenantB,relayer);
         } finally {
             web3j.shutdown();
         }
     }
 
-    /**
-     * 验证 {@code simulateLostBroadcastResponse} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private void simulateLostBroadcastResponse(UUID tenantId) {
-        jdbc.update("""
-                update evm_collection_batch
-                   set status = 'BROADCAST_UNKNOWN', canonical_tx_hash = null, submitted_at = null
-                 where tenant_id = ? and status = 'SUBMITTED'
-                """, tenantId);
-        jdbc.update("""
-                update evm_collection_batch_attempt a
-                   set status = 'UNKNOWN', submitted_at = null
-                  from evm_collection_batch b
-                 where b.tenant_id = ? and b.id = a.batch_id and a.status = 'SUBMITTED'
-                """, tenantId);
-        jdbc.update("""
-                update evm_collection_batch_item
-                   set status = 'SIGNED'
-                 where tenant_id = ? and status = 'SUBMITTED'
-                """, tenantId);
+    private void awaitStoppedThird() throws Exception {
+        assertEquals(8,jdbc.queryForObject("select count(*) from wallet_mpc_key where state='ACTIVE'",Integer.class));
+        Files.writeString(nativeRoot.resolve("7702-keys-ready"),"ready");
+        awaitMarker("7702-third-stopped");
     }
 
-    /**
-     * 验证 {@code simulateLostPayoutBroadcastResponse} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private void simulateLostPayoutBroadcastResponse(UUID tenantId) {
-        jdbc.update("""
-                update evm_withdrawal_batch
-                   set status = 'BROADCAST_UNKNOWN', canonical_tx_hash = null, submitted_at = null
-                 where tenant_id = ? and status = 'SUBMITTED'
-                """, tenantId);
-        jdbc.update("""
-                update evm_withdrawal_batch_attempt attempt
-                   set status = 'UNKNOWN', submitted_at = null
-                  from evm_withdrawal_batch batch
-                 where batch.tenant_id = ? and batch.id = attempt.batch_id
-                   and attempt.status = 'SUBMITTED'
-                """, tenantId);
-        jdbc.update("""
-                update evm_withdrawal_batch_item
-                   set status = 'SIGNED'
-                 where tenant_id = ? and status = 'SUBMITTED'
-                """, tenantId);
-        jdbc.update("""
-                update withdrawal_order withdrawal
-                   set status = 'SIGNING', tx_hash = null
-                  from evm_withdrawal_batch_item item
-                 where item.tenant_id = ? and item.batch_id = (
-                       select id from evm_withdrawal_batch
-                        where tenant_id = ? and status = 'BROADCAST_UNKNOWN'
-                        order by created_at desc limit 1)
-                   and withdrawal.tenant_id = item.tenant_id
-                   and withdrawal.id = item.withdrawal_order_id
-                   and withdrawal.status = 'SENT'
-                """, tenantId, tenantId);
+    private void awaitMarker(String name) throws Exception {
+        Instant deadline=Instant.now().plusSeconds(90);
+        while(!Files.isRegularFile(nativeRoot.resolve(name)) && Instant.now().isBefore(deadline))Thread.sleep(50);
+        assertTrue(Files.isRegularFile(nativeRoot.resolve(name)),"native driver did not acknowledge "+name);
+        var proof=new ObjectMapper().readTree(Files.readString(nativeRoot.resolve(name)));
+        assertEquals(quorum,new ObjectMapper().convertValue(proof.path("pair"),new tools.jackson.core.type.TypeReference<List<Integer>>(){}));
+        assertFalse(quorum.contains(proof.path("absent").asInt()));
+    }
+
+    /** Recreate application services using the original durable database and configured encryption keys. */
+    private void recreateWorkflows() {
+        var json=new ObjectMapper();
+        var signing=new com.surprising.wallet.service.MpcSigningService(
+                new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc),
+                new com.surprising.wallet.repository.WalletMpcKeyRepository(jdbc),
+                new com.surprising.wallet.repository.WalletMpcKeyEpochRepository(jdbc,json),
+                new com.surprising.wallet.repository.WalletMpcSignRequestRepository(jdbc),
+                new com.surprising.wallet.repository.WalletMpcSignAttemptRepository(jdbc,json),mpcSupport.crypto,json,mpcSupport.manager);
+        mpc7702=new com.surprising.wallet.service.Evm7702SigningService(
+                new com.surprising.wallet.repository.WalletMpcSignRequestRepository(jdbc),new ChainAddressRepository(jdbc),
+                new com.surprising.wallet.repository.EvmNonceRepository(jdbc),new com.surprising.wallet.repository.EvmCollectionBatchRepository(jdbc),
+                new com.surprising.wallet.repository.EvmWithdrawalBatchRepository(jdbc),signing,signingNodes,json,
+                new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc));
+        transactionContext.close();
+        transactionContext=new org.springframework.context.annotation.AnnotationConfigApplicationContext();
+        transactionContext.register(Transactions.class);
+        transactionContext.registerBean(org.springframework.transaction.PlatformTransactionManager.class,()->mpcSupport.manager);
+        transactionContext.registerBean(Evm7702CollectionCoordinator.class,()->com.surprising.wallet.testutil.CustodyTestSupport.evmCollections(jdbc,mpc7702,crypto));
+        transactionContext.registerBean(Evm7702WithdrawalCoordinator.class,()->com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawals(jdbc,mpc7702,crypto));
+        transactionContext.registerBean(CustodyWithdrawalService.class,()->withdrawalTarget);
+        transactionContext.refresh();
+        withdrawalService=transactionContext.getBean(CustodyWithdrawalService.class);
+        workflow=com.surprising.wallet.testutil.CustodyTestSupport.evmCollectionWorkflow(jdbc,
+                transactionContext.getBean(Evm7702CollectionCoordinator.class),evmRpc,mpc7702,crypto,runtimeConfig);
+        withdrawalWorkflow=com.surprising.wallet.testutil.CustodyTestSupport.evmWithdrawalWorkflow(jdbc,
+                transactionContext.getBean(Evm7702WithdrawalCoordinator.class),evmRpc,mpc7702,crypto,runtimeConfig);
+    }
+
+    private void recoverOriginal(boolean payout,String hash) throws Exception {
+        var json=new ObjectMapper();
+        String before=json.writeValueAsString(jdbc.queryForList("select id,current_attempt_id,payload_hex,preimage_hex from wallet_mpc_sign_request order by id"));
+        String phase=payout?"payout":"collection";
+        Files.writeString(nativeRoot.resolve("7702-"+phase+"-restart-ready"),"ready");
+        awaitMarker("7702-"+phase+"-restarted");
+        recreateWorkflows();
+        // Accepted work must finish even when all new-business entry points are disabled.
+        jdbc.update("update chain_profile set enabled=false,withdraw_enabled=false,collection_enabled=false where id=?",profile.getId());
+        jdbc.update("update chain_asset set active=false where chain=?",chain);
+        jdbc.update("update token_config set enabled=false where chain=? and network=?",chain,profile.getNetwork());
+        jdbc.update("update chain_address set enabled=false where chain=?",chain);
+        jdbc.update("update evm_7702_config set status='PAUSED' where chain=? and network=?",chain,profile.getNetwork());
+        try {
+            if(payout)withdrawalWorkflow.run();else workflow.run();
+            broadcastGate.assertHealthy();
+            String table=payout?"evm_withdrawal_batch":"evm_collection_batch";
+            assertEquals("CONFIRMED",jdbc.queryForObject("select status from "+table+" where canonical_tx_hash=?",String.class,hash));
+            assertEquals(before,json.writeValueAsString(jdbc.queryForList("select id,current_attempt_id,payload_hex,preimage_hex from wallet_mpc_sign_request order by id")),"recovery must retain all original intents and attempts");
+        } finally {
+            jdbc.update("update chain_profile set enabled=true,withdraw_enabled=true,collection_enabled=true where id=?",profile.getId());
+            jdbc.update("update chain_asset set active=true where chain=?",chain);
+            jdbc.update("update token_config set enabled=true where chain=? and network=?",chain,profile.getNetwork());
+            jdbc.update("update chain_address set enabled=true where chain=?",chain);
+            jdbc.update("update evm_7702_config set status='ACTIVE' where chain=? and network=?",chain,profile.getNetwork());
+        }
+    }
+
+    private void writePublicProof(Web3j web3j,TenantFixture a,TenantFixture b,String relayer) throws Exception {
+        broadcastGate.assertHealthy();
+        assertEquals(12,broadcastGate.transactions.size());
+        assertEquals(2,broadcastGate.acceptedLostResponses.size());
+        String balancesBefore=ledgerSnapshot();
+        int entriesBefore=jdbc.queryForObject("select count(*) from custody_ledger_entry",Integer.class);
+        int requestsBefore=jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class);
+        BigInteger fees=BigInteger.ZERO;
+        var publicTransactions=new ArrayList<Map<String,Object>>();
+        for(var item:broadcastGate.transactions.values()) {
+            var receipt=waitReceipt(web3j,(String)item.get("transactionHash"));
+            assertEquals("0x1",receipt.getStatus());
+            for(int scan=0;scan<2;scan++) {
+                depositScanner.scanAndCreditNative(ChainType.valueOf(chain),nativeSymbol,RPC,1,receipt.getBlockNumber().longValueExact());
+                depositScanner.scanAndCreditErc20(ChainType.valueOf(chain),RPC,1,receipt.getBlockNumber().longValueExact());
+            }
+            BigInteger fee=receipt.getGasUsed().multiply(Numeric.decodeQuantity(receipt.getEffectiveGasPrice()));
+            fees=fees.add(fee);
+            var proof=new java.util.LinkedHashMap<>(item);proof.put("feeAtomic",fee.toString());publicTransactions.add(proof);
+        }
+        workflow.run();withdrawalWorkflow.run();
+        assertEquals(balancesBefore,ledgerSnapshot(),"internal/duplicate scans and completed-job replay cannot change balances");
+        assertEquals(entriesBefore,jdbc.queryForObject("select count(*) from custody_ledger_entry",Integer.class));
+        assertEquals(requestsBefore,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        assertCreditedDeposits("USDT",5);assertCreditedDeposits(nativeSymbol,3);assertCreditedDeposits("USDC",5);
+        BigDecimal charged=jdbc.queryForObject("select sum(actual_amount) from custody_gas_usage where status='SETTLED'",BigDecimal.class);
+        assertEquals(fees,charged.movePointRight(18).toBigIntegerExact());
+        assertEquals(new BigInteger("5000000000000000000").subtract(fees),
+                web3j.ethGetBalance(relayer,DefaultBlockParameterName.LATEST).send().getBalance());
+        assertEquals(BigInteger.valueOf(12),web3j.ethGetTransactionCount(relayer,DefaultBlockParameterName.LATEST).send().getTransactionCount());
+        assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request where state<>'COMPLETED'",Integer.class));
+        var expectedOnline=quorum.stream().map(index->mpcSupport.nodes.parties().get(index)).toList();
+        for(String request:jdbc.queryForList("select request::text from wallet_mpc_sign_attempt",String.class))
+            assertEquals(expectedOnline,jsonList(new ObjectMapper().readTree(request).path("online")));
+        assertEquals(0,jdbc.queryForObject("select count(*) from ledger_balance where tenant_id in (?,?) and locked_balance<>0",Integer.class,a.tenantId(),b.tenantId()));
+        assertEquals(0,jdbc.queryForObject("select count(*) from withdrawal_order where tenant_id in (?,?) and status<>'CONFIRMED'",Integer.class,a.tenantId(),b.tenantId()));
+        assertEquals(10,jdbc.queryForObject("select count(*) from withdrawal_order where tenant_id in (?,?)",Integer.class,a.tenantId(),b.tenantId()));
+        for(var asset:Map.of("USDT",new BigDecimal("85"),"USDC",new BigDecimal("56")).entrySet()) {
+            BigDecimal total=jdbc.queryForObject("select sum(total_balance) from ledger_balance where tenant_id in (?,?) and asset_symbol=?",BigDecimal.class,a.tenantId(),b.tenantId(),asset.getKey());
+            assertEquals(0,asset.getValue().compareTo(total));
+        }
+        BigDecimal nativeLedger=jdbc.queryForObject("select sum(total_balance) from ledger_balance where tenant_id in (?,?) and asset_symbol=?",BigDecimal.class,a.tenantId(),b.tenantId(),nativeSymbol);
+        assertEquals(0,new BigDecimal("6.2").subtract(charged).compareTo(nativeLedger));
+        assertEquals(new BigInteger("2700000000000000000"),web3j.ethGetBalance(a.hotWallet(),DefaultBlockParameterName.LATEST).send().getBalance());
+        assertEquals(new BigInteger("1500000000000000000"),web3j.ethGetBalance(b.hotWallet(),DefaultBlockParameterName.LATEST).send().getBalance());
+        assertEquals(12,jdbc.queryForObject("select count(*) from custody_ledger_entry where entry_type='NETWORK_FEE'",Integer.class));
+        assertEquals(0,jdbc.queryForObject("select count(*) from chain_address where mpc_key_id is null",Integer.class));
+        var proof=new java.util.LinkedHashMap<String,Object>();
+        proof.put("passed",true);proof.put("pair",quorum);proof.put("transactions",publicTransactions);
+        proof.put("feeAtomic",fees.toString());proof.put("relayerFundedAtomic","5000000000000000000");
+        proof.put("relayerRemainingAtomic",new BigInteger("5000000000000000000").subtract(fees).toString());
+        proof.put("lostResponses",broadcastGate.acceptedLostResponses.size());proof.put("holderRestarts",2);proof.put("applicationServiceRecreations",2);
+        proof.put("mpcRequests",jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        proof.put("disabledEntryRecovery",true);proof.put("principalSettledOrders",10);
+        proof.put("internalRescanNoCredit",true);proof.put("ownedIncomingCreditOnce",true);proof.put("completedReplayUnchanged",true);
+        Files.writeString(nativeRoot.resolve("7702-business-public.json"),new ObjectMapper().writeValueAsString(proof));
+    }
+
+    private String ledgerSnapshot() {
+        return new ObjectMapper().writeValueAsString(jdbc.queryForList("select tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance from ledger_balance order by tenant_id,chain,asset_symbol,account_id"));
+    }
+
+    private static List<String> jsonList(JsonNode value) {
+        return java.util.stream.StreamSupport.stream(value.spliterator(),false).map(JsonNode::asText).toList();
+    }
+
+    /** All workflow broadcasts pass a real loopback gate; faucet/deployment calls use the node directly. */
+    private final class BroadcastGate implements AutoCloseable {
+        private final com.sun.net.httpserver.HttpServer server;
+        private final java.net.http.HttpClient forward=java.net.http.HttpClient.newBuilder()
+                .version(java.net.http.HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).build();
+        private final java.util.concurrent.atomic.AtomicReference<Throwable> failure=new java.util.concurrent.atomic.AtomicReference<>();
+        private final Map<String,Map<String,Object>> transactions=new java.util.concurrent.ConcurrentHashMap<>();
+        private final Set<String> acceptedLostResponses=java.util.concurrent.ConcurrentHashMap.newKeySet();
+        private volatile boolean loseResponses;
+        private volatile String lastHash;
+        BroadcastGate() throws Exception {
+            server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+            server.createContext("/",exchange->{
+                try {
+                    byte[] body=exchange.getRequestBody().readAllBytes();var request=new ObjectMapper().readTree(body);
+                    boolean broadcast="eth_sendRawTransaction".equals(request.path("method").asText());
+                    if(broadcast)verifyCommitted(request.path("params").get(0).asText());
+                    var response=forward.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(RPC)).timeout(Duration.ofSeconds(10))
+                            .header("Content-Type","application/json").POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(body)).build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+                    if(broadcast && loseResponses) {
+                        assertEquals(200,response.statusCode(),"the node must answer before its reply is lost");
+                        String hash=Hash.sha3(request.path("params").get(0).asText());
+                        var accepted=new ObjectMapper().readTree(response.body());
+                        if(hash.equalsIgnoreCase(accepted.path("result").asText()))acceptedLostResponses.add(hash);
+                        else assertTrue(acceptedLostResponses.contains(hash),"a lost initial response must prove actual acceptance");
+                        exchange.close();return;
+                    }
+                    exchange.getResponseHeaders().set("Content-Type","application/json");
+                    exchange.sendResponseHeaders(response.statusCode(),response.body().length);exchange.getResponseBody().write(response.body());
+                } catch(Throwable error) {
+                    failure.compareAndSet(null,error);
+                    byte[] message="fixture RPC gate validation failed".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    try {exchange.sendResponseHeaders(500,message.length);exchange.getResponseBody().write(message);}catch(java.io.IOException ignored){}
+                } finally {exchange.close();}
+            });server.start();
+        }
+        String endpoint() {return "http://127.0.0.1:"+server.getAddress().getPort();}
+        void assertHealthy() {if(failure.get()!=null)throw new AssertionError("workflow RPC gate failed",failure.get());}
+        private void verifyCommitted(String raw) {
+            String hash=Hash.sha3(raw);
+            var selected=jdbc.queryForList("select tenant_id,id,'COLLECTION' kind,status from evm_collection_batch where canonical_tx_hash=? union all select tenant_id,id,'WITHDRAWAL' kind,status from evm_withdrawal_batch where canonical_tx_hash=?",hash,hash);
+            assertEquals(1,selected.size(),"broadcast must follow original business raw/hash commit");
+            var row=selected.getFirst();UUID tenant=(UUID)row.get("tenant_id"),batch=(UUID)row.get("id");boolean payout="WITHDRAWAL".equals(row.get("kind"));
+            assertTrue(Set.of("BROADCAST_UNKNOWN","SUBMITTED").contains(row.get("status")));
+            String table=payout?"evm_withdrawal_batch_attempt":"evm_collection_batch_attempt";
+            String encrypted=jdbc.queryForObject("select signed_tx_ciphertext from "+table+" where tenant_id=? and batch_id=? and tx_hash=?",String.class,tenant,batch,hash);
+            assertTrue(raw.equals(crypto.decrypt(encrypted)),"wire must equal the committed encrypted selection");
+            var operation=new com.surprising.wallet.service.Evm7702SigningService.Operation(tenant,batch,chain,
+                    payout?com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL:com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.COLLECTION);
+            mpc7702.verifySelectedRaw(operation,raw,hash);
+            assertEquals("RESERVED",jdbc.queryForObject("select status from custody_gas_usage where tenant_id=? and operation_type=? and operation_id=?",String.class,tenant,payout?"WITHDRAWAL_BATCH":"COLLECTION_BATCH",batch));
+            assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request where business_reference=? and state<>'COMPLETED'",Integer.class,operation.reference()));
+            transactions.putIfAbsent(hash,Map.of("transactionHash",hash,"tenantId",tenant.toString(),"batchId",batch.toString(),
+                    "kind",row.get("kind"),"type",raw.startsWith("0x04")?4:2));
+            lastHash=hash;
+        }
+        @Override public void close() {server.stop(0);forward.close();}
     }
 
     /**
@@ -793,7 +959,7 @@ class Evm7702ProductionFlowIntegrationTest {
      * 验证 {@code createTenant} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private TenantFixture createTenant(String slug, int namespace, int itemCount, long userBase) throws Exception {
-        UUID tenantId = UUID.randomUUID();
+        UUID tenantId = UUID.nameUUIDFromBytes(slug.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         jdbc.update("insert into custody_tenant(id, slug, name, derivation_namespace) values (?, ?, ?, ?)",
                 tenantId, slug, slug, namespace);
         UUID tenantAdminId = UUID.randomUUID();
@@ -828,15 +994,15 @@ class Evm7702ProductionFlowIntegrationTest {
         for (int index = 0; index < itemCount; index++) {
             ChainAddressRecord record = keyRecord(
                     tenantId, userBase + index + 1, namespace, index, "DEPOSIT");
-            Credentials credentials = credentials(record);
+            String address = record.getAddress();
             long chainAddressId = insertChainAddress(record, tenantId);
             UUID custodyId = insertCustodyAddress(
-                    tenantId, chainAddressId, credentials.getAddress(), slug + "-user-" + index, index);
+                    tenantId, chainAddressId, address, slug + "-user-" + index, index);
             new com.surprising.wallet.repository.Evm7702AccountRepository(jdbc).createProjection(
-                    tenantId, custodyId, chain, "local", credentials.getAddress());
+                    tenantId, custodyId, chain, "local", address);
             BigInteger amount = BigInteger.valueOf((index + 1L) * 10_000_000L);
             authorities.add(new AuthorityFixture(
-                    tenantId, custodyId, record, credentials, amount,
+                    tenantId, custodyId, record, address, amount,
                     new BigDecimal(amount).movePointLeft(6), hotRecord.getAddress()));
         }
         return new TenantFixture(tenantId, hotRecord.getAddress(), List.copyOf(authorities));
@@ -888,8 +1054,8 @@ class Evm7702ProductionFlowIntegrationTest {
         assertEquals(expected, tokenBalance(web3j, tenant.hotWallet()));
         for (AuthorityFixture authority : tenant.authorities()) {
             assertEquals(BigInteger.ZERO, web3j.ethGetBalance(
-                    authority.credentials().getAddress(), DefaultBlockParameterName.LATEST).send().getBalance());
-            assertTrue(web3j.ethGetCode(authority.credentials().getAddress(), DefaultBlockParameterName.LATEST)
+                    authority.address(), DefaultBlockParameterName.LATEST).send().getBalance());
+            assertTrue(web3j.ethGetCode(authority.address(), DefaultBlockParameterName.LATEST)
                     .send().getCode().startsWith("0xef0100"));
         }
         String ciphertext = jdbc.queryForObject("""
@@ -953,7 +1119,7 @@ class Evm7702ProductionFlowIntegrationTest {
         assertEquals(expected, tokenBalance(web3j, tenant.hotWallet(), symbol));
         for (AuthorityFixture authority : authorities) {
             assertEquals(BigInteger.ZERO,
-                    tokenBalance(web3j, authority.credentials().getAddress(), symbol));
+                    tokenBalance(web3j, authority.address(), symbol));
         }
     }
 
@@ -987,16 +1153,8 @@ class Evm7702ProductionFlowIntegrationTest {
      * 验证 {@code insertChainAddress} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private long insertChainAddress(ChainAddressRecord record, UUID tenantId) {
-        return jdbc.queryForObject("""
-                insert into chain_address(
-                    chain, asset_symbol, account_id, user_id, biz, address_index,
-                    address, owner_address, derivation_path, wallet_role, enabled, tenant_id)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?)
-                returning id
-                """, Long.class, chain, nativeSymbol, record.getAddress().toLowerCase(),
-                record.getUserId(), record.getBiz(),
-                record.getAddressIndex(), record.getAddress(), record.getAddress(), record.getDerivationPath(),
-                record.getWalletRole(), tenantId);
+        assertEquals(tenantId,record.getTenantId());
+        return new ChainAddressRepository(jdbc).publishMpc(record).getId();
     }
 
     /**
@@ -1020,23 +1178,15 @@ class Evm7702ProductionFlowIntegrationTest {
      */
     private ChainAddressRecord keyRecord(UUID tenantId, long userId, int biz,
                                          long index, String role) {
-        ChainAddressRecord template = ChainAddressRecord.builder()
-                .chain(chain).assetSymbol(nativeSymbol).userId(userId).biz(biz)
-                .addressIndex(index).walletRole(role).enabled(true)
-                .derivationPath("m/44/60/" + biz + "/" + userId + "/" + index).build();
-        Credentials credentials = credentials(template);
-        template.setAddress(credentials.getAddress());
-        template.setAccountId(credentials.getAddress().toLowerCase());
-        template.setOwnerAddress(credentials.getAddress());
-        return template;
-    }
-
-    /**
-     * 验证 {@code credentials} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private Credentials credentials(ChainAddressRecord record) {
-        org.bitcoinj.crypto.ECKey key = keyService.key(profile, record);
-        return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
+        int namespace=new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc)
+                .findById(tenantId).orElseThrow().derivationNamespace();
+        var key=mpcSupport.signing.awaitKey(tenantId,ChainType.valueOf(chain),userId,namespace,index,mpcSupport.nodes);
+        String address=com.surprising.wallet.chain.MpcPublicAddressCodec.encode(profile,
+                java.util.HexFormat.of().parseHex(key.publicKeyHex()));
+        return ChainAddressRecord.builder().tenantId(tenantId).mpcKeyId(key.id())
+                .chain(chain).assetSymbol(nativeSymbol).userId(userId).biz(namespace)
+                .addressIndex(index).walletRole(role).enabled(true).derivationPath("mpc:"+key.id())
+                .address(address).accountId(address.toLowerCase(java.util.Locale.ROOT)).ownerAddress(address).build();
     }
 
     /**
@@ -1104,8 +1254,10 @@ class Evm7702ProductionFlowIntegrationTest {
      * 验证 {@code sendRaw} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private TransactionReceipt sendRaw(Web3j web3j, RawTransaction raw) throws Exception {
-        byte[] signed = TransactionEncoder.signMessage(raw, chainId, HARDHAT_ADMIN);
-        EthSendTransaction response = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
+        // Funding and deployments use only the isolated node's unlocked faucet account.
+        String to=raw.getTo()==null || raw.getTo().isBlank()?null:raw.getTo();
+        EthSendTransaction response = web3j.ethSendTransaction(new Transaction(HARDHAT_ADMIN,raw.getNonce(),
+                raw.getGasPrice(),raw.getGasLimit(),to,raw.getValue(),raw.getData())).send();
         assertFalse(response.hasError(), response.hasError() ? response.getError().getMessage() : "");
         return waitReceipt(web3j, response.getTransactionHash());
     }
@@ -1135,7 +1287,7 @@ class Evm7702ProductionFlowIntegrationTest {
         Function function = new Function(
                 "balanceOf", List.of(new Address(owner)), List.of(new TypeReferenceUint256()));
         EthCall call = web3j.ethCall(Transaction.createEthCallTransaction(
-                HARDHAT_ADMIN.getAddress(), token, FunctionEncoder.encode(function)),
+                HARDHAT_ADMIN, token, FunctionEncoder.encode(function)),
                 DefaultBlockParameterName.LATEST).send();
         return (BigInteger) org.web3j.abi.FunctionReturnDecoder.decode(
                 call.getValue(), function.getOutputParameters()).getFirst().getValue();
@@ -1161,28 +1313,6 @@ class Evm7702ProductionFlowIntegrationTest {
             Thread.sleep(100L);
         }
         throw new IllegalStateException("timed out waiting for " + txHash);
-    }
-
-    /**
-     * 验证 {@code testKeyset} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static WalletKeyConfig testKeyset() {
-        String[] seeds = new String[4];
-        for (int i = 0; i < seeds.length; i++) {
-            byte[] bytes = new byte[32];
-            Arrays.fill(bytes, (byte) (0x31 + i));
-            seeds[i] = Base64.getEncoder().encodeToString(bytes);
-        }
-        return new WalletKeyConfig(seeds[0], seeds[1], seeds[2], seeds[3]);
-    }
-
-    /**
-     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 
     /**
@@ -1235,7 +1365,7 @@ class Evm7702ProductionFlowIntegrationTest {
 
     private record AuthorityFixture(
             UUID tenantId, UUID custodyAddressId, ChainAddressRecord record,
-            Credentials credentials, BigInteger amountAtomic, BigDecimal amount,
+            String address, BigInteger amountAtomic, BigDecimal amount,
             String hotWallet) {
     }
 

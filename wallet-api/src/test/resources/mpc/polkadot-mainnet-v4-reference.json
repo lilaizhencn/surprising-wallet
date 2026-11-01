@@ -1,0 +1,100 @@
+{
+  "provenance": "Public live Polkadot Hub metadata; isolated @polkadot/api16.5.6 selects V4 pipeline0. Fresh independent reference private keys discarded. Native/USDC vectors are offline only; nothing is broadcast.",
+  "captured": "2026-10-31T08:01:33.855Z",
+  "metadataVersion": 16,
+  "extensionVersion": 0,
+  "vectors": [
+    {
+      "unsigned": {
+        "network": "mainnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f",
+        "specVersion": 2005002,
+        "transactionVersion": 15,
+        "sender": "14qWniS4Rt798cfMMgwh3tkYhvv9E4uiL4yc3mCC9QDL2QFd",
+        "publicKeyHex": "a9b4c1769095ca0e863d113eede217226d04d01264fa79603df033a0763dd948",
+        "recipient": "15eqxGZ51rxZkg8VTK15X7mF8PdEiE6UgW5DwqvsS14qth7A",
+        "amountAtomic": "1",
+        "assetId": null,
+        "nonce": 0,
+        "eraPeriod": 64,
+        "blockHeight": 22521100,
+        "blockHash": "0xeaa991052761c75ace65360ee46c58d096105d8dc4149497dd71e5bab2099905",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "PrevalidateAttests",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x0a03",
+          "allowDeath": "0x0a00"
+        },
+        "keepAlive": true
+      },
+      "callHex": "0x0a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04",
+      "payloadHex": "0x0a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04c500000000000a981e000f00000068d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2feaa991052761c75ace65360ee46c58d096105d8dc4149497dd71e5bab209990500",
+      "signingMessageHex": "0x0a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04c500000000000a981e000f00000068d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2feaa991052761c75ace65360ee46c58d096105d8dc4149497dd71e5bab209990500",
+      "signatureHex": "7ff9ee189d979128452a863c5d2be52359ff78577562dea803003244f03bc3939d74f02393be3928144685858067bf2001549472cf3e4fa03fc7212ac55aae0a",
+      "selected": {
+        "extrinsicHex": "0x35028400a9b4c1769095ca0e863d113eede217226d04d01264fa79603df033a0763dd948007ff9ee189d979128452a863c5d2be52359ff78577562dea803003244f03bc3939d74f02393be3928144685858067bf2001549472cf3e4fa03fc7212ac55aae0ac500000000000a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04",
+        "txHash": "0x019b1e6a376a962246a82849ce53a65fb123b90a9a00586f4ba6d9f0f12685c2"
+      }
+    },
+    {
+      "unsigned": {
+        "network": "mainnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f",
+        "specVersion": 2005002,
+        "transactionVersion": 15,
+        "sender": "13kHUCeV6U3i7KZtut2U2XGeeJErXNfecQMgjxNZPPrgY7yc",
+        "publicKeyHex": "797b757534fa81308095f508e2f6935e1c452c4a8672afcfff7115c3fd756d4d",
+        "recipient": "15eqxGZ51rxZkg8VTK15X7mF8PdEiE6UgW5DwqvsS14qth7A",
+        "amountAtomic": "1",
+        "assetId": "1337",
+        "nonce": 0,
+        "eraPeriod": 64,
+        "blockHeight": 22521100,
+        "blockHash": "0xeaa991052761c75ace65360ee46c58d096105d8dc4149497dd71e5bab2099905",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "PrevalidateAttests",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x3209",
+          "allowDeath": "0x3208"
+        },
+        "keepAlive": false
+      },
+      "callHex": "0x3208e51400cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04",
+      "payloadHex": "0x3208e51400cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04c500000000000a981e000f00000068d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2feaa991052761c75ace65360ee46c58d096105d8dc4149497dd71e5bab209990500",
+      "signingMessageHex": "0x3208e51400cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04c500000000000a981e000f00000068d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2feaa991052761c75ace65360ee46c58d096105d8dc4149497dd71e5bab209990500",
+      "signatureHex": "885cf8ae697a1dc96744853e2e9839396338caeab47d304d89f45f21e76cf63da785485f83f4c786b3780911a7d229b214ffa37d0b791d023ed066a02259cf0f",
+      "selected": {
+        "extrinsicHex": "0x3d028400797b757534fa81308095f508e2f6935e1c452c4a8672afcfff7115c3fd756d4d00885cf8ae697a1dc96744853e2e9839396338caeab47d304d89f45f21e76cf63da785485f83f4c786b3780911a7d229b214ffa37d0b791d023ed066a02259cf0fc500000000003208e51400cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd04",
+        "txHash": "0x810307fc02b3478ca0fdef1f864cd3001265aa0abede225c3db1c66b0f08e914"
+      }
+    }
+  ]
+}

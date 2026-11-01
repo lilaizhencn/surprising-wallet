@@ -1,160 +1,130 @@
 package com.surprising.wallet.chain.monero;
 
-import com.surprising.wallet.chain.model.MoneroTransactionRecord;
-import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainAddressRepository;
-import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.MoneroTransactionRepository;
-import com.surprising.wallet.repository.WithdrawalOrderRepository;
-import com.surprising.wallet.service.DepositService;
-import com.surprising.wallet.service.WithdrawalSettlementService;
+import com.surprising.wallet.model.mpc.*;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.service.*;
+import com.surprising.wallet.service.MoneroSubmissionService.Kind;
+import com.surprising.wallet.service.MoneroSubmissionService.Operation;
 import java.math.BigDecimal;
-import java.util.UUID;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-/**
- * Monero 链交易服务，通过 monero-wallet-rpc 发送转账并管理提现/归集流程。
- *
- * <p>Monero 交易由 wallet-rpc 全权处理（包括签名和广播），本服务只需调用
- * transfer 方法即可完成转账。提现确认通过 get_transfer_by_txid 查询交易状态，
- * 达到所需确认数后视为已确认。</p>
- *
- * @see MoneroWalletRpcClient
- */
+/** Native-only Monero payment workflow; Java never uses a private wallet RPC. */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class MoneroTransactionService {
+    private final MoneroDaemonClient daemon;
+    private final MoneroSubmissionService submissions;
+    private final MpcSigningService signing;
+    private final MpcNodes nodes;
+    private final ChainProfileRepository profiles;
+    private final ChainAddressRepository addresses;
+    private final CollectionRecordRepository collections;
+    private final CustodyGasService gas;
+    private final WalletRuntimeConfigService runtime;
 
-    /** 链标识 */
-    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
-
-    /** 原生币符号 */
-    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;
-
-    /** Monero 钱包 RPC 客户端 */
-    private final MoneroWalletRpcClient walletRpcClient;
-    private final MoneroTransactionRepository moneroTransactionRepository;
-    private final WithdrawalOrderRepository withdrawalOrderRepository;
-    private final CollectionRecordRepository collectionRecordRepository;
-    private final ChainAddressRepository chainAddressRepository;
-    private final DepositService depositService;
-
-
-    private final WithdrawalSettlementService settlements;
-    public String sendNative(AccountChainProfile profile, ChainAddressRecord from, String toAddress, BigDecimal amount) {
-        MoneroWalletRpcClient.Transfer transfer = walletRpcClient.transfer(
-                Math.toIntExact(from.getAddressIndex()), toAddress, amount, network(profile), "rpc");
-        moneroTransactionRepository.upsert(MoneroTransactionRecord.builder()
-                .chain(CHAIN)
-                .txHash(transfer.txHash())
-                .direction("OUT")
-                .accountIndex(transfer.accountIndex())
-                .subaddressIndex(transfer.subaddressIndex())
-                .address(from.getAddress())
-                .assetSymbol(SYMBOL)
-                .amount(amount)
-                .feeAtomic(transfer.feeAtomic())
-                .blockHeight(transfer.blockHeight())
-                .confirmations(transfer.confirmations())
-                .status("SENT")
-                .rawPayload(transfer.rawPayload())
-                .build());
-        return transfer.txHash();
+    public String send(Operation op,ChainAddressRecord source) {
+        require(op.kind()==Kind.WITHDRAWAL,"Monero withdrawal operation required");
+        if(submissions.intent(op).isPresent())return recoverOriginal(op);
+        runtime.requireTaskEnabled("XMR",WalletRuntimeConfigService.TASK_WITHDRAW,"Monero withdrawal");
+        return transfer(op,source);
     }
-
-    public void confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                  String orderNo, String txHash, String toAddress, BigDecimal amount) {
-        MoneroWalletRpcClient.Transfer transfer = confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations());
-        if (transfer != null) {
-            if (settlements.confirm(tenantId, CHAIN, orderNo, txHash)) {
-                creditInternalRecipient(profile, transfer, toAddress, amount);
-            }
-        }
+    public String collect(UUID tenant,String reference,ChainAddressRecord source) {
+        var op=new Operation(tenant,reference,Kind.COLLECTION);
+        if(submissions.intent(op).isPresent())return recoverOriginal(op);
+        runtime.requireTaskEnabled("XMR",WalletRuntimeConfigService.TASK_COLLECTION,"Monero collection");
+        require(collections.claimSigningDurable(tenant,"XMR",reference)==1,"Monero collection already has a durable owner");
+        return transfer(op,source);
     }
-
-    public void collectNative(java.util.UUID tenantId, AccountChainProfile profile, String collectionNo,
-                              ChainAddressRecord from, String toAddress, BigDecimal amount) {
-        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return;
-        }
+    private String transfer(Operation op,ChainAddressRecord source) {
         try {
-            String txHash = sendNative(profile, from, toAddress, amount);
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
-        } catch (RuntimeException e) {
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
-            throw e;
+            var payment=submissions.payment(op);var profile=profiles.findAccountByChain("XMR").orElseThrow();var network=daemon.network(profile.getNetwork());
+            BigInteger cap=BigInteger.valueOf(profile.getDefaultFee()==null?0:profile.getDefaultFee()).max(BigInteger.valueOf(3_000_000_000L));
+            var draft=new MoneroSigningPayload(network.name(),network.genesisHash(),source.getAddress(),payment.recipient(),payment.amount(),payment.customerFee(),cap,
+                    Math.max(1,profile.getWithdrawConfirmations()));
+            // Admit the main immutable payment before any Gas funding can leave the tenant's Gas account.
+            submissions.reserve(op,source,draft);return recoverOriginal(op);
+        } catch(RuntimeException error){submissions.unknown(op,error.getClass().getSimpleName());throw error;}
+    }
+    public boolean recover(Operation op) {if(submissions.intent(op).isEmpty())return false;recoverOriginal(op);return true;}
+    /** Accepted payments finish before admission switches, including when the entire chain is closed. */
+    public void recoverObserved() {
+        for(var op:submissions.pending()) {
+            try{recoverOriginal(op);}catch(RuntimeException pending){log.debug("Monero original relay/signing pending: {}",op.reference());}
+            try{confirm(op);}catch(RuntimeException pending){log.debug("Monero original confirmation pending: {}",op.reference());}
+            finally{submissions.refreshed(op);}
         }
     }
-
-    public void confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
-                                  String collectionNo) {
-        collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
-                .filter(txHash -> confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations()) != null)
-                .ifPresent(txHash -> collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash));
+    private String recoverOriginal(Operation op) {
+        try {
+            var request=submissions.intent(op).orElseThrow();var payload=submissions.payload(request);
+            if(!submissions.terminal(op) && submissions.stored(op).orElseThrow().txHash()==null) {
+                if(op.kind()!=Kind.FUNDING && !signing.hasStartedMoneroSignature(op.tenantId(),request.id()))
+                    ensureFunds(op,source(op.tenantId(),request.command().keyId(),payload.sender()),payload);
+                submissions.sign(op,request.id());
+            }
+            var selected=submissions.commit(op,request.id());
+            if(!submissions.terminal(op))submissions.relay(op);
+            return selected.transactionHash();
+        } catch(RuntimeException error){submissions.unknown(op,error.getClass().getSimpleName());throw error;}
     }
-
-    private void creditInternalRecipient(AccountChainProfile profile, MoneroWalletRpcClient.Transfer transfer,
-                                         String toAddress, BigDecimal amount) {
-        if (toAddress == null || toAddress.isBlank()) {
-            return;
+    private void ensureFunds(Operation business,ChainAddressRecord source,MoneroSigningPayload payload) {
+        var funding=funding(business);var existing=submissions.intent(funding);
+        if(existing.isPresent() && !submissions.terminal(funding)) {
+            recoverOriginal(funding);confirm(funding);
+            if(!submissions.terminal(funding))throw new MpcPendingException(existing.get().id(),"FUNDING_CONFIRMING");
         }
-        chainAddressRepository.findEnabledByAddress(CHAIN, SYMBOL, toAddress)
-                .ifPresent(recipient -> depositService.recordAndCredit(
-                        new DepositEvent(
-                                ChainType.XMR,
-                                SYMBOL,
-                                transfer.txHash(),
-                                transfer.fromAddress(),
-                                toAddress,
-                                amount,
-                                transfer.blockHeight(),
-                                transfer.txHash(),
-                                transfer.confirmations(),
-                                null,
-                                transfer.rawPayload()),
-                        scannerLogIndex(recipient),
-                        Math.max(1, profile.getDepositConfirmations()),
-                        recipient.getAccountId()));
+        var observation=observe(source,payload,null).result().monero();
+        var balance=new BigInteger(observation.path("balanceAtomic").asText());
+        var unlocked=new BigInteger(observation.path("unlockedBalanceAtomic").asText());
+        var required=payload.amountAtomic().add(payload.maximumFeeAtomic()).add(BigInteger.ONE);
+        if(unlocked.compareTo(required)>=0)return;
+        var parent=submissions.intent(business).orElseThrow();
+        if(balance.compareTo(required)>=0)throw new MpcPendingException(parent.id(),"FUNDS_LOCKED");
+        require(balance.compareTo(payload.amountAtomic())>=0,"Monero owned source cannot cover the fixed payment principal");
+        if(existing.isPresent())throw new MpcPendingException(existing.get().id(),"ORIGINAL_FUNDING_RECONCILIATION");
+        var account=gas.findGasAccount(business.tenantId(),"XMR").filter(row->row.status().equals("ACTIVE")).orElseThrow();
+        var gasSource=addresses.findEnabledByTenantAndAddress(business.tenantId(),"XMR",account.address()).orElseThrow();
+        require(gasSource.getMpcKeyId()!=null && !gasSource.getAddress().equals(source.getAddress()),"Monero Gas source must be a different owned native key");
+        var amount=required.subtract(balance);
+        var draft=new MoneroSigningPayload(payload.network(),payload.genesisHash(),gasSource.getAddress(),source.getAddress(),new BigDecimal(amount).movePointLeft(12),
+                BigDecimal.ZERO,payload.maximumFeeAtomic(),payload.requiredConfirmations());
+        var available=new BigInteger(observe(gasSource,draft,null).result().monero().path("unlockedBalanceAtomic").asText());
+        require(available.compareTo(amount.add(draft.maximumFeeAtomic()).add(BigInteger.ONE))>=0,"Monero tenant Gas wallet cannot cover the original funding and fee");
+        var request=submissions.reserve(funding,gasSource,draft);recoverOriginal(funding);confirm(funding);
+        throw new MpcPendingException(request.id(),"FUNDING_UNLOCK_PENDING");
     }
-    private static long scannerLogIndex(ChainAddressRecord recipient) {
-        long subaddressIndex = recipient.getAddressIndex() == null ? 0L : recipient.getAddressIndex();
-        return subaddressIndex << 32;
+    public int releaseUnsigned(Operation op){return submissions.releaseUnsigned(op);}
+    public boolean confirmWithdrawal(UUID tenant,String reference){return confirm(new Operation(tenant,reference,Kind.WITHDRAWAL));}
+    public boolean confirmCollection(UUID tenant,String reference){return confirm(new Operation(tenant,reference,Kind.COLLECTION));}
+    private boolean confirm(Operation op) {
+        if(submissions.terminal(op))return false;var request=submissions.intent(op).orElseThrow();
+        if(submissions.stored(op).orElseThrow().txHash()==null)return false;
+        var payload=submissions.payload(request);var selected=submissions.commit(op,request.id());
+        return submissions.settle(op,observe(source(op.tenantId(),request.command().keyId(),payload.sender()),payload,selected.transactionHash()));
     }
-
-    private MoneroWalletRpcClient.Transfer confirmedTransfer(AccountChainProfile profile,
-                                                            String txHash,
-                                                            int requiredConfirmations) {
-        if (txHash == null || txHash.isBlank()) {
-            return null;
-        }
-        MoneroWalletRpcClient.Transfer transfer = walletRpcClient.transferByTxHash(txHash, network(profile), "rpc");
-        if (transfer == null) {
-            return null;
-        }
-        int confirmations = Math.max(0, transfer.confirmations());
-        int required = Math.max(1, requiredConfirmations);
-        moneroTransactionRepository.upsert(MoneroTransactionRecord.builder()
-                .chain(CHAIN)
-                .txHash(transfer.txHash())
-                .direction(transfer.direction())
-                .accountIndex(transfer.accountIndex())
-                .subaddressIndex(transfer.subaddressIndex())
-                .address(transfer.toAddress())
-                .assetSymbol(SYMBOL)
-                .amount(transfer.amount())
-                .feeAtomic(transfer.feeAtomic())
-                .blockHeight(transfer.blockHeight())
-                .confirmations(confirmations)
-                .status(confirmations >= required ? "CONFIRMED" : "SENT")
-                .rawPayload(transfer.rawPayload())
-                .build());
-        return confirmations >= required ? transfer : null;
+    private MpcSigningService.MoneroSnapshot observe(ChainAddressRecord source,MoneroSigningPayload payload,String hash) {
+        var network=daemon.network(payload.network());require(network.genesisHash().equals(payload.genesisHash()),"Monero daemon changed the original signing network");
+        var header=daemon.header(payload.network(),network.height()-1);
+        var anchor=new MoneroScanAnchorService.Anchor(payload.network(),payload.genesisHash(),new ChainScanPoint(header.height(),header.height(),header.hash()),header.parentHash());
+        return signing.observeMonero(source.getTenantId(),source.getMpcKeyId(),source.getAddress(),header.height(),anchor,hash,nodes);
     }
-    private static String network(AccountChainProfile profile) {
-        return profile == null ? null : profile.getNetwork();
+    private ChainAddressRecord source(UUID tenant,UUID key,String address) {
+        return addresses.listMpcAddresses("XMR").stream().filter(row->row.getTenantId().equals(tenant) && row.getMpcKeyId().equals(key) && row.getAddress().equals(address)).findFirst().orElseThrow();
     }
+    private static Operation funding(Operation op) {
+        try{return new Operation(op.tenantId(),"xmr-gas:"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((op.kind()+":"+op.reference()).getBytes(StandardCharsets.UTF_8))),Kind.FUNDING);}
+        catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
+    }
+    private static void require(boolean valid,String message){if(!valid)throw new IllegalStateException(message);}
 }

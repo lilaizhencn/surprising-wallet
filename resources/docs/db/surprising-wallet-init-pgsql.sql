@@ -21,6 +21,16 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+ALTER TABLE IF EXISTS public.chain_address DROP CONSTRAINT IF EXISTS chain_address_mpc_key_fkey;
+ALTER TABLE IF EXISTS public.hypercore_action_record DROP CONSTRAINT IF EXISTS hypercore_action_record_request_fk;
+DROP TABLE IF EXISTS public.hypercore_ledger_cursor;
+DROP TABLE IF EXISTS public.cardano_owned_output;
+DROP TABLE IF EXISTS public.cardano_transaction;
+DROP TABLE IF EXISTS public.polkadot_transaction;
+ALTER TABLE IF EXISTS public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_request_fk;
+ALTER TABLE IF EXISTS public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_attempt_fk;
+DROP TABLE IF EXISTS public.wallet_mpc_sign_attempt, public.wallet_mpc_sign_request,
+    public.wallet_mpc_key_epoch, public.wallet_mpc_key;
 DROP TABLE IF EXISTS public.evm_withdrawal_batch_attempt;
 DROP TABLE IF EXISTS public.evm_withdrawal_batch_item;
 DROP TABLE IF EXISTS public.evm_withdrawal_batch;
@@ -198,13 +208,12 @@ ALTER TABLE IF EXISTS ONLY public.sol_transaction DROP CONSTRAINT IF EXISTS sol_
 ALTER TABLE IF EXISTS ONLY public.near_transaction DROP CONSTRAINT IF EXISTS near_transaction_pkey;
 ALTER TABLE IF EXISTS ONLY public.near_transaction DROP CONSTRAINT IF EXISTS near_transaction_chain_tx_hash_action_index_key;
 ALTER TABLE IF EXISTS ONLY public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_pkey;
-ALTER TABLE IF EXISTS ONLY public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_chain_tx_hash_direction_subaddress_key;
+ALTER TABLE IF EXISTS ONLY public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_tenant_request_key;
 ALTER TABLE IF EXISTS ONLY public.ledger_balance DROP CONSTRAINT IF EXISTS ledger_balance_tenant_id_key;
 ALTER TABLE IF EXISTS ONLY public.ledger_balance DROP CONSTRAINT IF EXISTS ledger_balance_pkey;
 ALTER TABLE IF EXISTS ONLY public.ledger_balance DROP CONSTRAINT IF EXISTS ledger_balance_chain_asset_symbol_account_id_key;
 ALTER TABLE IF EXISTS ONLY public.hypercore_token_metadata DROP CONSTRAINT IF EXISTS hypercore_token_metadata_pkey;
 ALTER TABLE IF EXISTS ONLY public.hypercore_spot_asset DROP CONSTRAINT IF EXISTS hypercore_spot_asset_pkey;
-ALTER TABLE IF EXISTS ONLY public.hypercore_balance_snapshot DROP CONSTRAINT IF EXISTS hypercore_balance_snapshot_pkey;
 ALTER TABLE IF EXISTS ONLY public.hypercore_action_record DROP CONSTRAINT IF EXISTS hypercore_action_record_pkey;
 ALTER TABLE IF EXISTS ONLY public.hot_wallet_address DROP CONSTRAINT IF EXISTS hot_wallet_address_pkey;
 ALTER TABLE IF EXISTS ONLY public.hot_wallet_address DROP CONSTRAINT IF EXISTS hot_wallet_address_chain_asset_symbol_wallet_role_key;
@@ -358,7 +367,6 @@ DROP SEQUENCE IF EXISTS public.ledger_balance_id_seq;
 DROP TABLE IF EXISTS public.ledger_balance;
 DROP TABLE IF EXISTS public.hypercore_token_metadata;
 DROP TABLE IF EXISTS public.hypercore_spot_asset;
-DROP TABLE IF EXISTS public.hypercore_balance_snapshot;
 DROP TABLE IF EXISTS public.hypercore_action_record;
 DROP SEQUENCE IF EXISTS public.hot_wallet_address_id_seq;
 DROP TABLE IF EXISTS public.hot_wallet_address;
@@ -476,9 +484,10 @@ CREATE TABLE public.aptos_transaction (
     receiver character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     coin_type character varying(256),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
     gas_used bigint DEFAULT 0 NOT NULL,
     gas_unit_price bigint DEFAULT 0 NOT NULL,
+    fee_octas bigint DEFAULT 0 NOT NULL CHECK (fee_octas >= 0),
     version bigint,
     sequence_number bigint,
     confirmations integer DEFAULT 0 NOT NULL,
@@ -490,6 +499,7 @@ CREATE TABLE public.aptos_transaction (
 
 
 --
+-- MPC outgoing raw_payload retains selected signed JSON before RPC. fee_octas is the committed net fee after storage refunds.
 -- Name: aptos_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -502,6 +512,7 @@ CREATE SEQUENCE public.aptos_transaction_id_seq
 
 
 --
+-- MPC outgoing raw_payload retains selected signed JSON before RPC. fee_octas is the committed net fee after storage refunds.
 -- Name: aptos_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
@@ -528,6 +539,8 @@ CREATE TABLE public.chain_address (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     tenant_id uuid,
+    mpc_key_id uuid,
+    CONSTRAINT chain_address_mpc_owner_check CHECK (mpc_key_id IS NULL OR tenant_id IS NOT NULL),
     CONSTRAINT chain_address_reserved_hot_wallet_check CHECK (((user_id <> 0) OR (biz <> 0) OR ((address_index = 0) AND ((wallet_role)::text = 'DEPOSIT'::text))))
 );
 
@@ -564,8 +577,8 @@ CREATE TABLE public.chain_asset (
     decimals integer DEFAULT 18 NOT NULL,
     native_asset boolean DEFAULT false NOT NULL,
     active boolean DEFAULT true NOT NULL,
-    min_transfer numeric(78,18),
-    min_withdraw numeric(78,18),
+    min_transfer numeric(84,24),
+    min_withdraw numeric(84,24),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -721,6 +734,7 @@ CREATE TABLE public.chain_scan_height (
     id bigint NOT NULL,
     chain character varying(32) NOT NULL,
     scanner_name character varying(64) NOT NULL,
+    genesis_hash varchar(64) CHECK (genesis_hash IS NULL OR genesis_hash ~ '^[0-9a-f]{64}$'),
     best_height bigint DEFAULT 0 NOT NULL,
     safe_height bigint DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'ACTIVE'::character varying NOT NULL,
@@ -737,6 +751,7 @@ CREATE TABLE public.chain_scan_block (
     chain character varying(32) NOT NULL,
     scanner_name character varying(64) NOT NULL,
     block_height bigint NOT NULL,
+    block_slot bigint CHECK (block_slot IS NULL OR block_slot >= 0),
     block_hash character varying(128) NOT NULL,
     parent_hash character varying(128),
     observed_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -815,8 +830,8 @@ CREATE TABLE public.collection_record (
     asset_symbol character varying(32) NOT NULL,
     from_address character varying(160) NOT NULL,
     to_address character varying(160) NOT NULL,
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee numeric(84,24) DEFAULT 0 NOT NULL,
     tx_hash character varying(128),
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     error_message text,
@@ -1241,7 +1256,7 @@ CREATE TABLE public.custody_gas_usage (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     settled_at timestamp with time zone,
-    CONSTRAINT custody_gas_usage_actual_check CHECK (((actual_amount IS NULL) OR (actual_amount >= (0)::numeric))),
+    CONSTRAINT custody_gas_usage_actual_check CHECK (actual_amount IS NULL OR actual_amount >= 0 OR chain = 'SUI'),
     CONSTRAINT custody_gas_usage_reserved_check CHECK ((reserved_amount > (0)::numeric)),
     CONSTRAINT custody_gas_usage_operation_type_check CHECK (((operation_type)::text = ANY ((ARRAY['WITHDRAWAL'::character varying, 'COLLECTION_BATCH'::character varying, 'WITHDRAWAL_BATCH'::character varying])::text[]))),
     CONSTRAINT custody_gas_usage_status_check CHECK (((status)::text = ANY ((ARRAY['RESERVED'::character varying, 'SETTLED'::character varying, 'RELEASED'::character varying, 'OVERDUE'::character varying])::text[])))
@@ -1497,7 +1512,7 @@ CREATE TABLE public.deposit_record (
     from_address character varying(160),
     to_address character varying(160) NOT NULL,
     contract_address character varying(128),
-    amount numeric(78,18) NOT NULL,
+    amount numeric(84,24) NOT NULL,
     block_height bigint NOT NULL,
     block_hash character varying(128),
     confirmations integer DEFAULT 0 NOT NULL,
@@ -1585,7 +1600,7 @@ CREATE TABLE public.evm_token_transfer (
     contract_address character varying(128) NOT NULL,
     from_address character varying(128) NOT NULL,
     to_address character varying(128) NOT NULL,
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
     block_height bigint NOT NULL,
     confirmations integer DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'DETECTED'::character varying NOT NULL,
@@ -1626,8 +1641,8 @@ CREATE TABLE public.evm_transaction (
     to_address character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     contract_address character varying(128),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee numeric(84,24) DEFAULT 0 NOT NULL,
     nonce bigint,
     block_height bigint,
     confirmations integer DEFAULT 0 NOT NULL,
@@ -1669,8 +1684,8 @@ CREATE TABLE public.evm_tx (
     to_address character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     contract_address character varying(128),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee numeric(84,24) DEFAULT 0 NOT NULL,
     nonce bigint,
     block_height bigint,
     confirmations integer DEFAULT 0 NOT NULL,
@@ -1710,7 +1725,7 @@ CREATE TABLE public.gas_topup_task (
     chain character varying(32) NOT NULL,
     target_address character varying(160) NOT NULL,
     source_address character varying(160),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
     tx_hash character varying(128),
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     reason character varying(256),
@@ -1782,6 +1797,8 @@ ALTER SEQUENCE public.hot_wallet_address_id_seq OWNED BY public.hot_wallet_addre
 --
 
 CREATE TABLE public.hypercore_action_record (
+    tenant_id uuid NOT NULL,
+    request_id uuid NOT NULL UNIQUE,
     action_id character varying(128) NOT NULL,
     action_type character varying(32) NOT NULL,
     chain character varying(32) DEFAULT 'HYPERCORE'::character varying NOT NULL,
@@ -1792,28 +1809,18 @@ CREATE TABLE public.hypercore_action_record (
     nonce bigint NOT NULL,
     request_payload text,
     response_payload text,
-    status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
+    execution_receipt jsonb CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object'),
+    status character varying(32) DEFAULT 'PREPARED'::character varying NOT NULL,
     error_message text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CHECK (status IN ('PREPARED','UNKNOWN','ACCEPTED')),
+    CHECK (execution_receipt IS NULL OR status = 'ACCEPTED')
 );
+COMMENT ON COLUMN public.hypercore_action_record.request_payload IS 'Immutable selected MPC signed /exchange JSON body, committed before RPC';
+COMMENT ON COLUMN public.hypercore_action_record.status IS 'PREPARED, UNKNOWN or ACCEPTED; API acknowledgement or original ledger proof; settlement requires execution_receipt';
+COMMENT ON COLUMN public.hypercore_action_record.execution_receipt IS 'Original spotTransfer event: exact signed owner nonce, recipient, asset, amount, zero unreserved fees and real chain hash; API reply alone never settles';
 
-
---
--- Name: hypercore_balance_snapshot; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.hypercore_balance_snapshot (
-    chain character varying(32) DEFAULT 'HYPERCORE'::character varying NOT NULL,
-    asset_symbol character varying(32) NOT NULL,
-    account_id character varying(160) NOT NULL,
-    address character varying(160) NOT NULL,
-    observed_balance numeric(78,24) DEFAULT 0 NOT NULL,
-    raw_payload text,
-    observed_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
 
 
 --
@@ -1860,9 +1867,9 @@ CREATE TABLE public.ledger_balance (
     chain character varying(32) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     account_id character varying(128) NOT NULL,
-    available_balance numeric(78,18) DEFAULT 0 NOT NULL,
-    locked_balance numeric(78,18) DEFAULT 0 NOT NULL,
-    total_balance numeric(78,18) DEFAULT 0 NOT NULL,
+    available_balance numeric(84,24) DEFAULT 0 NOT NULL,
+    locked_balance numeric(84,24) DEFAULT 0 NOT NULL,
+    total_balance numeric(84,24) DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     tenant_id uuid
@@ -1894,21 +1901,29 @@ ALTER SEQUENCE public.ledger_balance_id_seq OWNED BY public.ledger_balance.id;
 
 CREATE TABLE public.monero_transaction (
     id bigint NOT NULL,
-    chain character varying(32) DEFAULT 'XMR'::character varying NOT NULL,
-    tx_hash character varying(128) NOT NULL,
-    direction character varying(16) NOT NULL,
-    account_index integer DEFAULT 0 NOT NULL,
-    subaddress_index integer DEFAULT 0 NOT NULL,
-    address character varying(128) NOT NULL,
-    asset_symbol character varying(32) DEFAULT 'XMR'::character varying NOT NULL,
-    amount numeric(78,24) DEFAULT 0 NOT NULL,
-    fee_atomic bigint DEFAULT 0 NOT NULL,
-    block_height bigint,
-    confirmations integer DEFAULT 0 NOT NULL,
-    status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
-    raw_payload text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    chain varchar(32) NOT NULL DEFAULT 'XMR' CHECK (chain = 'XMR'),
+    tenant_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    sender varchar(128) NOT NULL,
+    tx_hash varchar(64) CHECK (tx_hash IS NULL OR tx_hash ~ '^[0-9a-f]{64}$'),
+    selected_attempt_id uuid,
+    artifact_hash varchar(64) CHECK (artifact_hash IS NULL OR artifact_hash ~ '^[0-9a-f]{64}$'),
+    fee_atomic numeric(20,0) CHECK (fee_atomic IS NULL OR fee_atomic BETWEEN 0 AND 18446744073709551615),
+    status varchar(32) NOT NULL DEFAULT 'SIGNING' CHECK (status IN ('SIGNING','PREPARED','SENT','CONFIRMED')),
+    block_height bigint CHECK (block_height IS NULL OR block_height >= 0),
+    block_hash varchar(64) CHECK (block_hash IS NULL OR block_hash ~ '^[0-9a-f]{64}$'),
+    confirmations integer NOT NULL DEFAULT 0 CHECK (confirmations >= 0),
+    execution_receipt jsonb CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CHECK ((status = 'SIGNING') = (tx_hash IS NULL)),
+    CHECK ((tx_hash IS NULL) = (selected_attempt_id IS NULL)),
+    CHECK ((tx_hash IS NULL) = (artifact_hash IS NULL)),
+    CHECK ((tx_hash IS NULL) = (fee_atomic IS NULL)),
+    CHECK ((status = 'CONFIRMED') = (execution_receipt IS NOT NULL)),
+    CHECK ((status = 'CONFIRMED') = (block_height IS NOT NULL)),
+    CHECK ((status = 'CONFIRMED') = (block_hash IS NOT NULL)),
+    CHECK ((status = 'CONFIRMED') = (confirmations > 0))
 );
 
 
@@ -1945,12 +1960,21 @@ CREATE TABLE public.near_transaction (
     asset_symbol character varying(32) DEFAULT 'NEAR'::character varying NOT NULL,
     amount numeric(78,24) DEFAULT 0 NOT NULL,
     gas_burnt bigint DEFAULT 0 NOT NULL,
+    fee_yocto numeric(78,0),
     block_height bigint,
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     raw_payload text,
+    execution_receipt jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT near_transaction_fee_check CHECK (fee_yocto IS NULL OR fee_yocto >= 0),
+    CONSTRAINT near_transaction_receipt_check CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object')
 );
+
+CREATE INDEX near_transaction_pending_sender_idx ON public.near_transaction (sender)
+    WHERE status IN ('SIGNING','PREPARED','SENT','CONFIRMING');
+COMMENT ON COLUMN public.near_transaction.fee_yocto IS 'Exact net native expense: burnt fees plus retained attached deposit; NEP-145 excludes completed deposit refunds and never subtracts Gas refunds twice';
+
 
 
 --
@@ -1984,7 +2008,7 @@ CREATE TABLE public.sol_transaction (
     to_address character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     mint_address character varying(128),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
     fee_lamports bigint DEFAULT 0 NOT NULL,
     slot bigint,
     confirmations integer DEFAULT 0 NOT NULL,
@@ -1996,6 +2020,11 @@ CREATE TABLE public.sol_transaction (
 
 
 --
+-- Selected outgoing MPC wire is immutable; incoming scanner facts may contain parsed JSON.
+COMMENT ON COLUMN public.sol_transaction.raw_payload IS 'MPC outgoing selected Base64 wire retained across observations; incoming scanner JSON is separate transaction data';
+COMMENT ON COLUMN public.sol_transaction.status IS 'CREATED, PREPARED, SENT, CONFIRMING, CONFIRMED or FAILED; confirmed terminal observations are never regressed';
+COMMENT ON COLUMN public.sol_transaction.fee_lamports IS 'Confirmed fee-payer spending excluding native payment amount; includes SPL ATA rent when created';
+
 -- Name: sol_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2026,11 +2055,12 @@ CREATE TABLE public.sui_transaction (
     receiver character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     coin_type character varying(256),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    gas_used bigint DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee_mist bigint DEFAULT 0 NOT NULL,
     checkpoint bigint,
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     raw_payload text,
+    execution_receipt jsonb CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object'),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -2067,15 +2097,15 @@ CREATE TABLE public.token_config (
     contract_address character varying(128) NOT NULL,
     decimals integer NOT NULL,
     enabled boolean DEFAULT true NOT NULL,
-    min_deposit numeric(78,18),
-    min_withdraw numeric(78,18),
+    min_deposit numeric(84,24),
+    min_withdraw numeric(84,24),
     collect_enabled boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     network character varying(32) NOT NULL,
     contract_address_base58 character varying(128),
     contract_address_hex character varying(128),
-    collect_threshold numeric(78,18),
+    collect_threshold numeric(84,24),
     gas_strategy character varying(64),
     confirmation_required integer,
     CONSTRAINT token_config_network_nonblank CHECK (btrim(network) <> '')
@@ -2150,12 +2180,13 @@ CREATE TABLE public.ton_transaction (
     to_address character varying(160) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     jetton_master character varying(160),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee_nano bigint DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee_nano bigint DEFAULT 0 NOT NULL CHECK (fee_nano >= 0),
     logical_time numeric(78,0),
     confirmations integer DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     raw_payload text,
+    execution_receipt jsonb CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object'),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -2193,7 +2224,7 @@ CREATE TABLE public.tron_token_transfer (
     contract_address character varying(128) NOT NULL,
     from_address character varying(128) NOT NULL,
     to_address character varying(128) NOT NULL,
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
     block_height bigint NOT NULL,
     confirmations integer DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'DETECTED'::character varying NOT NULL,
@@ -2233,8 +2264,8 @@ CREATE TABLE public.tron_transaction (
     to_address character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     contract_address character varying(128),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee numeric(84,24) DEFAULT 0 NOT NULL,
     block_height bigint,
     confirmations integer DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
@@ -2275,8 +2306,8 @@ CREATE TABLE public.tron_tx (
     to_address character varying(128) NOT NULL,
     asset_symbol character varying(32) NOT NULL,
     contract_address character varying(128),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) DEFAULT 0 NOT NULL,
+    fee numeric(84,24) DEFAULT 0 NOT NULL,
     block_height bigint,
     confirmations integer DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'NEW'::character varying NOT NULL,
@@ -2316,7 +2347,7 @@ CREATE TABLE public.utxo_record (
     tx_hash character varying(128) NOT NULL,
     vout integer NOT NULL,
     address character varying(160) NOT NULL,
-    amount numeric(78,18) NOT NULL,
+    amount numeric(84,24) NOT NULL,
     block_height bigint NOT NULL,
     block_hash character varying(128) NOT NULL,
     confirmations integer DEFAULT 0 NOT NULL,
@@ -2493,8 +2524,8 @@ CREATE TABLE public.withdrawal_order (
     asset_symbol character varying(32) NOT NULL,
     from_address character varying(160),
     to_address character varying(160) NOT NULL,
-    amount numeric(78,18) NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
+    amount numeric(84,24) NOT NULL,
+    fee numeric(84,24) DEFAULT 0 NOT NULL,
     tx_hash character varying(128),
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     error_message text,
@@ -2592,6 +2623,10 @@ CREATE TABLE public.xrp_transaction (
 
 
 --
+-- XRP MPC: selected canonical signed binary is immutable; observations retain it.
+COMMENT ON COLUMN public.xrp_transaction.raw_payload IS 'Selected signed XRPL binary hex; immutable across RPC observation and recovery';
+COMMENT ON COLUMN public.xrp_transaction.status IS 'CREATED, PREPARED, SENT, CONFIRMED or FAILED; validated terminal state is never regressed';
+
 -- Name: xrp_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3518,14 +3553,6 @@ ALTER TABLE ONLY public.hypercore_action_record
 
 
 --
--- Name: hypercore_balance_snapshot hypercore_balance_snapshot_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.hypercore_balance_snapshot
-    ADD CONSTRAINT hypercore_balance_snapshot_pkey PRIMARY KEY (chain, asset_symbol, account_id);
-
-
---
 -- Name: hypercore_spot_asset hypercore_spot_asset_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3566,11 +3593,11 @@ ALTER TABLE ONLY public.ledger_balance
 
 
 --
--- Name: monero_transaction monero_transaction_chain_tx_hash_direction_subaddress_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: monero_transaction monero_transaction_tenant_request_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.monero_transaction
-    ADD CONSTRAINT monero_transaction_chain_tx_hash_direction_subaddress_key UNIQUE (chain, tx_hash, direction, subaddress_index);
+    ADD CONSTRAINT monero_transaction_tenant_request_key UNIQUE (tenant_id, request_id);
 
 
 --
@@ -4833,6 +4860,7 @@ CREATE TABLE public.evm_collection_batch (
     relayer_address character varying(42) NOT NULL,
     delegate_version integer NOT NULL,
     batch_hash character varying(66) NOT NULL,
+    claim_payload jsonb NOT NULL,
     status character varying(32) NOT NULL,
     item_count integer NOT NULL,
     estimated_gas bigint,
@@ -4866,7 +4894,15 @@ CREATE TABLE public.evm_collection_batch (
         'PARTIAL_FAILED'::character varying, 'FAILED'::character varying,
         'REORGED'::character varying, 'MANUAL_REVIEW'::character varying])::text[])),
     CONSTRAINT evm_collection_batch_tenant_fk FOREIGN KEY (tenant_id)
-        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT
+        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT,
+    CONSTRAINT evm_collection_batch_claim_check CHECK (
+        jsonb_typeof(claim_payload) = 'object'
+        AND claim_payload ?& ARRAY['id','tenantId','chain','network','batchHash']
+        AND (claim_payload->>'id') IS NOT DISTINCT FROM id::text
+        AND (claim_payload->>'tenantId') IS NOT DISTINCT FROM tenant_id::text
+        AND (claim_payload->>'chain') IS NOT DISTINCT FROM chain
+        AND (claim_payload->>'network') IS NOT DISTINCT FROM network
+        AND (claim_payload->>'batchHash') IS NOT DISTINCT FROM batch_hash)
 );
 
 CREATE UNIQUE INDEX evm_collection_batch_tx_key
@@ -4969,6 +5005,7 @@ CREATE TABLE public.evm_withdrawal_batch (
     relayer_address character varying(42) NOT NULL,
     delegate_version integer NOT NULL,
     batch_hash character varying(66) NOT NULL,
+    claim_payload jsonb NOT NULL,
     status character varying(32) NOT NULL,
     item_count integer NOT NULL,
     authorization_included boolean DEFAULT false NOT NULL,
@@ -5005,7 +5042,15 @@ CREATE TABLE public.evm_withdrawal_batch (
         'PARTIAL_FAILED'::character varying, 'FAILED'::character varying,
         'REORGED'::character varying, 'MANUAL_REVIEW'::character varying])::text[])),
     CONSTRAINT evm_withdrawal_batch_tenant_fk FOREIGN KEY (tenant_id)
-        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT
+        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT,
+    CONSTRAINT evm_withdrawal_batch_claim_check CHECK (
+        jsonb_typeof(claim_payload) = 'object'
+        AND claim_payload ?& ARRAY['id','tenantId','chain','network','batchHash']
+        AND (claim_payload->>'id') IS NOT DISTINCT FROM id::text
+        AND (claim_payload->>'tenantId') IS NOT DISTINCT FROM tenant_id::text
+        AND (claim_payload->>'chain') IS NOT DISTINCT FROM chain
+        AND (claim_payload->>'network') IS NOT DISTINCT FROM network
+        AND (claim_payload->>'batchHash') IS NOT DISTINCT FROM batch_hash)
 );
 
 CREATE UNIQUE INDEX evm_withdrawal_batch_tx_key
@@ -5192,7 +5237,7 @@ INSERT INTO public.chain_asset (id, chain, symbol, asset_kind, contract_address,
     (173, 'X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
     (174, 'ROBINHOOD_CHAIN', 'ETH_ROBINHOOD', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
     (175, 'ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
-    (176, 'HYPERCORE', 'USDC', 'CORE_USDC', NULL, 6, true, true, '1', '1', '2026-10-24T04:50:35.389884+08:00', '2026-10-24T04:50:35.389884+08:00'),
+    (176, 'HYPERCORE', 'USDC', 'HIP1_USDC', NULL, 6, true, true, '1', '1', '2026-10-24T04:50:35.389884+08:00', '2026-10-24T04:50:35.389884+08:00'),
     (177, 'HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, false, true, '0', '0', '2026-10-24T04:50:35.389884+08:00', '2026-10-24T04:50:35.389884+08:00'),
     (178, 'ADA', 'ADA', 'NATIVE', NULL, 6, true, false, '0', '0', '2026-10-24T04:50:35.393104+08:00', '2026-10-24T04:50:35.393104+08:00'),
     (179, 'DOT', 'DOT', 'NATIVE', NULL, 10, true, false, '0', '0', '2026-10-24T04:50:35.393104+08:00', '2026-10-24T04:50:35.393104+08:00'),
@@ -5261,8 +5306,8 @@ INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", 
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (3, 'DOGE', 'testnet', 'dev', 'tatum-doge-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://dogecoin-testnet.gateway.tatum.io', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Dogecoin testnet RPC gateway', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (4, 'BCH', 'testnet', 'dev', 'tatum-bch-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://bitcoin-cash-testnet.gateway.tatum.io', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Bitcoin Cash testnet RPC gateway', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (5, 'SOLANA', 'devnet', 'dev', 'solana-devnet-public', 'rpc', 'HTTP_JSON_RPC', 'https://api.devnet.solana.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Solana devnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
-INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (6, 'TON', 'testnet', 'dev', 'toncenter-testnet', 'rpc', 'HTTP_JSON', 'https://testnet.toncenter.com/api/v2', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 10, true, NULL, 'TON Center testnet API, optional API key', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
-INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (7, 'TON', 'testnet', 'dev', 'tonapi-testnet', 'indexer', 'HTTP_JSON', 'https://testnet.tonapi.io', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 20, true, NULL, 'TON API testnet indexer, optional API key', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password", "min_request_interval_ms") VALUES (6, 'TON', 'testnet', 'dev', 'toncenter-testnet', 'rpc', 'HTTP_JSON', 'https://testnet.toncenter.com/api/v2', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 10, true, NULL, 'TON Center testnet API, optional API key', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL, 1050);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password", "min_request_interval_ms") VALUES (7, 'TON', 'testnet', 'dev', 'tonapi-testnet', 'indexer', 'HTTP_JSON', 'https://testnet.tonapi.io', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 20, true, NULL, 'TON API testnet indexer, optional API key', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL, 1050);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (8, 'APTOS', 'devnet', 'dev', 'aptos-devnet-public', 'rpc', 'HTTP_REST', 'https://fullnode.devnet.aptoslabs.com/v1', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Aptos devnet fullnode', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (9, 'APTOS', 'devnet', 'dev', 'aptos-devnet-faucet', 'faucet', 'HTTP_REST', 'https://faucet.devnet.aptoslabs.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Aptos devnet faucet', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (10, 'SUI', 'testnet', 'dev', 'sui-testnet-public', 'rpc', 'GRPC', 'fullnode.testnet.sui.io:443', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Sui testnet gRPC fullnode', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
@@ -5459,8 +5504,6 @@ INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "valu
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.transfer.enabled', 'true', 'boolean', true, 'Global internal transfer switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('withdrawal.admin.approval.required', 'false', 'boolean', true, 'When true, wallet app withdrawals freeze user ledger balance and wait in PENDING_REVIEW until wallet admin approval moves the order to FROZEN for signing.', '2026-07-03 01:20:00+08', '2026-07-03 01:20:00+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('near.token.account.activation.yocto', '50000000000000000000000', 'bigint', true, 'NEAR native amount sent from the default NEAR hot wallet before preparing a NEP-141 token deposit address. Default is 0.05 NEAR.', '2026-06-28 13:20:00+08', '2026-06-28 13:20:00+08');
-INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('dot.asset_hub.min_sender_gas.planck', '20000000000', 'bigint', true, 'Minimum Asset Hub native free balance required before signing DOT Asset Hub token transfers. Default is 0.02 WND on Westend units.', '2026-06-28 23:00:00+08', '2026-06-28 23:00:00+08');
-INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('dot.asset_hub.token.gas_topup.planck', '100000000000', 'bigint', true, 'Asset Hub native top-up sent from the default DOT hot wallet when a DOT token sender lacks gas. Default is 0.1 WND on Westend units.', '2026-06-28 23:00:00+08', '2026-06-28 23:00:00+08');
 
 
 --
@@ -5893,38 +5936,30 @@ INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_
                                        "priority", "min_request_interval_ms", "enabled", "remark",
                                        "created_at", "updated_at", "username", "password")
 VALUES
-    ('XMR', 'regtest', 'dev', 'local-monero-wallet-rpc-regtest', 'rpc', 'WALLET_RPC',
-     'http://127.0.0.1:18088', 'NONE', NULL, 5, 250, true,
-     'Local monero-wallet-rpc connected to monerod --regtest for deterministic integration tests.',
-     now(), now(), NULL, NULL),
     ('XMR', 'regtest', 'dev', 'local-monero-wallet-rpc-funder-regtest', 'faucet', 'WALLET_RPC',
      'http://127.0.0.1:18090', 'NONE', NULL, 6, 250, true,
      'Local funder monero-wallet-rpc used only by the non-production XMR regtest faucet.',
      now(), now(), NULL, NULL),
     ('XMR', 'regtest', 'dev', 'local-monerod-regtest', 'daemon', 'HTTP_JSON_RPC',
      'http://127.0.0.1:18081', 'NONE', NULL, 7, 250, true,
-     'Local monerod --regtest daemon RPC used by the XMR regtest faucet to mine confirmations.',
+     'Public native XMR network/genesis/scan-anchor reads and regtest mining; wallet files remain in signing nodes.',
      now(), now(), NULL, NULL),
-    ('XMR', 'regtest', 'test2', 'local-monero-wallet-rpc-regtest', 'rpc', 'WALLET_RPC',
-     'http://127.0.0.1:18088', 'DIGEST', NULL, 5, 250, true,
-     'test2 monero-wallet-rpc placeholder. Bind to the private host IP and replace username/password in DB before enabling XMR.',
-     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD'),
     ('XMR', 'regtest', 'test2', 'local-monero-wallet-rpc-funder-regtest', 'faucet', 'WALLET_RPC',
      'http://127.0.0.1:18090', 'DIGEST', NULL, 6, 250, true,
      'test2 funder monero-wallet-rpc placeholder. Bind to the private host IP and replace username/password in DB before enabling the faucet.',
      now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD'),
     ('XMR', 'regtest', 'test2', 'local-monerod-regtest', 'daemon', 'HTTP_JSON_RPC',
      'http://127.0.0.1:18081', 'NONE', NULL, 7, 250, true,
-     'test2 monerod --regtest daemon RPC placeholder. Bind to the private host IP before enabling the faucet.',
+     'test2 public monerod network/genesis/scan-anchor endpoint and regtest mining.',
      now(), now(), NULL, NULL),
-    ('XMR', 'stagenet', 'test2', 'local-monero-wallet-rpc-stagenet', 'rpc', 'WALLET_RPC',
-     'http://127.0.0.1:38088', 'DIGEST', NULL, 10, 500, true,
-     'Local monero-wallet-rpc connected to a stagenet wallet. Bind to localhost or private network only; replace username/password in DB.',
-     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD'),
-    ('XMR', 'mainnet', 'prod', 'local-monero-wallet-rpc-mainnet', 'rpc', 'WALLET_RPC',
-     'http://127.0.0.1:18088', 'DIGEST', NULL, 10, 500, false,
-     'Production monero-wallet-rpc endpoint placeholder; keep disabled until wallet-rpc is hardened, backed up and funded.',
-     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD')
+    ('XMR', 'stagenet', 'test2', 'local-monerod-stagenet', 'daemon', 'HTTP_JSON_RPC',
+     'http://127.0.0.1:38081', 'DIGEST', NULL, 10, 500, false,
+     'Public stagenet daemon for native XMR network/genesis and canonical scan-anchor reads.',
+     now(), now(), 'CHANGE_ME_MONERO_DAEMON_USER', 'CHANGE_ME_MONERO_DAEMON_PASSWORD'),
+    ('XMR', 'mainnet', 'prod', 'local-monerod-mainnet', 'daemon', 'HTTP_JSON_RPC',
+     'http://127.0.0.1:18081', 'DIGEST', NULL, 10, 500, false,
+     'Public mainnet daemon for native XMR network/genesis and canonical scan-anchor reads.',
+     now(), now(), 'CHANGE_ME_MONERO_DAEMON_USER', 'CHANGE_ME_MONERO_DAEMON_PASSWORD')
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
     "rpc_url" = EXCLUDED."rpc_url",
@@ -5943,18 +5978,18 @@ INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_
                                        "priority", "min_request_interval_ms", "enabled", "remark",
                                        "created_at", "updated_at", "api_key")
 VALUES
-    ('ADA', 'preprod', 'dev', 'blockfrost-cardano-preprod', 'rpc', 'BLOCKFROST',
-     'https://cardano-preprod.blockfrost.io/api/v0', 'PROJECT_ID', NULL, 10, 500, false,
-     'Cardano preprod Blockfrost-compatible backend. Fill api_key and keep chain_profile disabled until e2e tests pass.',
-     now(), now(), 'CHANGE_ME_BLOCKFROST_PREPROD_PROJECT_ID'),
-    ('ADA', 'preprod', 'test2', 'blockfrost-cardano-preprod', 'rpc', 'BLOCKFROST',
-     'https://cardano-preprod.blockfrost.io/api/v0', 'PROJECT_ID', NULL, 10, 500, false,
-     'test2 Cardano preprod Blockfrost-compatible backend. Fill api_key and keep chain_profile disabled until e2e tests pass.',
-     now(), now(), 'CHANGE_ME_BLOCKFROST_PREPROD_PROJECT_ID'),
-    ('ADA', 'mainnet', 'prod', 'blockfrost-cardano-mainnet', 'rpc', 'BLOCKFROST',
-     'https://cardano-mainnet.blockfrost.io/api/v0', 'PROJECT_ID', NULL, 10, 1000, false,
-     'Production Cardano Blockfrost-compatible backend placeholder; enable only after production key, monitoring and e2e tests are ready.',
-     now(), now(), 'CHANGE_ME_BLOCKFROST_MAINNET_PROJECT_ID')
+    ('ADA', 'preprod', 'dev', 'cardano-preprod-native', 'rpc', 'GRPC',
+     'https://CHANGE_ME_CARDANO_PREPROD_NATIVE_RPC:443', 'NONE', NULL, 10, 500, false,
+     'Native cardano-node UTxORPC v1beta TLS endpoint; configure genesis-matched node and explicit auth before enabling.',
+     now(), now(), NULL),
+    ('ADA', 'preprod', 'test2', 'cardano-preprod-native', 'rpc', 'GRPC',
+     'https://CHANGE_ME_CARDANO_PREPROD_NATIVE_RPC:443', 'NONE', NULL, 10, 500, false,
+     'test2 native Cardano UTxORPC endpoint; no auxiliary indexer or wallet private keys.',
+     now(), now(), NULL),
+    ('ADA', 'mainnet', 'prod', 'cardano-mainnet-native', 'rpc', 'GRPC',
+     'https://CHANGE_ME_CARDANO_MAINNET_NATIVE_RPC:443', 'NONE', NULL, 10, 1000, false,
+     'Production native UTxORPC placeholder. Configure TLS, node authentication and monitoring before enabling.',
+     now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
     "rpc_url" = EXCLUDED."rpc_url",
@@ -5972,47 +6007,35 @@ INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_
                                        "priority", "min_request_interval_ms", "enabled", "remark",
                                        "created_at", "updated_at", "api_key")
 VALUES
-    ('DOT', 'westend', 'dev', 'polkadot-westend-ws', 'rpc', 'WS_RPC',
-     'wss://westend-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
-     'Westend substrate WebSocket node used by the metadata-aware Polkadot runtime service.',
-     now(), now(), NULL),
-    ('DOT', 'westend', 'dev', 'polkadot-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+    ('DOT', 'westend', 'dev', 'polkadot-westend-assethub-ws', 'rpc', 'WS_RPC',
      'wss://westend-asset-hub-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
-     'Official Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     'Official Westend Asset Hub WebSocket node used for DOT, USDT and USDC public reads and externally signed wire.',
      now(), now(), NULL),
-    ('DOT', 'westend', 'dev', 'dotters-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+    ('DOT', 'westend', 'dev', 'dotters-westend-assethub-ws', 'rpc', 'WS_RPC',
      'wss://asset-hub-westend.dotters.network', 'NONE', NULL, 20, 250, false,
-     'Backup Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     'Backup Westend Asset Hub WebSocket node used for DOT, USDT and USDC public reads and externally signed wire.',
      now(), now(), NULL),
     ('DOT', 'westend', 'dev', 'local-polkadot-runtime-service', 'runtime', 'HTTP_JSON',
      'http://127.0.0.1:8787', 'bearer', 'Authorization', 20, 100, false,
      'Local Polkadot runtime service backed by @polkadot/api. Fill api_key and enable only with the DOT profile during e2e tests.',
      now(), now(), 'CHANGE_ME_POLKADOT_RUNTIME_API_KEY'),
-    ('DOT', 'westend', 'test2', 'polkadot-westend-ws', 'rpc', 'WS_RPC',
-     'wss://westend-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
-     'test2 Westend substrate WebSocket node used by the metadata-aware Polkadot runtime service.',
-     now(), now(), NULL),
-    ('DOT', 'westend', 'test2', 'polkadot-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+    ('DOT', 'westend', 'test2', 'polkadot-westend-assethub-ws', 'rpc', 'WS_RPC',
      'wss://westend-asset-hub-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
-     'test2 official Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     'test2 official Westend Asset Hub WebSocket node used for DOT, USDT and USDC public reads and externally signed wire.',
      now(), now(), NULL),
-    ('DOT', 'westend', 'test2', 'dotters-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+    ('DOT', 'westend', 'test2', 'dotters-westend-assethub-ws', 'rpc', 'WS_RPC',
      'wss://asset-hub-westend.dotters.network', 'NONE', NULL, 20, 250, false,
-     'test2 backup Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     'test2 backup Westend Asset Hub WebSocket node used for DOT, USDT and USDC public reads and externally signed wire.',
      now(), now(), NULL),
     ('DOT', 'westend', 'test2', 'local-polkadot-runtime-service', 'runtime', 'HTTP_JSON',
      'http://127.0.0.1:8787', 'bearer', 'Authorization', 20, 100, false,
      'test2 Polkadot runtime service backed by @polkadot/api. Fill api_key and enable only during e2e tests.',
      now(), now(), 'CHANGE_ME_POLKADOT_RUNTIME_API_KEY'),
-    ('DOT', 'mainnet', 'prod', 'polkadot-mainnet-ws', 'rpc', 'WS_RPC',
-     'wss://rpc.polkadot.io', 'NONE', NULL, 10, 500, false,
-     'Production Polkadot WebSocket node placeholder; enable only after runtime service and monitoring are ready.',
-     now(), now(), NULL),
-    ('DOT', 'mainnet', 'prod', 'polkadot-assethub-ws', 'asset_rpc', 'WS_RPC',
+    ('DOT', 'mainnet', 'prod', 'polkadot-assethub-ws', 'rpc', 'WS_RPC',
      'wss://polkadot-asset-hub-rpc.polkadot.io', 'NONE', NULL, 10, 500, false,
-     'Production official Polkadot Asset Hub WebSocket placeholder; enable only after token e2e tests and monitoring are ready.',
+     'Production official Polkadot Asset Hub WebSocket placeholder; enable only after MPC e2e tests and monitoring are ready.',
      now(), now(), NULL),
-    ('DOT', 'mainnet', 'prod', 'dotters-polkadot-assethub-ws', 'asset_rpc', 'WS_RPC',
+    ('DOT', 'mainnet', 'prod', 'dotters-polkadot-assethub-ws', 'rpc', 'WS_RPC',
      'wss://asset-hub-polkadot.dotters.network', 'NONE', NULL, 20, 500, false,
      'Production backup Polkadot Asset Hub WebSocket placeholder.',
      now(), now(), NULL),
@@ -6293,7 +6316,7 @@ ALTER TABLE public.custody_gas_usage
     DROP CONSTRAINT IF EXISTS custody_gas_usage_operation_type_check;
 ALTER TABLE public.custody_gas_usage
     ADD CONSTRAINT custody_gas_usage_operation_type_check
-    CHECK (operation_type IN ('WITHDRAWAL', 'COLLECTION_BATCH', 'WITHDRAWAL_BATCH'));
+    CHECK (operation_type IN ('WITHDRAWAL', 'COLLECTION_BATCH', 'WITHDRAWAL_BATCH', 'ADDRESS_PREPARATION'));
 
 CREATE TABLE IF NOT EXISTS public.evm_7702_payout_account (
     id uuid NOT NULL PRIMARY KEY,
@@ -6337,6 +6360,7 @@ CREATE TABLE IF NOT EXISTS public.evm_withdrawal_batch (
     relayer_address character varying(42) NOT NULL,
     delegate_version integer NOT NULL,
     batch_hash character varying(66) NOT NULL,
+    claim_payload jsonb NOT NULL,
     status character varying(32) NOT NULL,
     item_count integer NOT NULL,
     authorization_included boolean DEFAULT false NOT NULL,
@@ -6370,7 +6394,15 @@ CREATE TABLE IF NOT EXISTS public.evm_withdrawal_batch (
         status IN ('LOCKED', 'SIGNING', 'SUBMITTED', 'BROADCAST_UNKNOWN', 'CONFIRMING',
                    'CONFIRMED', 'PARTIAL_FAILED', 'FAILED', 'REORGED', 'MANUAL_REVIEW')),
     CONSTRAINT evm_withdrawal_batch_tenant_fk FOREIGN KEY (tenant_id)
-        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT
+        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT,
+    CONSTRAINT evm_withdrawal_batch_claim_check CHECK (
+        jsonb_typeof(claim_payload) = 'object'
+        AND claim_payload ?& ARRAY['id','tenantId','chain','network','batchHash']
+        AND (claim_payload->>'id') IS NOT DISTINCT FROM id::text
+        AND (claim_payload->>'tenantId') IS NOT DISTINCT FROM tenant_id::text
+        AND (claim_payload->>'chain') IS NOT DISTINCT FROM chain
+        AND (claim_payload->>'network') IS NOT DISTINCT FROM network
+        AND (claim_payload->>'batchHash') IS NOT DISTINCT FROM batch_hash)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS evm_withdrawal_batch_tx_key
@@ -6580,7 +6612,7 @@ CREATE EXTENSION IF NOT EXISTS pgmq VERSION '1.11.1';
 DO $$
 DECLARE q text;
 BEGIN
-    FOREACH q IN ARRAY ARRAY['wallet_sign_first', 'wallet_sign_second', 'wallet_sign_done',
+    FOREACH q IN ARRAY ARRAY['wallet_mpc_sign', 'wallet_sign_done',
         'wallet_withdraw', 'wallet_deposit_event', 'wallet_withdraw_event', 'wallet_rbf']
     LOOP
         PERFORM pgmq.create(q);
@@ -6601,7 +6633,7 @@ CREATE OR REPLACE FUNCTION public.wallet_replay_dead(q text, dead_id bigint, rea
 RETURNS bigint LANGUAGE plpgsql AS $$
 DECLARE m record; new_id bigint;
 BEGIN
-    IF q <> ALL(ARRAY['wallet_sign_first','wallet_sign_second','wallet_sign_done',
+    IF q <> ALL(ARRAY['wallet_mpc_sign', 'wallet_sign_done',
         'wallet_withdraw','wallet_deposit_event','wallet_withdraw_event','wallet_rbf']) THEN
         RAISE EXCEPTION 'Unknown wallet queue';
     END IF;
@@ -6628,3 +6660,356 @@ COMMENT ON COLUMN public.custody_withdrawal.subject IS '实际提现用户或客
 COMMENT ON COLUMN public.custody_withdrawal.funding_source IS '本金来源范围：ADDRESS 或 TENANT_POOL';
 CREATE INDEX ledger_balance_pool_sources_idx ON public.ledger_balance(tenant_id,chain,asset_symbol,available_balance DESC,id) WHERE available_balance>0;
 CREATE INDEX custody_withdrawal_subject_idx ON public.custody_withdrawal(tenant_id,subject,created_at DESC,id);
+
+-- MPC metadata only: secret shares belong exclusively to independent signer nodes.
+ALTER TABLE public.custody_tenant ADD CONSTRAINT custody_tenant_mpc_namespace_key UNIQUE (id,derivation_namespace);
+CREATE TABLE public.wallet_mpc_key (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES public.custody_tenant(id),
+    key_group varchar(32) NOT NULL,
+    user_id bigint NOT NULL CHECK (user_id >= 0),
+    biz integer NOT NULL CHECK (biz > 0),
+    address_index bigint NOT NULL CHECK (address_index >= 0),
+    algorithm varchar(32) NOT NULL CHECK (algorithm IN ('ECDSA_SECP256K1','ED25519','SCHNORR_BIP340','MONERO_NATIVE_2_OF_3')),
+    state varchar(24) NOT NULL DEFAULT 'CREATING' CHECK (state IN ('CREATING','ACTIVE','REFRESHING','FAILED','RETIRED')),
+    active_epoch integer NOT NULL DEFAULT 0 CHECK (active_epoch BETWEEN 0 AND 1000000),
+    public_key_hex text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, id),
+    UNIQUE (tenant_id, id, algorithm),
+    FOREIGN KEY (tenant_id,biz) REFERENCES public.custody_tenant(id,derivation_namespace),
+    CHECK ((state IN ('CREATING','FAILED') AND active_epoch = 0 AND public_key_hex IS NULL)
+        OR (state IN ('ACTIVE','REFRESHING','RETIRED') AND active_epoch > 0 AND public_key_hex IS NOT NULL)),
+    CHECK (public_key_hex IS NULL OR CASE algorithm
+        WHEN 'ECDSA_SECP256K1' THEN public_key_hex ~ '^(02|03)[0-9a-f]{64}$'
+        WHEN 'MONERO_NATIVE_2_OF_3' THEN public_key_hex ~ '^[0-9a-f]{128}$'
+        ELSE public_key_hex ~ '^[0-9a-f]{64}$' END)
+);
+CREATE UNIQUE INDEX wallet_mpc_key_coordinates_idx
+    ON public.wallet_mpc_key(tenant_id,key_group,user_id,biz,address_index)
+    WHERE state IN ('CREATING','ACTIVE','REFRESHING');
+
+ALTER TABLE public.chain_address ADD CONSTRAINT chain_address_mpc_key_fkey
+    FOREIGN KEY (tenant_id,mpc_key_id) REFERENCES public.wallet_mpc_key(tenant_id,id);
+COMMENT ON COLUMN public.chain_address.mpc_key_id IS 'Immutable tenant-owned joint key; wallet stores public metadata only';
+
+CREATE OR REPLACE FUNCTION public.chain_address_mpc_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.mpc_key_id IS NOT NULL AND
+       ROW(NEW.tenant_id,NEW.mpc_key_id,NEW.chain,NEW.asset_symbol,NEW.account_id,NEW.user_id,NEW.biz,
+           NEW.address_index,NEW.address,NEW.owner_address,NEW.derivation_path,NEW.wallet_role)
+       IS DISTINCT FROM
+       ROW(OLD.tenant_id,OLD.mpc_key_id,OLD.chain,OLD.asset_symbol,OLD.account_id,OLD.user_id,OLD.biz,
+           OLD.address_index,OLD.address,OLD.owner_address,OLD.derivation_path,OLD.wallet_role) THEN
+        RAISE EXCEPTION 'MPC chain address identity is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER chain_address_mpc_immutable BEFORE UPDATE ON public.chain_address
+    FOR EACH ROW EXECUTE FUNCTION public.chain_address_mpc_immutable();
+
+CREATE TABLE public.wallet_mpc_key_epoch (
+    request jsonb NOT NULL,
+    tenant_id uuid GENERATED ALWAYS AS ((request->>'tenantId')::uuid) STORED NOT NULL,
+    key_id uuid GENERATED ALWAYS AS ((request->>'keyId')::uuid) STORED NOT NULL,
+    epoch integer GENERATED ALWAYS AS ((request->>'epoch')::integer) STORED NOT NULL CHECK (epoch BETWEEN 1 AND 1000000),
+    session_id uuid GENERATED ALWAYS AS ((request->>'sessionId')::uuid) STORED NOT NULL UNIQUE,
+    algorithm varchar(32) GENERATED ALWAYS AS (request->>'algorithm') STORED NOT NULL,
+    state varchar(24) NOT NULL DEFAULT 'PREPARING' CHECK (state IN ('PREPARING','ACTIVE','REFRESHING','FAILED','RETIRED')),
+    node_results jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(node_results) = 'object'),
+    refresh_actor varchar(192),
+    refresh_reason varchar(512),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (key_id,epoch),
+    UNIQUE (tenant_id,key_id,epoch),
+    UNIQUE (tenant_id,key_id,epoch,algorithm),
+    FOREIGN KEY (tenant_id,key_id,algorithm) REFERENCES public.wallet_mpc_key(tenant_id,id,algorithm),
+    CHECK (request->>'operation' IS NOT NULL AND request->>'operation' IN ('CREATE_KEY','REFRESH')),
+    CHECK ((request->>'operation'='CREATE_KEY' AND epoch=1 AND refresh_actor IS NULL AND refresh_reason IS NULL)
+        OR (request->>'operation'='REFRESH' AND epoch>1 AND algorithm<>'MONERO_NATIVE_2_OF_3'
+            AND refresh_actor IS NOT NULL AND length(btrim(refresh_actor))>0
+            AND refresh_reason IS NOT NULL AND length(btrim(refresh_reason))>=5)),
+    CHECK (request->'online' IS NOT NULL AND jsonb_typeof(request->'online') = 'array'
+        AND jsonb_array_length(request->'online') = 3),
+    CHECK (request->'online'->>0 IS NOT NULL AND request->'online'->>1 IS NOT NULL AND request->'online'->>2 IS NOT NULL
+        AND request->'online'->>0 ~ '^[0-9a-f]{64}$' AND request->'online'->>1 ~ '^[0-9a-f]{64}$'
+        AND request->'online'->>2 ~ '^[0-9a-f]{64}$'
+        AND request->'online'->>0 <> request->'online'->>1
+        AND request->'online'->>0 <> request->'online'->>2
+        AND request->'online'->>1 <> request->'online'->>2)
+);
+
+CREATE TABLE public.wallet_mpc_sign_request (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    key_id uuid NOT NULL,
+    key_epoch integer NOT NULL CHECK (key_epoch > 0),
+    chain varchar(32) NOT NULL,
+    business_type varchar(32) NOT NULL CHECK (business_type IN ('WITHDRAWAL','COLLECTION','RECOVERY','FUNDING','DEV_FAUCET')),
+    business_reference varchar(192) NOT NULL CHECK (length(btrim(business_reference)) > 0),
+    signing_slot varchar(96) NOT NULL CHECK (length(btrim(signing_slot)) > 0),
+    signing_purpose varchar(48) NOT NULL CHECK (signing_purpose IN ('TRANSACTION','EIP7702_AUTHORIZATION','EIP7702_OPERATION')),
+    payload_encoding varchar(48) NOT NULL CHECK (payload_encoding ~ '^[A-Z][A-Z0-9_]{0,47}$'),
+    payload_hex text NOT NULL CHECK (payload_hex ~ '^[0-9a-f]+$' AND length(payload_hex) % 2 = 0),
+    preimage_hex text NOT NULL CHECK (preimage_hex ~ '^[0-9a-f]*$' AND length(preimage_hex) % 2 = 0),
+    preimage_hash text GENERATED ALWAYS AS (encode(sha256(decode(preimage_hex,'hex')),'hex')) STORED NOT NULL,
+    state varchar(24) NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','SIGNING','COMPLETED','INDETERMINATE')),
+    current_attempt_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id,key_id,key_epoch) REFERENCES public.wallet_mpc_key_epoch(tenant_id,key_id,epoch),
+    UNIQUE (tenant_id,chain,business_type,business_reference,signing_slot),
+    UNIQUE (tenant_id,id,key_id,key_epoch,preimage_hash),
+    CHECK ((state = 'PENDING') = (current_attempt_id IS NULL))
+);
+CREATE INDEX wallet_mpc_sign_request_pending_idx ON public.wallet_mpc_sign_request(state,created_at,id)
+    WHERE state <> 'COMPLETED';
+
+CREATE TABLE public.wallet_mpc_sign_attempt (
+    request_id uuid NOT NULL,
+    request jsonb NOT NULL,
+    id uuid GENERATED ALWAYS AS ((request->>'sessionId')::uuid) STORED PRIMARY KEY,
+    tenant_id uuid GENERATED ALWAYS AS ((request->>'tenantId')::uuid) STORED NOT NULL,
+    key_id uuid GENERATED ALWAYS AS ((request->>'keyId')::uuid) STORED NOT NULL,
+    key_epoch integer GENERATED ALWAYS AS ((request->>'epoch')::integer) STORED NOT NULL,
+    algorithm varchar(32) GENERATED ALWAYS AS (request->>'algorithm') STORED NOT NULL,
+    preimage_hash text GENERATED ALWAYS AS (encode(sha256(decode(request->>'messageHex','hex')),'hex')) STORED NOT NULL,
+    state varchar(24) NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','RUNNING','COMPLETED','INDETERMINATE')),
+    signature_ciphertext text,
+    node_results jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(node_results) = 'object'),
+    replay_actor varchar(192),
+    replay_reason varchar(512),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id,request_id,id),
+    FOREIGN KEY (tenant_id,request_id,key_id,key_epoch,preimage_hash)
+        REFERENCES public.wallet_mpc_sign_request(tenant_id,id,key_id,key_epoch,preimage_hash),
+    FOREIGN KEY (tenant_id,key_id,key_epoch,algorithm)
+        REFERENCES public.wallet_mpc_key_epoch(tenant_id,key_id,epoch,algorithm),
+    CHECK (request->>'operation' IS NOT NULL AND request->>'operation' = 'SIGN'),
+    CHECK (request->'online' IS NOT NULL AND jsonb_typeof(request->'online') = 'array'
+        AND jsonb_array_length(request->'online') = 2),
+    CHECK (request->'online'->>0 IS NOT NULL AND request->'online'->>1 IS NOT NULL
+        AND request->'online'->>0 ~ '^[0-9a-f]{64}$' AND request->'online'->>1 ~ '^[0-9a-f]{64}$'
+        AND request->'online'->>0 <> request->'online'->>1),
+    CHECK (request->>'messageHex' IS NOT NULL AND request->>'messageHex' ~ '^[0-9a-f]*$'
+        AND length(request->>'messageHex') % 2 = 0),
+    CHECK (algorithm NOT IN ('ECDSA_SECP256K1','SCHNORR_BIP340') OR length(request->>'messageHex') = 64),
+    CHECK ((state = 'COMPLETED') = (signature_ciphertext IS NOT NULL)),
+    CHECK (signature_ciphertext IS NULL OR signature_ciphertext LIKE 'v1:%'),
+    CHECK ((replay_actor IS NULL AND replay_reason IS NULL)
+        OR (replay_actor IS NOT NULL AND replay_reason IS NOT NULL
+            AND length(btrim(replay_actor)) > 0 AND length(btrim(replay_reason)) >= 5))
+);
+CREATE UNIQUE INDEX wallet_mpc_sign_attempt_running_idx ON public.wallet_mpc_sign_attempt(request_id)
+    WHERE state IN ('PENDING','RUNNING');
+ALTER TABLE public.wallet_mpc_sign_request ADD CONSTRAINT wallet_mpc_current_attempt_fkey
+    FOREIGN KEY (tenant_id,id,current_attempt_id)
+    REFERENCES public.wallet_mpc_sign_attempt(tenant_id,request_id,id);
+
+-- Application code may advance state, but cannot replace accepted signing intent.
+CREATE OR REPLACE FUNCTION public.wallet_mpc_sign_request_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id,NEW.tenant_id,NEW.key_id,NEW.key_epoch,NEW.chain,NEW.business_type,
+           NEW.business_reference,NEW.signing_slot,NEW.signing_purpose,NEW.payload_encoding,NEW.payload_hex,NEW.preimage_hex)
+       IS DISTINCT FROM
+       ROW(OLD.id,OLD.tenant_id,OLD.key_id,OLD.key_epoch,OLD.chain,OLD.business_type,
+           OLD.business_reference,OLD.signing_slot,OLD.signing_purpose,OLD.payload_encoding,OLD.payload_hex,OLD.preimage_hex)
+       OR (OLD.state = 'COMPLETED' AND ROW(NEW.state,NEW.current_attempt_id) IS DISTINCT FROM ROW(OLD.state,OLD.current_attempt_id)) THEN
+        RAISE EXCEPTION 'MPC accepted signing intent or completed result is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER wallet_mpc_sign_request_immutable BEFORE UPDATE ON public.wallet_mpc_sign_request
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_sign_request_immutable();
+
+CREATE OR REPLACE FUNCTION public.wallet_mpc_sign_attempt_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.request_id,NEW.request,NEW.replay_actor,NEW.replay_reason)
+       IS DISTINCT FROM ROW(OLD.request_id,OLD.request,OLD.replay_actor,OLD.replay_reason)
+       OR (OLD.state = 'INDETERMINATE' AND NEW.state NOT IN ('INDETERMINATE','COMPLETED'))
+       OR (OLD.state = 'COMPLETED' AND ROW(NEW.state,NEW.signature_ciphertext)
+           IS DISTINCT FROM ROW(OLD.state,OLD.signature_ciphertext)) THEN
+        RAISE EXCEPTION 'MPC accepted attempt or completed signature is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER wallet_mpc_sign_attempt_immutable BEFORE UPDATE ON public.wallet_mpc_sign_attempt
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_sign_attempt_immutable();
+
+CREATE OR REPLACE FUNCTION public.wallet_mpc_key_epoch_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.request,NEW.refresh_actor,NEW.refresh_reason)
+       IS DISTINCT FROM ROW(OLD.request,OLD.refresh_actor,OLD.refresh_reason)
+       OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED')
+       OR (OLD.state='ACTIVE' AND NEW.state NOT IN ('ACTIVE','RETIRED'))
+       OR (OLD.state IN ('ACTIVE','RETIRED') AND NEW.node_results IS DISTINCT FROM OLD.node_results) THEN
+        RAISE EXCEPTION 'MPC accepted key ceremony is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER wallet_mpc_key_epoch_immutable BEFORE UPDATE ON public.wallet_mpc_key_epoch
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_key_epoch_immutable();
+
+CREATE OR REPLACE FUNCTION public.wallet_mpc_key_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id,NEW.tenant_id,NEW.key_group,NEW.user_id,NEW.biz,NEW.address_index,NEW.algorithm)
+       IS DISTINCT FROM ROW(OLD.id,OLD.tenant_id,OLD.key_group,OLD.user_id,OLD.biz,OLD.address_index,OLD.algorithm)
+       OR (OLD.public_key_hex IS NOT NULL AND NEW.public_key_hex IS DISTINCT FROM OLD.public_key_hex) THEN
+        RAISE EXCEPTION 'MPC key ownership, coordinates and published public key are immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER wallet_mpc_key_immutable BEFORE UPDATE ON public.wallet_mpc_key
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_key_immutable();
+
+-- TRON outgoing MPC receipts use the existing transaction table; signatures and tenant ownership remain bound by MPC intent/business rows.
+COMMENT ON COLUMN public.tron_tx.status IS 'Observed NEW/CONFIRMING, or outgoing PREPARED after raw/business-hash commit, SENT after matching node observation, then CONFIRMED/FAILED';
+COMMENT ON COLUMN public.tron_tx.raw_payload IS 'First persisted raw fact; outgoing MPC transactions store canonical signed protobuf hex and confirmation must preserve it';
+
+COMMENT ON TABLE public.tron_tx IS 'TRON network transaction facts; outgoing MPC raw is committed with owned business hash before RPC, solidified CONFIRMED/FAILED fees are retained atomically with settlement';
+
+-- Sui owned Coin admission; active MPC key locks serialize sender reservations across assets.
+CREATE INDEX sui_transaction_pending_sender_idx ON public.sui_transaction(sender)
+    WHERE status IN ('SIGNING','PREPARED','SENT','CONFIRMING');
+
+
+-- DOT custody native and tokens share Asset Hub nonce; selected hash includes the MPC witness.
+ALTER TABLE public.wallet_mpc_sign_request ADD CONSTRAINT wallet_mpc_sign_request_tenant_id_key UNIQUE (tenant_id,id);
+ALTER TABLE public.hypercore_action_record ADD CONSTRAINT hypercore_action_record_request_fk
+    FOREIGN KEY (tenant_id,request_id) REFERENCES public.wallet_mpc_sign_request(tenant_id,id);
+CREATE TABLE public.polkadot_transaction (
+    request_id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    role varchar(16) NOT NULL CHECK (role = 'ASSET_HUB'),
+    sender varchar(50) NOT NULL,
+    tx_hash varchar(66) UNIQUE CHECK (tx_hash IS NULL OR tx_hash ~ '^0x[0-9a-f]{64}$'),
+    status varchar(16) NOT NULL CHECK (status IN ('SIGNING','PREPARED','SENT','CONFIRMING','CONFIRMED','FAILED')),
+    raw_payload text,
+    fee_planck numeric(39,0) CHECK (fee_planck IS NULL OR fee_planck > 0),
+    native_decimals integer NOT NULL CHECK (native_decimals BETWEEN 0 AND 24),
+    block_height bigint CHECK (block_height IS NULL OR block_height >= 0),
+    execution_receipt jsonb CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id,request_id) REFERENCES public.wallet_mpc_sign_request(tenant_id,id),
+    CHECK ((status = 'SIGNING') = (tx_hash IS NULL AND raw_payload IS NULL)),
+    CHECK ((tx_hash IS NULL) = (raw_payload IS NULL)),
+    CHECK (status NOT IN ('CONFIRMING','CONFIRMED','FAILED') OR
+        (execution_receipt IS NOT NULL AND fee_planck IS NOT NULL AND block_height IS NOT NULL))
+);
+CREATE UNIQUE INDEX polkadot_transaction_pending_sender_idx ON public.polkadot_transaction(role,sender)
+    WHERE status IN ('SIGNING','PREPARED','SENT','CONFIRMING');
+COMMENT ON TABLE public.polkadot_transaction IS 'Tenant-owned Asset Hub DOT MPC request, shared native/token nonce admission, original signed extrinsic and finalized payment/fee proof';
+
+-- Native Cardano immutable payment admission. Body hash is known before the external witness.
+CREATE TABLE public.cardano_transaction (
+    request_id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    sender varchar(160) NOT NULL,
+    tx_hash varchar(64) NOT NULL UNIQUE CHECK (tx_hash ~ '^[0-9a-f]{64}$'),
+    status varchar(16) NOT NULL CHECK (status IN ('SIGNING','PREPARED','SENT','CONFIRMING','CONFIRMED','FAILED')),
+    raw_payload text CHECK (raw_payload IS NULL OR
+        (length(raw_payload) BETWEEN 2 AND 131072 AND raw_payload ~ '^([0-9a-f]{2})+$')),
+    observed_height bigint NOT NULL CHECK (observed_height >= 0),
+    observed_slot bigint NOT NULL CHECK (observed_slot >= 0),
+    observed_hash varchar(64) NOT NULL CHECK (observed_hash ~ '^[0-9a-f]{64}$'),
+    search_height bigint NOT NULL CHECK (search_height >= observed_height),
+    search_slot bigint NOT NULL CHECK (search_slot >= observed_slot),
+    search_hash varchar(64) NOT NULL CHECK (search_hash ~ '^[0-9a-f]{64}$'),
+    fee_lovelace numeric(20,0) CHECK (fee_lovelace IS NULL OR fee_lovelace >= 0),
+    native_expense_lovelace numeric(20,0) CHECK (native_expense_lovelace IS NULL OR native_expense_lovelace >= 0),
+    block_height bigint CHECK (block_height IS NULL OR block_height >= observed_height),
+    execution_receipt jsonb CHECK (execution_receipt IS NULL OR jsonb_typeof(execution_receipt) = 'object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id,request_id) REFERENCES public.wallet_mpc_sign_request(tenant_id,id),
+    CHECK ((status = 'SIGNING') = (raw_payload IS NULL)),
+    CHECK (status NOT IN ('CONFIRMING','CONFIRMED','FAILED') OR
+        (execution_receipt IS NOT NULL AND fee_lovelace IS NOT NULL AND native_expense_lovelace IS NOT NULL AND block_height IS NOT NULL))
+);
+CREATE UNIQUE INDEX cardano_transaction_pending_sender_idx ON public.cardano_transaction(sender)
+    WHERE status IN ('SIGNING','PREPARED','SENT','CONFIRMING');
+COMMENT ON TABLE public.cardano_transaction IS 'Tenant-owned immutable Cardano MPC payment, original witness CBOR, bounded canonical search and proven native expense';
+
+-- Only wallet-owned outputs, including spent history needed to identify internal inputs.
+CREATE TABLE public.cardano_owned_output (
+    tx_hash varchar(64) NOT NULL CHECK (tx_hash ~ '^[0-9a-f]{64}$'),
+    output_index integer NOT NULL CHECK (output_index BETWEEN 0 AND 65535),
+    tenant_id uuid NOT NULL,
+    chain_address_id bigint NOT NULL,
+    address varchar(160) NOT NULL,
+    block_height bigint NOT NULL CHECK (block_height >= 0),
+    block_hash varchar(64) NOT NULL CHECK (block_hash ~ '^[0-9a-f]{64}$'),
+    output_cbor text NOT NULL CHECK (length(output_cbor) BETWEEN 2 AND 131072 AND output_cbor ~ '^([0-9a-f]{2})+$'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tx_hash,output_index),
+    FOREIGN KEY (tenant_id,chain_address_id) REFERENCES public.chain_address(tenant_id,id) ON DELETE RESTRICT
+);
+CREATE INDEX cardano_owned_output_tenant_address_idx ON public.cardano_owned_output(tenant_id,chain_address_id);
+CREATE INDEX cardano_owned_output_height_idx ON public.cardano_owned_output(block_height);
+COMMENT ON TABLE public.cardano_owned_output IS 'Tenant-owned wallet output references and original public output bytes; not a full-chain index';
+COMMENT ON COLUMN public.chain_scan_height.genesis_hash IS 'Optional native scanner network identity; must match before advancing a slot/hash cursor';
+COMMENT ON COLUMN public.chain_scan_block.block_slot IS 'Optional native slot required with the original hash to resume Cardano FollowTip';
+
+CREATE TABLE public.hypercore_ledger_cursor (
+    tenant_id uuid NOT NULL,
+    network varchar(32) NOT NULL CHECK (network IN ('mainnet','testnet')),
+    chain_address_id bigint NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    address varchar(42) NOT NULL CHECK (address ~ '^0x[0-9a-f]{40}$'),
+    last_time_ms bigint NOT NULL DEFAULT 0 CHECK (last_time_ms >= 0),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id,network,chain_address_id,asset_symbol),
+    FOREIGN KEY (tenant_id,chain_address_id) REFERENCES public.chain_address(tenant_id,id) ON DELETE RESTRICT
+);
+COMMENT ON TABLE public.hypercore_ledger_cursor IS 'Per tenant/network/asset address inclusive ledger timestamp; real transfer hash deduplicates boundary replays; cursor and mandatory deposit projection commit together';
+
+
+-- Monero native payment admission and immutable public selection. Native txsets remain encrypted in MPC results.
+ALTER TABLE public.monero_transaction ADD CONSTRAINT monero_transaction_request_fk
+    FOREIGN KEY (tenant_id,request_id) REFERENCES public.wallet_mpc_sign_request(tenant_id,id);
+ALTER TABLE public.monero_transaction ADD CONSTRAINT monero_transaction_attempt_fk
+    FOREIGN KEY (tenant_id,request_id,selected_attempt_id) REFERENCES public.wallet_mpc_sign_attempt(tenant_id,request_id,id);
+CREATE UNIQUE INDEX monero_transaction_hash_idx ON public.monero_transaction(chain,tx_hash) WHERE tx_hash IS NOT NULL;
+CREATE UNIQUE INDEX monero_transaction_pending_sender_idx ON public.monero_transaction(tenant_id,sender) WHERE status <> 'CONFIRMED';
+CREATE OR REPLACE FUNCTION public.monero_transaction_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id,NEW.chain,NEW.tenant_id,NEW.request_id,NEW.sender) IS DISTINCT FROM ROW(OLD.id,OLD.chain,OLD.tenant_id,OLD.request_id,OLD.sender)
+       OR (OLD.tx_hash IS NOT NULL AND ROW(NEW.tx_hash,NEW.selected_attempt_id,NEW.artifact_hash,NEW.fee_atomic)
+           IS DISTINCT FROM ROW(OLD.tx_hash,OLD.selected_attempt_id,OLD.artifact_hash,OLD.fee_atomic))
+       OR (OLD.status = 'CONFIRMED' AND ROW(NEW.status,NEW.execution_receipt,NEW.block_height,NEW.block_hash,NEW.confirmations)
+           IS DISTINCT FROM ROW(OLD.status,OLD.execution_receipt,OLD.block_height,OLD.block_hash,OLD.confirmations)) THEN
+        RAISE EXCEPTION 'Monero original native payment selection or confirmation is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER monero_transaction_immutable BEFORE UPDATE ON public.monero_transaction
+    FOR EACH ROW EXECUTE FUNCTION public.monero_transaction_immutable();
+COMMENT ON TABLE public.monero_transaction IS 'Tenant native Monero request, original authenticated artifact digest/hash selection and canonical two-holder payment proof; no plaintext txset';
+
+-- Original public EIP-7702 batch claim survives interruption before any signing RPC.
+-- Identities, claimed principal and the snapshot cannot be rewritten into a different batch.
+CREATE OR REPLACE FUNCTION public.wallet_enforce_evm_batch_claim() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.claim_payload IS DISTINCT FROM OLD.claim_payload
+       OR ROW(NEW.id, NEW.tenant_id, NEW.chain, NEW.network, NEW.asset_symbol,
+              NEW.token_contract, NEW.token_decimals, NEW.hot_wallet, NEW.relayer_address,
+              NEW.delegate_version, NEW.batch_hash, NEW.item_count)
+          IS DISTINCT FROM
+          ROW(OLD.id, OLD.tenant_id, OLD.chain, OLD.network, OLD.asset_symbol,
+              OLD.token_contract, OLD.token_decimals, OLD.hot_wallet, OLD.relayer_address,
+              OLD.delegate_version, OLD.batch_hash, OLD.item_count) THEN
+        RAISE EXCEPTION 'original EIP-7702 batch claim is immutable' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER evm_collection_batch_claim_immutable BEFORE UPDATE ON public.evm_collection_batch
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_evm_batch_claim();
+CREATE TRIGGER evm_withdrawal_batch_claim_immutable BEFORE UPDATE ON public.evm_withdrawal_batch
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_evm_batch_claim();

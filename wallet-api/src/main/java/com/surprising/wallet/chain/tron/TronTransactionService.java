@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class TronTransactionService {
+    public Chain.Transaction prepareTrxTransfer(TronTridentClient client,String owner,String toAddress,long amountSun) throws IllegalException {
+        return client.createTrxTransfer(owner,toAddress,amountSun);
+    }
     public SignedTronTransaction signTrxTransfer(TronTridentClient client, KeyPair keyPair,
                                                  String toAddress, long amountSun) throws IllegalException {
         String fromAddress = keyPair.toBase58CheckAddress();

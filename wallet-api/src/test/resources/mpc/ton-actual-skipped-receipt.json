@@ -1,0 +1,56 @@
+{
+  "receipt": {
+    "@type": "raw.transaction",
+    "address": {
+      "@type": "accountAddress",
+      "account_address": "EQC2nYBWFyAliyGVK5oLfcZBv2QSxir0UbqlR6zMZellKd-F"
+    },
+    "utime": 1793413662,
+    "data": "te6cckECCAEAAhMAA7V7adgFYXICWLIZUrmgt9xkG/ZBLGKvRRuqVHrMxl6WUpAAAAAWUXZ8HYWEGfoRjT6O/+ClltPJxB58wFLiyP2NvBxkkEe/7bhQAAAAFkQchBauVSHgABRqAoCIAQIDAQGgBACCcsI0P41nEXyd7ctTfeOFWiZoxz3BoMRdYK/LyypXkaRKeJJ2zax8fqrZ9GWkeZPPOduH4WzU+rqGnLb4Is18okoCDwxBBhmTzwRABgcB4YgBbTsArC5ASxZDKlc0FvuMg37IJYxV6KN1So9ZmMvSylICULTMZDsJgNGRW1ur2p90lrcLSx20ChTzf7QxmkjoBUxq9PenGUQNYGYDyo/OaYF6893bLNJXp37h+uiZnIpwbU1NGLtXKqNoAAAAGAAcBQDSQn+vc752hb1zd8RVn6GobEOWMjM//fOwOaKpCunm/VmUpa9GpSiAAAAAAAAAAAAAAAAAAAAAAAAAdG9uLXNraXBwZWQtZjc3YmE5YzYtYjMzNC00MDgxLThjMjctZWJjNWQwNmI4ZTBjAJ1BnYMTiAAAAAAAAAAAEQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAFvAAAAAAAACAAAAAgAB9GWBA4zVOtvQIbin3CLgcG5nB5coAdtxY4hH+n0fUG4EXHgmZg==",
+    "transaction_id": {
+      "@type": "internal.transactionId",
+      "lt": "5991000001",
+      "hash": "+l9IQi6V8uoKIHxqz2nxoIoQpCm/maiMi7hfXWEMjOA="
+    },
+    "fee": "5248004",
+    "storage_fee": "4",
+    "other_fee": "5248000",
+    "in_msg": {
+      "@type": "raw.message",
+      "hash": "ZL+xQN5BrqLi7tOHqtBi5NUcgTu+BK7NfVu4ME4GeSU=",
+      "source": "",
+      "destination": "EQC2nYBWFyAliyGVK5oLfcZBv2QSxir0UbqlR6zMZellKd-F",
+      "value": "0",
+      "extra_currencies": [],
+      "fwd_fee": "0",
+      "ihr_fee": "0",
+      "created_lt": "0",
+      "body_hash": "CV494xNWiPE5davp77Xx4bWlUzlV/SOio1aM05pbtJQ=",
+      "msg_data": {
+        "@type": "msg.dataRaw",
+        "body": "te6cckEBAgEAvAABnEoWmYyHYTAaMitrdXtT7pLW4WljtoFCnm/2hjNJHQCpjV6e9OMogawMwHlR+c0wL157u2WaSvTv3D9dEzORTg2pqaMXauVUbQAAAAMAAwEA0kJ/r3O+doW9c3fEVZ+hqGxDljIzP/3zsDmiqQrp5v1ZlKWvRqUogAAAAAAAAAAAAAAAAAAAAAAAAHRvbi1za2lwcGVkLWY3N2JhOWM2LWIzMzQtNDA4MS04YzI3LWViYzVkMDZiOGUwY5sbqh8=",
+        "init_state": ""
+      },
+      "message": "ShaZjIdhMBoyK2t1e1PuktbhaWO2gUKeb/aGM0kdAKmNXp704yiBrAzAeVH5zTAvXnu7ZZpK9O/c\nP10TM5FODampoxdq5VRtAAAAAwAD\n"
+    },
+    "out_msgs": []
+  },
+  "selected": {
+    "bocBase64": "te6ccgEBAgEA3wAB4YgBbTsArC5ASxZDKlc0FvuMg37IJYxV6KN1So9ZmMvSylICULTMZDsJgNGRW1ur2p90lrcLSx20ChTzf7QxmkjoBUxq9PenGUQNYGYDyo/OaYF6893bLNJXp37h+uiZnIpwbU1NGLtXKqNoAAAAGAAcAQDSQn+vc752hb1zd8RVn6GobEOWMjM//fOwOaKpCunm/VmUpa9GpSiAAAAAAAAAAAAAAAAAAAAAAAAAdG9uLXNraXBwZWQtZjc3YmE5YzYtYjMzNC00MDgxLThjMjctZWJjNWQwNmI4ZTBj",
+    "messageHashHex": "64bfb140de41aea2e2eed387aad062e4d51c813bbe04aecd7d5bb8304e067925"
+  },
+  "unsigned": {
+    "network": "testnet",
+    "sender": "0:b69d80561720258b21952b9a0b7dc641bf6412c62af451baa547accc65e96529",
+    "recipient": "-1:5ee77ced0b7ae6ef88ab3f4350d8872c64667ffbe76073455215d3cdfab3294b",
+    "amountAtomic": 1000000000000,
+    "jettonMaster": null,
+    "sourceJettonWallet": null,
+    "recipientJettonWallet": null,
+    "sequence": 3,
+    "validUntil": 1793414253,
+    "queryId": 0,
+    "memo": "ton-skipped-f77ba9c6-b334-4081-8c27-ebc5d06b8e0c",
+    "publicKeyHex": "1f411434e3c8db3afe8dacd71a1860ff0987a37c286d04eb29ce23764c8f8a25"
+  }
+}

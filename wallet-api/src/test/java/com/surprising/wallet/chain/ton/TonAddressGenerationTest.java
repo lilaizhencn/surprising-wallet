@@ -1,71 +1,44 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.chain.WalletKeyTestFixture;
-import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
-import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
+import com.surprising.wallet.common.chain.*;
+import com.surprising.wallet.repository.*;
+import java.util.*;
 import org.junit.jupiter.api.Test;
-import org.ton.ton4j.address.Address;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
-import java.util.Arrays;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/**
- * 验证 {@code TonAddressGenerationTest} 覆盖的业务流程、边界条件和异常行为。
- */
 class TonAddressGenerationTest {
-    /**
-     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
-     */
-    private static final String MASTER_SEED =
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-
-    /**
-     * 验证 {@code derivesStableWalletV4R2TestnetAddressesFromUnifiedEd25519Tree} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void derivesStableWalletV4R2TestnetAddressesFromUnifiedEd25519Tree() {
-        TonKeyService first = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
-        TonKeyService restarted = new TonKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
-
-        String user0 = friendly(first, 0);
-        String user1 = friendly(first, 1);
-        String restartedUser0 = friendly(restarted, 0);
-
-        assertEquals(user0, restartedUser0);
-        assertNotEquals(user0, user1);
-        assertTrue(Address.isValid(user0));
-        assertTrue(Address.of(user0).isTestOnly());
-        assertEquals("m/44'/607'/0'/0'", first.derive(0).derivationPath());
-        assertEquals("m/44'/607'/1'/0'", first.derive(1).derivationPath());
+    private final UUID tenant=UUID.randomUUID(),key=UUID.randomUUID();
+    private final TonCenterClient rpc=mock(TonCenterClient.class);
+    private final ChainAddressRepository addresses=mock(ChainAddressRepository.class);
+    private final ChainProfileRepository profiles=mock(ChainProfileRepository.class);
+    private final TokenConfigRepository tokens=mock(TokenConfigRepository.class);
+    private final TonAddressService service=new TonAddressService(rpc,addresses,profiles,tokens);
+    private final String owner="0:"+"ab".repeat(32),wallet="0:"+"cd".repeat(32),master="0:"+"ef".repeat(32);
+    private ChainAddressRecord owner(){return ChainAddressRecord.builder().id(1L).tenantId(tenant).mpcKeyId(key).chain("TON").assetSymbol("TON").accountId(owner).address(owner).ownerAddress(owner).userId(42L).biz(1).addressIndex(7L).walletRole("DEPOSIT").derivationPath("mpc:"+key).enabled(true).build();}
+    private void setup(){
+        when(addresses.find("TON","TON",42,1,7,"DEPOSIT")).thenReturn(Optional.of(owner()));
+        when(profiles.findAccountByChain("TON")).thenReturn(Optional.of(AccountChainProfile.builder().chain("TON").network("testnet").build()));
+        when(tokens.findDefinition("TON","testnet","USDC")).thenReturn(Optional.of(TokenDefinition.builder().symbol("USDC").contractAddress(master).decimals(6).build()));
+        when(rpc.jettonWallet(owner,master)).thenReturn(wallet);
     }
-
-    /**
-     * 验证 {@code tonPathIsSeparateFromSolanaAptosAndSuiPaths} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void tonPathIsSeparateFromSolanaAptosAndSuiPaths() {
-        Ed25519KeyProvider provider = new Ed25519KeyProvider(
-                Ed25519KeyProvider.decodeMasterSeed(MASTER_SEED));
-
-        assertEquals("m/44'/607'/9'/0'", provider.derive(Ed25519Chain.TON, 9).derivationPath());
-        assertNotEquals(0, Arrays.compareUnsigned(
-                provider.derive(Ed25519Chain.SOLANA, 9).publicKey(),
-                provider.derive(Ed25519Chain.TON, 9).publicKey()));
-        assertNotEquals(0, Arrays.compareUnsigned(
-                provider.derive(Ed25519Chain.APTOS, 9).publicKey(),
-                provider.derive(Ed25519Chain.TON, 9).publicKey()));
-        assertNotEquals(0, Arrays.compareUnsigned(
-                provider.derive(Ed25519Chain.SUI, 9).publicKey(),
-                provider.derive(Ed25519Chain.TON, 9).publicKey()));
+    @Test void jettonRegistrationInheritsPublishedTenantKeyAndAccount(){
+        setup();when(addresses.publishMpc(any())).thenAnswer(call->((ChainAddressRecord)call.getArgument(0)).toBuilder().id(2L).build());
+        var row=service.registerJettonWallet(tenant,"USDC",wallet,42,1,7,"DEPOSIT");
+        assertEquals(tenant,row.getTenantId());assertEquals(key,row.getMpcKeyId());assertEquals(owner,row.getAccountId());
+        assertEquals(owner,row.getOwnerAddress());assertEquals(wallet,row.getAddress());assertEquals("mpc:"+key,row.getDerivationPath());
+        verify(addresses,never()).upsert(any());
     }
-
-    /**
-     * 验证 {@code friendly} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static String friendly(TonKeyService keys, long index) {
-        return keys.wallet(index).getAddress().toString(true, true, false, true);
+    @Test void missingOrForeignNativeOwnerCannotCreateAnAddress(){
+        assertThrows(IllegalStateException.class,()->service.requireNativeAddress(tenant,42,1,7,"DEPOSIT"));
+        setup();assertThrows(IllegalStateException.class,()->service.requireNativeAddress(UUID.randomUUID(),42,1,7,"DEPOSIT"));
+        verifyNoInteractions(rpc);verify(addresses,never()).publishMpc(any());
+    }
+    @Test void wrongMasterResultOrExistingKeyCannotReplacePublishedIdentity(){
+        setup();assertThrows(IllegalStateException.class,()->service.registerJettonWallet(tenant,"USDC",master,42,1,7,"DEPOSIT"));
+        when(addresses.find("TON","USDC",42,1,7,"DEPOSIT")).thenReturn(Optional.of(owner().toBuilder().assetSymbol("USDC").address(wallet).mpcKeyId(UUID.randomUUID()).build()));
+        assertThrows(IllegalStateException.class,()->service.registerJettonWallet(tenant,"USDC",wallet,42,1,7,"DEPOSIT"));
+        verify(addresses,never()).publishMpc(any());verify(addresses,never()).upsert(any());
     }
 }

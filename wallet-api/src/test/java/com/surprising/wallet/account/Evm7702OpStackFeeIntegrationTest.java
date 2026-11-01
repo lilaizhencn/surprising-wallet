@@ -1,6 +1,6 @@
 package com.surprising.wallet.account;
 
-import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
+import com.surprising.wallet.testutil.Evm7702TestSigning;
 import com.surprising.wallet.chain.evm.EvmTransactionReceipt.RpcResponse;
 import com.surprising.wallet.chain.evm.EvmTransactionReceipt;
 import java.math.BigInteger;
@@ -85,7 +85,7 @@ class Evm7702OpStackFeeIntegrationTest {
             }
 
             Credentials signer = Credentials.create("11".repeat(32));
-            var signed = new Evm7702BatchTransactionService().signBatch(
+            var signed = new com.surprising.wallet.testutil.Evm7702TestSigning().signBatch(
                     expectedChainId.longValueExact(), BigInteger.ZERO,
                     BigInteger.valueOf(1_000_000L), BigInteger.valueOf(1_000_000_000L),
                     BigInteger.valueOf(100_000L), signer.getAddress(), "0x00", List.of(), signer);

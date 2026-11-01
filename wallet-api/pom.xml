@@ -15,16 +15,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.surprising</groupId>
-            <artifactId>wallet-sig1</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.surprising</groupId>
-            <artifactId>wallet-sig2</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>

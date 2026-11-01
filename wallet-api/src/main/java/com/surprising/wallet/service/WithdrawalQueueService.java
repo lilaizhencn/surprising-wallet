@@ -27,11 +27,10 @@ public class WithdrawalQueueService {
         });
     }
     public void broadcast() {
-        worker.drain(WalletQueue.SIGN_DONE, 100, message -> {
+        worker.drainRemote(WalletQueue.SIGN_DONE, 100, message -> {
             var result = JacksonJson.readValue(objectMapper, message.body(), UtxoSigningResult.class);
             QueueTenant.verify(objectMapper, message, result.tenantId());
-            broadcasts.apply(result);
-            return null;
-        });
+            return broadcasts.broadcast(broadcasts.prepare(result, message));
+        }, (message, observation) -> broadcasts.complete(observation));
     }
 }

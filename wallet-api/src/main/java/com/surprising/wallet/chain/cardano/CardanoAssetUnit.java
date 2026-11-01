@@ -19,13 +19,15 @@ final class CardanoAssetUnit {
         }
         if (unit.contains(".")) {
             String[] parts = unit.split("\\.", 2);
-            return hex(parts[0], "policy id") + hex(parts.length > 1 ? parts[1] : "", "asset name");
+            String policy = hex(parts[0], "policy id");
+            if (policy.length() != 56) throw new IllegalArgumentException("Cardano policy id must be 28 bytes");
+            return policy + hex(parts.length > 1 ? parts[1] : "", "asset name");
         }
         return hex(unit, "asset unit");
     }
     static String fromTokenContract(String contractAddress) {
         String unit = normalize(contractAddress);
-        if (LOVELACE.equals(unit) || unit.length() < 56) {
+        if (LOVELACE.equals(unit) || unit.length() < 56 || unit.length() > 120) {
             throw new IllegalArgumentException("Cardano token contract_address must be policyId.assetNameHex");
         }
         return unit;

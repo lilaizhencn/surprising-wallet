@@ -1440,11 +1440,11 @@ components:
         message: { type: string }
     WalletConfigSummary:
       type: object
-      required: [environment, production, keysetConfigured, globalSwitches, statistics, chains, anomalies, generatedAt]
+      required: [environment, production, mpcConfigured, globalSwitches, statistics, chains, anomalies, generatedAt]
       properties:
         environment: { type: string }
         production: { type: boolean }
-        keysetConfigured: { type: boolean }
+        mpcConfigured: { type: boolean }
         globalSwitches: { $ref: '#/components/schemas/WalletGlobalSwitches' }
         statistics: { $ref: '#/components/schemas/WalletConfigStatistics' }
         chains:

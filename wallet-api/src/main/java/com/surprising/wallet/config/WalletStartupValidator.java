@@ -5,7 +5,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.EvmFeeModel;
 import com.surprising.wallet.common.chain.EvmGasPolicy;
-import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
@@ -42,8 +42,8 @@ public class WalletStartupValidator implements ApplicationRunner {
     private final WalletRuntimeConfigService runtimeConfigService;
     /** 原始 SQL 查询器，用于关键配置一致性校验。 */
     private final JdbcTemplate jdbcTemplate;
-    /** 钱包密钥提供者，用于启动前校验签名材料是否已配置。 */
-    private final WalletKeyMaterialProvider keyMaterial;
+    /** 经过 mTLS 配置校验的三名独立 MPC 持有者客户端。 */
+    private final MpcNodes mpcNodes;
 
     /** 当前环境标识（dev/test/prod）。 */
     @Value("${sw.app.env.name:dev}")
@@ -55,7 +55,7 @@ public class WalletStartupValidator implements ApplicationRunner {
      */
     @Override
     public void run(ApplicationArguments args) {
-        validateKeyset();
+        validateMpcClients();
         validateEnabledAssetsAndTokens();
         validateProfiles();
         logRuntimeMatrix();
@@ -64,12 +64,11 @@ public class WalletStartupValidator implements ApplicationRunner {
     /**
      * 校验签名公钥材料是否都已加载，确保地址派生与签名服务可用。
      */
-    private void validateKeyset() {
-        keyMaterial.sig1PublicRoot();
-        keyMaterial.sig2PublicRoot();
-        keyMaterial.recoveryPublicRoot();
-        keyMaterial.ed25519();
-        log.info("wallet keyset check passed: required private material and public roots loaded for API");
+    private void validateMpcClients() {
+        if (mpcNodes.parties().size() != 3 || mpcNodes.clients().size() != 3) {
+            throw new IllegalStateException("three independent MPC signer clients are required");
+        }
+        log.info("wallet MPC client configuration checked; wallet signing material stays on independent holders");
     }
 
     /**
@@ -270,8 +269,7 @@ public class WalletStartupValidator implements ApplicationRunner {
      */
     private void validateRpcNodeCredentials(AccountChainProfile profile, ChainRpcNode node) {
         String authType = normalized(node.getAuthType());
-        String connectionType = normalized(node.getConnectionType());
-        if (WalletRpcPolicy.requiresApiKey(authType, connectionType) && !StringUtils.hasText(node.getApiKey())) {
+        if (WalletRpcPolicy.requiresApiKey(authType) && !StringUtils.hasText(node.getApiKey())) {
             throw new IllegalStateException(
                     "enabled chain_rpc_node requires api_key: "
                             + profile.getChain() + "/" + profile.getNetwork()

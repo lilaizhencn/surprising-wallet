@@ -38,6 +38,8 @@ public class WalletTaskLeaseService {
 
     /** 尝试领取任务租约并执行任务，租约期间由心跳持续续租。 */
     public Object execute(String taskName, LeaseAction action) throws Throwable {
+        // Concurrent invocations in one JVM must not re-enter the same database lease.
+        String ownerId = this.ownerId + "-" + UUID.randomUUID();
         try {
             if (!repository.acquire(taskName, ownerId, LEASE_DURATION)) {
                 return null;

@@ -187,7 +187,7 @@ class AccountChainWorkflowServiceTest {
      * 验证 {@code aptosTokenWithdrawalUsesConfiguredTokenStandard} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void aptosTokenWithdrawalUsesConfiguredTokenStandard() throws Exception {
+    void aptosTokenWithdrawalDelegatesTheOwnedOperationToMpcBusiness() throws Exception {
         ChainAddressRecord address = ChainAddressRecord.builder()
                 .chain("APTOS")
                 .assetSymbol("USDC")
@@ -218,7 +218,7 @@ class AccountChainWorkflowServiceTest {
                 .enabled(true)
                 .build();
         WithdrawalOrderRecord order = WithdrawalOrderRecord.builder()
-                .orderNo("aptos-fa-withdrawal")
+                .tenantId(TENANT_ID).orderNo("aptos-fa-withdrawal")
                 .userId(1L)
                 .chain("APTOS")
                 .assetSymbol("USDC")
@@ -231,15 +231,15 @@ class AccountChainWorkflowServiceTest {
         String hash = dispatchWithdrawal(service, profile, order, address);
 
         assertEquals("0xaptos-fa", hash);
-        assertEquals(token, aptos.token);
-        assertEquals(1_250_000L, aptos.atomicAmount);
+        assertEquals(new AptosSubmissionService.Operation(TENANT_ID,"aptos-fa-withdrawal",AptosSubmissionService.Kind.WITHDRAWAL),aptos.operation);
+        assertEquals(address,aptos.source);
     }
 
     /**
      * 验证 {@code tonJettonWithdrawalUsesMaterializedWalletAndAtomicAmount} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void tonJettonWithdrawalUsesMaterializedWalletAndAtomicAmount() throws Exception {
+    void tonJettonWithdrawalDelegatesOwnedOperation() throws Exception {
         ChainAddressRecord owner = ChainAddressRecord.builder()
                 .chain("TON").assetSymbol("TON").accountId("owner").userId(1L).biz(0).addressIndex(7L)
                 .address("owner").ownerAddress("owner").walletRole("DEPOSIT").enabled(true).build();
@@ -255,21 +255,20 @@ class AccountChainWorkflowServiceTest {
         AccountChainProfile profile = AccountChainProfile.builder()
                 .chain("TON").network("testnet").family("ton").nativeSymbol("TON").enabled(true).build();
         WithdrawalOrderRecord order = WithdrawalOrderRecord.builder()
-                .orderNo("ton-usdt-withdrawal").userId(1L).chain("TON").assetSymbol("USDT")
+                .tenantId(TENANT_ID).orderNo("ton-usdt-withdrawal").userId(1L).chain("TON").assetSymbol("USDT")
                 .fromAddress("owner").toAddress("destination").amount(new BigDecimal("1.25"))
                 .status("FROZEN").build();
 
         assertEquals("ton-hash", dispatchWithdrawal(service, profile, order, owner));
-        assertEquals(jettonWallet, ton.from);
-        assertEquals("jetton-wallet", ton.sourceJettonWallet);
-        assertEquals(BigInteger.valueOf(1_250_000L), ton.atomicAmount);
+        assertEquals(owner, ton.from);
+        assertEquals(new TonSubmissionService.Operation(TENANT_ID,"ton-usdt-withdrawal",TonSubmissionService.Kind.WITHDRAWAL),ton.operation);
     }
 
     /**
      * 验证 {@code tonWithdrawalSettlesOnlyAfterExternalMessageIsOnChain} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void tonWithdrawalSettlesOnlyAfterExternalMessageIsOnChain() throws Exception {
+    void tonConfirmationDelegatesOwnedReceiptSettlement() throws Exception {
         ChainAddressRecord owner = ChainAddressRecord.builder()
                 .chain("TON").assetSymbol("TON").accountId("owner").userId(1L).biz(0).addressIndex(7L)
                 .address("owner").ownerAddress("owner").walletRole("DEPOSIT").enabled(true).build();
@@ -287,7 +286,9 @@ class AccountChainWorkflowServiceTest {
 
         ton.messageConfirmed = true;
         confirmTonWithdrawal(service, order);
-        assertEquals(1, repository.withdrawalSettlements);
+        assertEquals(0, repository.withdrawalSettlements);
+        assertEquals(TENANT_ID,ton.confirmTenant);
+        assertEquals("ton-confirm",ton.confirmReference);
     }
 
     /**
@@ -330,9 +331,9 @@ class AccountChainWorkflowServiceTest {
     private static void confirmTonWithdrawal(AccountChainWorkflowService service,
                                              WithdrawalOrderRecord order) throws Exception {
         Method method = AccountChainWorkflowService.class.getDeclaredMethod(
-                "confirmTonWithdrawal", WithdrawalOrderRecord.class);
+                "confirmWithdrawal", AccountChainProfile.class, WithdrawalOrderRecord.class);
         method.setAccessible(true);
-        method.invoke(service, order);
+        method.invoke(service, AccountChainProfile.builder().chain("TON").family("ton").build(), order);
     }
 
     /**
@@ -408,7 +409,7 @@ class AccountChainWorkflowServiceTest {
                 Mockito.mock(WalletRuntimeConfigService.class), Mockito.mock(AccountChainDepositWorkflow.class),
                 new AccountChainAssetService(repository.evm7702ConfigRepository, repository.chainAddressRepository,
                         repository.tokenConfigRepository, repository.chainAssetRepository,
-                        Mockito.mock(com.surprising.wallet.chain.xrp.XrpTransactionService.class)),
+                        Mockito.mock(com.surprising.wallet.chain.xrp.XrpTransactionService.class),Mockito.mock(com.surprising.wallet.chain.polkadot.PolkadotTransactionService.class),Mockito.mock(com.surprising.wallet.chain.cardano.CardanoTransactionService.class)),
                 Mockito.mock(TronAccountChainService.class), evmService,
                 Mockito.mock(com.surprising.wallet.chain.hypercore.HyperCoreTransactionService.class),
                 Mockito.mock(com.surprising.wallet.chain.solana.SolanaTransactionService.class), aptosService,
@@ -548,7 +549,7 @@ class AccountChainWorkflowServiceTest {
                 return 1;
             }).when(withdrawalClaimService).claim(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
             Mockito.doAnswer(invocation -> { signingClaims++; return 1; })
-                    .when(withdrawalClaimService).claimEvm(any(),anyString(),anyString(),anyString());
+                    .when(withdrawalClaimService).claimDurable(any(),anyString(),anyString(),anyString());
             Mockito.doAnswer(invocation -> {
                 String arg_chain = invocation.getArgument(0);
                 String arg_orderNo = invocation.getArgument(1);
@@ -711,7 +712,6 @@ class AccountChainWorkflowServiceTest {
                     null,
                     null,
                     null,
-                    null,
                     mock(WithdrawalSettlementService.class),
                     mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class));
         }
@@ -745,7 +745,6 @@ class AccountChainWorkflowServiceTest {
                     mock(EvmTransactionRepository.class),
                     mock(ChainProfileRepository.class),
                     mock(ChainAssetRepository.class),
-                    null,
                     null,
                     null,
                     null,
@@ -865,114 +864,30 @@ class AccountChainWorkflowServiceTest {
      * 测试替身 {@code CapturingAptosService}，用于隔离外部依赖并验证调用参数和状态变化。
      */
     private static final class CapturingAptosService extends AptosTransactionService {
-        /**
-         * 保存 {@code token}，表示测试所覆盖的链、网络、资产或代币配置。
-         */
-        private TokenDefinition token;
-        /**
-         * 保存 {@code atomicAmount}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
-         */
-        private long atomicAmount;
-
-        /**
-         * 验证 {@code CapturingAptosService} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        private CapturingAptosService() {
-            super(
-                    null,
-                    null,
-                    mock(AccountSequenceRepository.class),
-                    mock(ChainProfileRepository.class),
-                    mock(TokenConfigRepository.class),
-                    mock(WithdrawalOrderRepository.class),
-                    mock(LedgerBalanceRepository.class),
-                    mock(WithdrawalClaimService.class),
-                    mock(CollectionRecordRepository.class),
-                    mock(AptosTransactionRepository.class),
-                    mock(WithdrawalSettlementService.class),
-                    RuntimeTestSupport.enabled());
-        }
-
-        /**
-         * 验证 {@code sendToken} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public String sendToken(ChainAddressRecord from, TokenDefinition token,
-                                String toAddress, long amountAtomic) {
-            this.token = token;
-            this.atomicAmount = amountAtomic;
-            return "0xaptos-fa";
-        }
+        private AptosSubmissionService.Operation operation;
+        private ChainAddressRecord source;
+        private CapturingAptosService(){super(null,null,mock(ChainProfileRepository.class),mock(TokenConfigRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),RuntimeTestSupport.enabled());}
+        @Override public String send(AptosSubmissionService.Operation operation,ChainAddressRecord source){this.operation=operation;this.source=source;return "0xaptos-fa";}
     }
 
     /**
      * 测试替身 {@code CapturingTonService}，用于隔离外部依赖并验证调用参数和状态变化。
      */
     private static final class CapturingTonService extends TonTransactionService {
-        /**
-         * 保存 {@code from}，用于承载当前测试夹具的配置或运行数据。
-         */
         private ChainAddressRecord from;
-        /**
-         * 保存 {@code sourceJettonWallet}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private String sourceJettonWallet;
-        /**
-         * 保存 {@code atomicAmount}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
-         */
-        private BigInteger atomicAmount;
-        /**
-         * 保存 {@code messageConfirmed}，记录测试开关、处理状态、确认结果或重试信息。
-         */
+        private TonSubmissionService.Operation operation;
+        private UUID confirmTenant;
+        private String confirmReference;
         private boolean messageConfirmed;
-
-        /**
-         * 验证 {@code CapturingTonService} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
         private CapturingTonService() {
-            super(
-                    null,
-                    null,
-                    mock(AccountSequenceRepository.class),
-                    mock(TonTransactionRepository.class),
-                    mock(WithdrawalOrderRepository.class),
-                    mock(LedgerBalanceRepository.class),
-                    mock(WithdrawalClaimService.class),
-                    mock(ChainProfileRepository.class),
-                    mock(TokenConfigRepository.class),
-                    mock(CollectionRecordRepository.class),
-                    mock(WithdrawalSettlementService.class),
-                    RuntimeTestSupport.enabled());
+            super(null,null,mock(ChainProfileRepository.class),mock(TokenConfigRepository.class),
+                    mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),RuntimeTestSupport.enabled());
         }
-
-        /**
-         * 验证 {@code prepareJetton} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public PreparedTransfer prepareJetton(ChainAddressRecord from, String sourceJettonWallet,
-                                              String destinationOwner, BigInteger tokenAmount,
-                                              String responseAddress, String comment) {
-            this.from = from;
-            this.sourceJettonWallet = sourceJettonWallet;
-            this.atomicAmount = tokenAmount;
-            return new PreparedTransfer(1L, new byte[]{1}, "AQ==", "message-hash");
+        @Override public String send(TonSubmissionService.Operation operation,ChainAddressRecord from) {
+            this.operation=operation;this.from=from;return "ton-hash";
         }
-
-        /**
-         * 验证 {@code broadcastAndRecord} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public String broadcastAndRecord(PreparedTransfer transfer, String from, String to,
-                                         String symbol, String master, BigDecimal amount) {
-            return "ton-hash";
-        }
-
-        /**
-         * 验证 {@code confirmSentMessage} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean confirmSentMessage(String messageHash, String senderAddress) {
-            return messageConfirmed;
+        @Override public boolean confirmWithdrawal(UUID tenant,String reference) {
+            confirmTenant=tenant;confirmReference=reference;return messageConfirmed;
         }
     }
 }

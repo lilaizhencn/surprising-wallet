@@ -1,0 +1,127 @@
+{
+  "reference": "@mysten/sui 2.38.0; public fixtures only; ephemeral fixture private key discarded",
+  "vectors": [
+    {
+      "network": "regtest",
+      "chainIdentifier": "AH55uZypPRvYk66GqvYgdQdGRkUfw8unqgREvu6su27G",
+      "sender": "0x56629c9002314e5d2ad3038e1e32da225a33236407dbb66a81c63485505fe671",
+      "recipient": "0xabababababababababababababababababababababababababababababababab",
+      "amountAtomic": "100000000",
+      "coinType": "0x2::sui::SUI",
+      "inputs": [],
+      "gasPayment": [
+        {
+          "objectId": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "version": "7",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "200000000000"
+        }
+      ],
+      "gasPrice": 1000,
+      "gasBudget": 10000000,
+      "publicKeyHex": "124baaa8ca6efd1385bc0ead333452365f3367d45e84daec1867606478aefae9",
+      "signingHashHex": "9159d8d1692eff8d5443ad1f5a5f7624b66f037c038ce52e67ace5a7f2c5763a",
+      "txBytesBase64": "AAACACCrq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urqwAIAOH1BQAAAAACAgABAQEAAQECAAABAABWYpyQAjFOXSrTA44eMtoiWjMjZAfbtmqBxjSFUF/mcQFERERERERERERERERERERERERERERERERERERERERERAcAAAAAAAAAIDyyemCCtteUtCaQHLbe/1Vj7oM/NHyOGNoEl1WarHErVmKckAIxTl0q0wOOHjLaIlozI2QH27ZqgcY0hVBf5nHoAwAAAAAAAICWmAAAAAAAAA==",
+      "digest": "79Juuk6aD2mJK3jSF6H4KNCBykQNZ8zn5Zn37JccpL17",
+      "signatureBase64": "AKrJY5MG0PkUd5CIECuDgOgM4FvYAwN/oe/7/9Kvo8UcZiMqAgDNnzsX18sBC2aZiY/kmJKcJ1us3ry8Jg6IZQcSS6qoym79E4W8Dq0zNFI2XzNn1F6E2uwYZ2BkeK766Q=="
+    },
+    {
+      "network": "regtest",
+      "chainIdentifier": "AH55uZypPRvYk66GqvYgdQdGRkUfw8unqgREvu6su27G",
+      "sender": "0x56629c9002314e5d2ad3038e1e32da225a33236407dbb66a81c63485505fe671",
+      "recipient": "0xabababababababababababababababababababababababababababababababab",
+      "amountAtomic": "100000000",
+      "coinType": "0x2::sui::SUI",
+      "inputs": [],
+      "gasPayment": [
+        {
+          "objectId": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "version": "7",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "200000000000"
+        },
+        {
+          "objectId": "0x7777777777777777777777777777777777777777777777777777777777777777",
+          "version": "7",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "200000000000"
+        }
+      ],
+      "gasPrice": 1000,
+      "gasBudget": 10000000,
+      "publicKeyHex": "124baaa8ca6efd1385bc0ead333452365f3367d45e84daec1867606478aefae9",
+      "signingHashHex": "d993dabeee1b7cbbd64b9de22b0dccca9f6e483049f3c62669f5a725707893f1",
+      "txBytesBase64": "AAACACCrq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urqwAIAOH1BQAAAAACAgABAQEAAQECAAABAABWYpyQAjFOXSrTA44eMtoiWjMjZAfbtmqBxjSFUF/mcQJERERERERERERERERERERERERERERERERERERERERERAcAAAAAAAAAIDyyemCCtteUtCaQHLbe/1Vj7oM/NHyOGNoEl1WarHErd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3cHAAAAAAAAACA8snpggrbXlLQmkBy23v9VY+6DPzR8jhjaBJdVmqxxK1ZinJACMU5dKtMDjh4y2iJaMyNkB9u2aoHGNIVQX+Zx6AMAAAAAAACAlpgAAAAAAAA=",
+      "digest": "3pfcST8KixE56v6ZYBP1wMxWzwEMJSVzq3eWtui3sPkv",
+      "signatureBase64": "AM9Baw5RFhWRp+V5JpZQOz6l/FC643cwPNXovJrm9e0zZzj3HEkmNlIgIoYRj6g2J4dW5+soXBccTIdTRqXTug4SS6qoym79E4W8Dq0zNFI2XzNn1F6E2uwYZ2BkeK766Q=="
+    },
+    {
+      "network": "regtest",
+      "chainIdentifier": "AH55uZypPRvYk66GqvYgdQdGRkUfw8unqgREvu6su27G",
+      "sender": "0x56629c9002314e5d2ad3038e1e32da225a33236407dbb66a81c63485505fe671",
+      "recipient": "0xabababababababababababababababababababababababababababababababab",
+      "amountAtomic": "1000000",
+      "coinType": "0x2222222222222222222222222222222222222222222222222222222222222222::usdc::USDC",
+      "inputs": [
+        {
+          "objectId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+          "version": "9",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "1000000"
+        }
+      ],
+      "gasPayment": [
+        {
+          "objectId": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "version": "7",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "200000000000"
+        }
+      ],
+      "gasPrice": 1000,
+      "gasBudget": 10000000,
+      "publicKeyHex": "124baaa8ca6efd1385bc0ead333452365f3367d45e84daec1867606478aefae9",
+      "signingHashHex": "869a7f94a4158e2fce92ce3b2f2f5c5846d7c44f365606b597a0ca72ccbd4064",
+      "txBytesBase64": "AAADAQBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQkAAAAAAAAAIDyyemCCtteUtCaQHLbe/1Vj7oM/NHyOGNoEl1WarHErAAhAQg8AAAAAAAAgq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6sDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACBGNvaW4FdmFsdWUBByIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiBHVzZGMEVVNEQwABAQAAAgEAAAEBAQABAQMBAAAAAQIAVmKckAIxTl0q0wOOHjLaIlozI2QH27ZqgcY0hVBf5nEBREREREREREREREREREREREREREREREREREREREREREQHAAAAAAAAACA8snpggrbXlLQmkBy23v9VY+6DPzR8jhjaBJdVmqxxK1ZinJACMU5dKtMDjh4y2iJaMyNkB9u2aoHGNIVQX+Zx6AMAAAAAAACAlpgAAAAAAAA=",
+      "digest": "2jsmpV5LnnM7z1XefZXk54Qfn7AMWwoptJKjuojgZfxW",
+      "signatureBase64": "ABWgPLPf2kYLcZwFXusq1SqeW64KXJCAZOztM9jati0W5r2chAl+f4NCxKBIqQ2Yi0GWGIQausLXGQKbNk8h6wASS6qoym79E4W8Dq0zNFI2XzNn1F6E2uwYZ2BkeK766Q=="
+    },
+    {
+      "network": "regtest",
+      "chainIdentifier": "AH55uZypPRvYk66GqvYgdQdGRkUfw8unqgREvu6su27G",
+      "sender": "0x56629c9002314e5d2ad3038e1e32da225a33236407dbb66a81c63485505fe671",
+      "recipient": "0xabababababababababababababababababababababababababababababababab",
+      "amountAtomic": "7000000",
+      "coinType": "0x2222222222222222222222222222222222222222222222222222222222222222::usdt::USDT",
+      "inputs": [
+        {
+          "objectId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+          "version": "9",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "6000000"
+        },
+        {
+          "objectId": "0x6666666666666666666666666666666666666666666666666666666666666666",
+          "version": "9",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "6000000"
+        }
+      ],
+      "gasPayment": [
+        {
+          "objectId": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "version": "7",
+          "digest": "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi",
+          "balance": "200000000000"
+        }
+      ],
+      "gasPrice": 1000,
+      "gasBudget": 10000000,
+      "publicKeyHex": "124baaa8ca6efd1385bc0ead333452365f3367d45e84daec1867606478aefae9",
+      "signingHashHex": "d5359a3a40f63754c8ad06504212de044f4a2106d8c06e04c9a96b88aa393419",
+      "txBytesBase64": "AAAEAQBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQkAAAAAAAAAIDyyemCCtteUtCaQHLbe/1Vj7oM/NHyOGNoEl1WarHErAQBmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZgkAAAAAAAAAIDyyemCCtteUtCaQHLbe/1Vj7oM/NHyOGNoEl1WarHErAAjAz2oAAAAAAAAgq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6sEAwEAAAEBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIEY29pbgV2YWx1ZQEHIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIEdXNkdARVU0RUAAEBAAACAQAAAQECAAEBAwIAAAABAwBWYpyQAjFOXSrTA44eMtoiWjMjZAfbtmqBxjSFUF/mcQFERERERERERERERERERERERERERERERERERERERERERAcAAAAAAAAAIDyyemCCtteUtCaQHLbe/1Vj7oM/NHyOGNoEl1WarHErVmKckAIxTl0q0wOOHjLaIlozI2QH27ZqgcY0hVBf5nHoAwAAAAAAAICWmAAAAAAAAA==",
+      "digest": "2TrUbhGuo2CyawXQ9QdHcgCNp3mB8p6ppbgFV9V3ZPkS",
+      "signatureBase64": "ANQVrw+8geFG2G2fFEiCAvkyMjA6fpEQKQBMCcE5K+c/ZkxGH9MsZbCEBLdLv0MT0OuziVkWZTIndA3wYH6Iog4SS6qoym79E4W8Dq0zNFI2XzNn1F6E2uwYZ2BkeK766Q=="
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.chain.model.TokenConfiguration;
@@ -55,7 +55,7 @@ public class WalletConfigOverviewService {
     /**
      * 提供密钥配置状态，概览接口不读取或返回私钥材料。
      */
-    private final WalletKeyMaterialProvider keyMaterial;
+    private final MpcNodes mpcNodes;
     private final String environment;
     private final WalletRuntimeConfigService runtimeConfig;
 
@@ -65,7 +65,7 @@ public class WalletConfigOverviewService {
                                        ChainAssetRepository chainAssetRepository,
                                        ChainRpcNodeRepository rpcNodeRepository,
                                        CustodyAuditRepository audits,
-                                       WalletKeyMaterialProvider keyMaterial,
+                                       MpcNodes mpcNodes,
                                        @Value("${sw.app.env.name:dev}")
                                        String environment, WalletRuntimeConfigService runtimeConfig) {
         this.systemConfigRepository = systemConfigRepository;
@@ -74,7 +74,7 @@ public class WalletConfigOverviewService {
         this.chainAssetRepository = chainAssetRepository;
         this.rpcNodeRepository = rpcNodeRepository;
         this.audits = audits;
-        this.keyMaterial = keyMaterial;
+        this.mpcNodes = mpcNodes;
         this.environment = normalizeEnvironment(environment);
         this.runtimeConfig = runtimeConfig;
     }
@@ -93,7 +93,7 @@ public class WalletConfigOverviewService {
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         GlobalSwitches switches = runtimeConfig.globalSwitches();
-        boolean keysetConfigured = this.keyMaterial.hasApiKeyMaterial();
+        boolean mpcConfigured = mpcNodes.parties().size() == 3 && mpcNodes.clients().size() == 3;
         List<AccountChainProfile> profiles = chainProfileRepository.listAll();
         List<TokenConfiguration> tokens = tokenConfigRepository.listAll();
         List<ChainAsset> assets = chainAssetRepository.listNonNativeOverview();
@@ -101,7 +101,7 @@ public class WalletConfigOverviewService {
         boolean production = WalletEnvironmentPolicy.isProduction(environment);
 
         List<AnomalyView> anomalies = findAnomalies(
-                keysetConfigured, production, profiles, tokens, assets, rpcNodes);
+                mpcConfigured, production, profiles, tokens, assets, rpcNodes);
         Map<NetworkKey, Integer> tokenCounts = enabledTokenCounts(tokens);
         Map<NetworkKey, Integer> rpcCounts = enabledRpcCounts(rpcNodes);
         Map<String, Long> enabledNetworksByChain = profiles.stream()
@@ -114,7 +114,7 @@ public class WalletConfigOverviewService {
                 .map(profile -> chainStatus(
                         profile,
                         switches,
-                        keysetConfigured,
+                        mpcConfigured,
                         production,
                         enabledNetworksByChain.getOrDefault(normalize(profile.getChain()), 0L),
                         tokenCounts.getOrDefault(profileKey(profile.getChain(), profile.getNetwork()), 0),
@@ -136,7 +136,7 @@ public class WalletConfigOverviewService {
         return new SummaryView(
                 environment,
                 production,
-                keysetConfigured,
+                mpcConfigured,
                 switches,
                 new StatisticsView(
                         profiles.size(), enabledChainCount, enabledNetworkCount,
@@ -177,17 +177,17 @@ public class WalletConfigOverviewService {
         return summary(actor);
     }
 
-    private List<AnomalyView> findAnomalies(boolean keysetConfigured,
+    private List<AnomalyView> findAnomalies(boolean mpcConfigured,
                                             boolean production,
                                             List<AccountChainProfile> profiles,
                                             List<TokenConfiguration> tokens,
                                             List<ChainAsset> assets,
                                             List<Overview> rpcNodes) {
         List<AnomalyView> anomalies = new ArrayList<>();
-        if (!keysetConfigured) {
+        if (!mpcConfigured) {
             anomalies.add(new AnomalyView(
-                    "KEYSET_NOT_CONFIGURED", "ERROR", null, null,
-                    "Wallet keyset is not configured."));
+                    "MPC_NOT_CONFIGURED", "ERROR", null, null,
+                    "Independent MPC signer clients are not configured."));
         }
 
         Map<String, List<AccountChainProfile>> enabledProfiles = profiles.stream()
@@ -272,7 +272,7 @@ public class WalletConfigOverviewService {
 
     private ChainStatusView chainStatus(AccountChainProfile profile,
                                         GlobalSwitches global,
-                                        boolean keysetConfigured,
+                                        boolean mpcConfigured,
                                         boolean production,
                                         long enabledNetworkCount,
                                         int tokenCount,
@@ -289,8 +289,8 @@ public class WalletConfigOverviewService {
         if (!profile.getEnabled()) {
             blockers.add("Chain profile is disabled.");
         } else {
-            if (!keysetConfigured) {
-                blockers.add("Wallet keyset is not configured.");
+            if (!mpcConfigured) {
+                blockers.add("Independent MPC signer clients are not configured.");
             }
             if (rpcNodeCount == 0) {
                 blockers.add("No enabled RPC node for environment " + environment + ".");
@@ -385,7 +385,7 @@ public class WalletConfigOverviewService {
     public record SummaryView(
             String environment,
             boolean production,
-            boolean keysetConfigured,
+            boolean mpcConfigured,
             GlobalSwitches globalSwitches,
             StatisticsView statistics,
             List<ChainStatusView> chains,

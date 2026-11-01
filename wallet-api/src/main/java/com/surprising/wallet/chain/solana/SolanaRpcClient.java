@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.net.ssl.SSLContext;
 
@@ -173,12 +174,11 @@ public class SolanaRpcClient {
         config.put("maxSupportedTransactionVersion", 0);
         return call("getTransaction", List.of(signature, config));
     }
-    /**
-     * 获取账户信息（jsonParsed 编码）。
-     *
-     * @param address Solana 地址
-     * @return 账户信息 value，不存在返回 null
-     */
+    /** Exact base64 wire and execution metadata for MPC receipt verification. */
+    public JsonNode getRawTransaction(String signature) {
+        return call("getTransaction",List.of(signature,Map.of("encoding","base64","commitment","confirmed","maxSupportedTransactionVersion",0)));
+    }
+    /** 获取账户信息（jsonParsed 编码），不存在返回 null。 */
     public JsonNode getAccountInfo(String address) {
         ObjectNode config = commitment();
         config.put("encoding", "jsonParsed");

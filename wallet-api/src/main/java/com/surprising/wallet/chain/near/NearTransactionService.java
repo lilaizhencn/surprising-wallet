@@ -1,380 +1,163 @@
 package com.surprising.wallet.chain.near;
 
-import com.surprising.wallet.chain.model.HotWalletRules;
-import com.surprising.wallet.chain.model.NearTransactionRecord;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainAddressRepository;
-import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.NearTransactionRepository;
-import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.service.WithdrawalSettlementService;
-import java.io.IOException;
+import com.surprising.wallet.model.mpc.NearSigningPayload;
+import com.surprising.wallet.model.mpc.NearRegistrationPayload;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.service.*;
+import com.surprising.wallet.service.NearSubmissionService.Operation;
+import com.surprising.wallet.service.NearSubmissionService.Kind;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.bitcoinj.base.Base58;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
-/**
- * NEAR 链交易服务，负责构造、签名、广播 Borsh 序列化交易及提现/归集流程。
- *
- * <p>支持的操作：
- * <ul>
- *   <li>NEAR 原生转账（Transfer Action）</li>
- *   <li>隐式账户激活</li>
- *   <li>NEP-141 代币转账（FunctionCall ft_transfer）</li>
- *   <li>代币存储注册（storage_deposit）</li>
- *   <li>合约部署并初始化</li>
- *   <li>提现和归集确认</li>
- * </ul></p>
- *
- * <p>NEAR 精度：1 NEAR = 10^24 yoctoNEAR。默认使用 24 位小数。</p>
- *
- * @see NearTransactionSigner
- * @see NearRpcClient
- * @see NearKeyService
- */
+/** Public access-key/RPC selection. Recovery always retains the original nonce, block and signed Borsh. */
 @Service
+@RequiredArgsConstructor
 public class NearTransactionService {
-
-    /** 链标识 */
-    private static final String CHAIN = "NEAR";
-
-    /** 原生币符号 */
-    private static final String SYMBOL = "NEAR";
-
-    /** NEAR 小数位数（1 NEAR = 10^24 yoctoNEAR） */
-    private static final int DECIMALS = 24;
-
-    /** 默认 FunctionCall Gas 用量（30 TGas） */
-    private static final long DEFAULT_FUNCTION_CALL_GAS = 30_000_000_000_000L;
-
-    /** 代币转账 Gas 用量（15 TGas） */
-    private static final long TOKEN_TRANSFER_GAS = 15_000_000_000_000L;
-
-    /** 1 yoctoNEAR，用于 ft_transfer 调用时的最小 deposit */
-    private static final BigInteger ONE_YOCTO = BigInteger.ONE;
-
-    /** NEAR RPC 客户端 */
+    private static final long TOKEN_GAS=30_000_000_000_000L;
     private final NearRpcClient rpc;
+    private final NearSubmissionService submissions;
+    private final ChainProfileRepository profiles;
+    private final TokenConfigRepository tokens;
+    private final WithdrawalOrderRepository orders;
+    private final CollectionRecordRepository collections;
+    private final NearRegistrationService registrations;
+    @NonNull private final WalletRuntimeConfigService runtime;
 
-    /** 交易签名器 */
-    private final NearTransactionSigner signer;
-
-    /** NEAR 密钥服务 */
-    private final NearKeyService keyService;
-    private final NearTransactionRepository nearTransactionRepository;
-    private final CollectionRecordRepository collectionRecordRepository;
-    private final ChainAddressRepository chainAddressRepository;
-
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final WithdrawalSettlementService settlements;
-
-    /** 运行时任务开关服务。 */
-    private final WalletRuntimeConfigService runtimeConfigService;
-
-    public NearTransactionService(
-            NearRpcClient rpc,
-            NearTransactionSigner signer,
-            NearKeyService keyService,
-            NearTransactionRepository nearTransactionRepository,
-            CollectionRecordRepository collectionRecordRepository,
-            ChainAddressRepository chainAddressRepository,
-            WithdrawalSettlementService settlements,
-            WalletRuntimeConfigService runtimeConfigService) {
-        this.rpc = rpc;
-        this.signer = signer;
-        this.keyService = keyService;
-        this.nearTransactionRepository = nearTransactionRepository;
-        this.collectionRecordRepository = collectionRecordRepository;
-        this.chainAddressRepository = chainAddressRepository;
-        this.settlements = settlements;
-        this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
+    public String send(Operation op,ChainAddressRecord source) {
+        runtime.requireTaskEnabled("NEAR",WalletRuntimeConfigService.TASK_WITHDRAW,"NEAR withdrawal");
+        if(op.kind()!=Kind.WITHDRAWAL)throw new IllegalArgumentException("withdrawal operation required");
+        return transfer(op,source);
     }
-    public String sendNative(ChainAddressRecord from, String toAddress, BigInteger amountYocto) {
-        JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
-        long nonce = accessKey.path("nonce").asLong(0L) + 1L;
-        NearTransactionSigner.SignedTransaction signed = signer.transfer(
-                from.getUserId(), from.getBiz(), from.getAddressIndex(),
-                from.getAddress(), nonce, toAddress,
-                accessKey.path("block_hash").asText(), amountYocto);
-        JsonNode result = rpc.broadcastTxCommit(signed.signedTransactionBase64());
-        String txHash = result.path("transaction").path("hash").asText(signed.transactionHash());
-        record(txHash, 0L, from.getAddress(), toAddress, SYMBOL, fromYocto(amountYocto),
-                gasBurnt(result), blockHeight(result), txSucceeded(result) ? "CONFIRMED" : "SENT",
-                result.toString());
-        return txHash;
+    public String collect(UUID tenant,String reference,ChainAddressRecord source) {
+        runtime.requireTaskEnabled("NEAR",WalletRuntimeConfigService.TASK_COLLECTION,"NEAR collection");
+        var previous=collections.findTxHash(tenant,"NEAR",reference);if(previous.isPresent())return previous.get();
+        if(collections.claimSigningDurable(tenant,"NEAR",reference)!=1)throw new IllegalStateException("NEAR collection is claimed; recovery owns the intent");
+        var op=new Operation(tenant,reference,Kind.COLLECTION);
+        try{String hash=transfer(op,source);submissions.restoreSent(op,hash);return hash;}
+        catch(RuntimeException error){submissions.unknown(op,error.getClass().getSimpleName());throw error;}
     }
-    public boolean accountExists(String accountId) {
-        return rpc.accountExists(accountId);
-    }
-    public String activateImplicitAccount(ChainAddressRecord payer, String accountId, BigInteger amountYocto) {
-        if (!NearKeyService.isValidAccountId(accountId)) {
-            throw new IllegalArgumentException("invalid NEAR account id: " + accountId);
-        }
-        if (amountYocto == null || amountYocto.signum() <= 0) {
-            throw new IllegalArgumentException("NEAR activation amount must be positive");
-        }
-        return sendNative(payer, accountId, amountYocto);
-    }
-    public String sendToken(ChainAddressRecord from, TokenDefinition token, String toAccountId, BigDecimal amount) {
-        BigInteger atomicAmount = toAtomic(amount, token.getDecimals());
-        ObjectNode args = objectMapper.createObjectNode();
-        args.put("receiver_id", toAccountId);
-        args.put("amount", atomicAmount.toString());
-        JsonNode result = sendFunctionCall(from, token.getContractAddress(), "ft_transfer",
-                jsonBytes(args), TOKEN_TRANSFER_GAS, ONE_YOCTO);
-        String txHash = result.path("transaction").path("hash").asText();
-        record(txHash, 0L, from.getAddress(), toAccountId, token.getSymbol(), amount,
-                gasBurnt(result), blockHeight(result), txSucceeded(result) ? "CONFIRMED" : "SENT",
-                result.toString());
-        return txHash;
-    }
-
-    public String storageDeposit(ChainAddressRecord payer, TokenDefinition token,
-                                 String accountId, BigInteger depositYocto) {
-        ObjectNode args = objectMapper.createObjectNode();
-        args.put("account_id", accountId);
-        args.put("registration_only", true);
-        JsonNode result = sendFunctionCall(payer, token.getContractAddress(), "storage_deposit",
-                jsonBytes(args), DEFAULT_FUNCTION_CALL_GAS, depositYocto);
-        String txHash = result.path("transaction").path("hash").asText();
-        record(txHash, 0L, payer.getAddress(), accountId, token.getSymbol(), BigDecimal.ZERO,
-                gasBurnt(result), blockHeight(result), txSucceeded(result) ? "CONFIRMED" : "SENT",
-                result.toString());
-        return txHash;
-    }
-
-    public DeployResult deployContractAndInit(ChainAddressRecord from, byte[] contractCode,
-                                              String initMethod, byte[] initArgs,
-                                              long gas, BigInteger depositYocto) {
-        JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
-        long nonce = accessKey.path("nonce").asLong(0L) + 1L;
-        NearTransactionSigner.SignedTransaction signed = signer.deployContractAndFunctionCall(
-                from.getUserId(), from.getBiz(), from.getAddressIndex(),
-                from.getAddress(), nonce, from.getAddress(),
-                accessKey.path("block_hash").asText(), contractCode, initMethod,
-                initArgs, gas, depositYocto);
-        JsonNode result = rpc.broadcastTxCommit(signed.signedTransactionBase64());
-        String txHash = result.path("transaction").path("hash").asText(signed.transactionHash());
-        record(txHash, 0L, from.getAddress(), from.getAddress(), "NEAR_CONTRACT", BigDecimal.ZERO,
-                gasBurnt(result), blockHeight(result), txSucceeded(result) ? "CONFIRMED" : "SENT",
-                result.toString());
-        return new DeployResult(txHash, nonce, result);
-    }
-    public boolean tokenStorageRegistered(TokenDefinition token, String accountId) {
-        ObjectNode args = objectMapper.createObjectNode();
-        args.put("account_id", accountId);
-        JsonNode balance = rpc.viewFunctionJson(token.getContractAddress(), "storage_balance_of", jsonBytes(args));
-        return balance != null && !balance.isNull() && !balance.isMissingNode();
-    }
-    public BigInteger tokenStorageMinimum(TokenDefinition token) {
-        JsonNode bounds = rpc.viewFunctionJson(token.getContractAddress(), "storage_balance_bounds",
-                "{}".getBytes(StandardCharsets.UTF_8));
-        String min = bounds.path("min").asText("0");
-        return new BigInteger(min);
-    }
-
-    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String txHash, String signerAccountId) {
-        JsonNode status = requireSuccessfulConfirmation(txHash, signerAccountId, Duration.ofMinutes(2));
-        if (settlements.confirm(tenantId, CHAIN, orderNo, txHash)) {
-            nearTransactionRepository.markConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status), status.toString());
-            return true;
-        }
-        return false;
-    }
-
-    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
-                                String hotAddress, BigInteger amountYocto) {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "near collectNative");
-        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
-                    .orElseThrow(() -> new IllegalStateException("NEAR collection is not retryable"));
-        }
-        try {
-            String txHash = sendNative(from, hotAddress, amountYocto);
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
-            return txHash;
-        } catch (RuntimeException e) {
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
-            throw e;
-        }
-    }
-
-    public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
-                               TokenDefinition token, String hotAddress, BigDecimal amount) {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "near collectToken");
-        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
-                    .orElseThrow(() -> new IllegalStateException("NEAR token collection is not retryable"));
-        }
-        try {
-            ensureTokenStorageRegistered(token, hotAddress);
-            String txHash = sendToken(from, token, hotAddress, amount);
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
-            return txHash;
-        } catch (RuntimeException e) {
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
-            throw e;
-        }
-    }
-    private void ensureTokenStorageRegistered(TokenDefinition token, String accountId) {
-        if (tokenStorageRegistered(token, accountId)) {
-            return;
-        }
-        ChainAddressRecord payer = chainAddressRepository.find(
-                CHAIN,
-                SYMBOL,
-                HotWalletRules.DEFAULT_HOT_USER_ID,
-                HotWalletRules.DEFAULT_HOT_BIZ,
-                HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
-                HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
-                .orElseThrow(() -> new IllegalStateException(
-                        "missing NEAR hot wallet for token storage registration"));
-        BigInteger minimum = tokenStorageMinimum(token);
-        if (minimum.signum() <= 0) {
-            throw new IllegalStateException("NEAR token storage minimum is not configured by contract");
-        }
-        String txHash = storageDeposit(payer, token, accountId, minimum);
-        requireSuccessfulConfirmation(txHash, payer.getAddress(), Duration.ofMinutes(2));
-        if (!waitForTokenStorageRegistered(token, accountId, Duration.ofSeconds(30))) {
-            throw new IllegalStateException("NEAR token storage registration did not complete");
-        }
-    }
-    public boolean waitForTokenStorageRegistered(TokenDefinition token, String accountId, Duration timeout) {
-        Instant deadline = Instant.now().plus(timeout);
-        while (Instant.now().isBefore(deadline)) {
-            if (tokenStorageRegistered(token, accountId)) {
-                return true;
+    private String transfer(Operation op,ChainAddressRecord source) {
+        NearSigningPayload draft=null;
+        if(submissions.intent(op).isEmpty()) {
+            var payment=submissions.payment(op);var previousRegistration=registrations.intent(op);
+            var original=previousRegistration.isPresent()?registrations.payload(op):null;
+            var profile=(original==null?profiles.findAccountByChain("NEAR"):profiles.findByChainAndNetwork("NEAR",original.unsigned().network())).orElseThrow();
+            var selectedRpc=rpc.forNetwork(profile.getNetwork());
+            var status=selectedRpc.status();requireNetwork(profile.getNetwork(),status.path("chain_id").asText());
+            var genesis=selectedRpc.genesisConfig();
+            require(status.path("chain_id").asText().equals(genesis.path("chain_id").asText()),"NEAR genesis configuration belongs to another network");
+            long validity=genesis.path("transaction_validity_period").asLong();require(validity>0,"NEAR reference validity is unavailable");
+            String contract=null;int decimals=24;
+            if(!"NEAR".equals(payment.symbol())) {
+                if(original!=null){contract=original.unsigned().contract();decimals=original.tokenDecimals();}
+                else {var token=tokens.findDefinition("NEAR",profile.getNetwork(),payment.symbol()).orElseThrow();contract=token.getContractAddress();decimals=token.getDecimals();}
+                ensureRegistration(op,source,payment,contract,decimals,profile.getNetwork(),status,validity,selectedRpc);
             }
-            sleep(750L);
+            String publicKey=submissions.publicKey(source);
+            var access=selectedRpc.accessKey(source.getAddress(),Base58.encode(HexFormat.of().parseHex(publicKey)));
+            require("FullAccess".equals(access.path("permission").asText()),"NEAR joint access key is not FullAccess");
+            String blockHash=access.path("block_hash").asText();long height=access.path("block_height").asLong(-1);
+            var header=selectedRpc.block(blockHash).path("header");require(blockHash.equals(header.path("hash").asText()) && height==header.path("height").asLong(-2),"NEAR selected reference block identity differs");
+            var unsigned=new MpcNearTransactionCodec.Unsigned(profile.getNetwork(),status.path("genesis_hash").asText(),source.getAddress(),Math.addExact(access.path("nonce").asLong(),1),payment.recipient(),payment.amount().movePointRight(decimals).toBigIntegerExact(),contract,contract==null?0:TOKEN_GAS,contract==null?null:op.reference(),height,Math.addExact(height,validity),blockHash,publicKey);
+            draft=new NearSigningPayload(payment.symbol(),payment.amount(),payment.customerFee(),decimals,unsigned);
         }
-        return tokenStorageRegistered(token, accountId);
+        var request=submissions.reserve(op,source,draft);submissions.sign(op,request.id());
+        return broadcast(op,submissions.commit(op,request.id()),submissions.payload(request));
     }
-
-    public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
-                                     String collectionNo) {
-        String txHash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
-        JsonNode status = requireSuccessfulConfirmation(txHash, null, Duration.ofMinutes(2));
-        if (collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1) {
-            nearTransactionRepository.markConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status), status.toString());
-            return true;
+    public boolean recover(Operation op) {
+        var request=submissions.intent(op);
+        if(request.isEmpty()) {
+            if(registrations.intent(op).isEmpty())return false;
+            String hash=transfer(op,registrations.source(op));submissions.restoreSent(op,hash);return true;
         }
-        return false;
+        submissions.sign(op,request.get().id());var signed=submissions.commit(op,request.get().id());
+        String hash=broadcast(op,signed,submissions.payload(request.get()));submissions.restoreSent(op,hash);return true;
     }
-    public JsonNode requireSuccessfulConfirmation(String txHash, String senderAccountId, Duration timeout) {
-        Instant deadline = Instant.now().plus(timeout);
-        String sender = senderAccountId == null || senderAccountId.isBlank()
-                ? nearTransactionRepository.findSender(CHAIN, txHash).orElseThrow()
-                : senderAccountId;
-        while (Instant.now().isBefore(deadline)) {
-            JsonNode result = rpc.transactionStatus(txHash, sender);
-            if (txSucceeded(result)) {
-                return result;
-            }
-            JsonNode failure = result.path("status").path("Failure");
-            if (!failure.isMissingNode()) {
-                throw new IllegalStateException("NEAR transaction failed: " + failure);
-            }
-            sleep(750L);
+    public int releaseUnsigned(Operation op){return submissions.releaseUnsigned(op);}
+    private String broadcast(Operation op,MpcNearTransactionCodec.Signed signed,NearSigningPayload p) {
+        var selectedRpc=rpc.forNetwork(p.unsigned().network());requireIdentity(p,selectedRpc);boolean found;
+        try{var known=selectedRpc.knownTransaction(signed.txHash(),p.unsigned().sender());found=signed.txHash().equals(known.path("transaction").path("hash").asText());require(found,"NEAR lookup returned another transaction");}
+        catch(IllegalStateException error){if(!NearRpcClient.isUnknownTransactionError(error.getMessage()))throw error;found=false;}
+        if(!found) {
+            require(selectedRpc.latestFinalBlockHeight()<=p.unsigned().validUntilHeight(),"NEAR reference expired; original payment remains held for reconciliation");
+            var answer=selectedRpc.sendTransaction(signed.signedTransactionBase64());
+            require(signed.txHash().equals(answer.path("transaction").path("hash").asText()),"NEAR node returned another selected transaction hash");
         }
-        throw new IllegalStateException("NEAR confirmation timeout for " + txHash);
+        submissions.observed(op,signed.txHash());return signed.txHash();
     }
-    private String publicKeyBase58(ChainAddressRecord from) {
-        return keyService.publicKeyBase58(from.getUserId(), from.getBiz(), from.getAddressIndex());
+    public boolean confirmWithdrawal(UUID tenant,String reference){return confirm(new Operation(tenant,reference,Kind.WITHDRAWAL),orders.findTxHash("NEAR",reference,tenant).orElseThrow());}
+    public boolean confirmCollection(UUID tenant,String reference){return confirm(new Operation(tenant,reference,Kind.COLLECTION),collections.findTxHash(tenant,"NEAR",reference).orElseThrow());}
+    private boolean confirm(Operation op,String hash) {
+        var request=submissions.intent(op).orElseThrow();var p=submissions.payload(request);var selectedRpc=rpc.forNetwork(p.unsigned().network());requireIdentity(p,selectedRpc);
+        var proof=submissions.proof(op).orElseGet(()->{
+            var signed=submissions.commit(op,request.id());var execution=selectedRpc.finalTransaction(hash,p.unsigned().sender());
+            var verified=NearExecutionReceipt.verify(execution,p.unsigned(),signed);var headers=new HashMap<String,JsonNode>();
+            for(String block:verified.blockHashes())headers.put(block,selectedRpc.block(block).path("header"));
+            return new NearExecutionReceipt.Proof(execution,headers);
+        });
+        return submissions.settle(op,proof,selectedRpc.latestFinalBlockHeight(),profiles.findByChainAndNetwork("NEAR",p.unsigned().network()).orElseThrow().getWithdrawConfirmations());
     }
-
-    private JsonNode sendFunctionCall(ChainAddressRecord from, String contractAccountId,
-                                      String methodName, byte[] args, long gas, BigInteger depositYocto) {
-        JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
-        long nonce = accessKey.path("nonce").asLong(0L) + 1L;
-        NearTransactionSigner.SignedTransaction signed = signer.functionCall(
-                from.getUserId(), from.getBiz(), from.getAddressIndex(),
-                from.getAddress(), nonce, contractAccountId, accessKey.path("block_hash").asText(),
-                methodName, args, gas, depositYocto);
-        return rpc.broadcastTxCommit(signed.signedTransactionBase64());
+    private void requireIdentity(NearSigningPayload p,NearRpcClient selectedRpc) {
+        var status=selectedRpc.status();requireNetwork(p.unsigned().network(),status.path("chain_id").asText());
+        require(p.unsigned().genesisHash().equals(status.path("genesis_hash").asText()),"NEAR RPC genesis differs from fixed intent");
     }
-
-    private void record(String hash, long actionIndex, String sender, String receiver,
-                        String assetSymbol, BigDecimal amount,
-                        long gasBurnt, long blockHeight, String status, String rawPayload) {
-        nearTransactionRepository.upsert(NearTransactionRecord.builder()
-                .chain(CHAIN)
-                .txHash(hash)
-                .actionIndex(actionIndex)
-                .sender(sender)
-                .receiver(receiver)
-                .assetSymbol(assetSymbol)
-                .amount(amount)
-                .gasBurnt(gasBurnt)
-                .blockHeight(blockHeight)
-                .status(status)
-                .rawPayload(rawPayload)
-                .build());
-    }
-    private static boolean txSucceeded(JsonNode result) {
-        JsonNode status = result.path("status");
-        return status.has("SuccessValue") || status.has("SuccessReceiptId");
-    }
-    private static long gasBurnt(JsonNode result) {
-        long total = result.path("transaction_outcome").path("outcome").path("gas_burnt").asLong(0L);
-        for (JsonNode receipt : result.path("receipts_outcome")) {
-            total += receipt.path("outcome").path("gas_burnt").asLong(0L);
+    private void ensureRegistration(Operation op,ChainAddressRecord source,NearSubmissionService.Payment payment,
+            String contract,int decimals,String network,JsonNode status,long validity,NearRpcClient selectedRpc) {
+        NearRegistrationPayload draft=null;
+        if(registrations.intent(op).isEmpty()) {
+            var storage=selectedRpc.viewFunctionJson(contract,"storage_balance_of",jsonArgs("account_id",payment.recipient()));
+            if(!storage.isNull()) {require(storage.isObject() && positive(storage.path("total")).signum()>0,"NEP-145 storage balance is malformed");return;}
+            var bounds=selectedRpc.viewFunctionJson(contract,"storage_balance_bounds",jsonArgs(null,null));BigInteger deposit=positive(bounds.path("min"));
+            require(bounds.path("max").isNull() || positive(bounds.path("max")).compareTo(deposit)>=0,"NEP-145 storage bounds are inconsistent");
+            var payer=registrations.gasSender(op.tenantId(),network);String publicKey=registrations.publicKey(payer);
+            var access=selectedRpc.accessKey(payer.getAddress(),Base58.encode(HexFormat.of().parseHex(publicKey)));
+            require("FullAccess".equals(access.path("permission").asText()),"NEP-145 Gas joint access key is not FullAccess");
+            String block=access.path("block_hash").asText();long height=access.path("block_height").asLong(-1);
+            var header=selectedRpc.block(block).path("header");require(block.equals(header.path("hash").asText()) && height==header.path("height").asLong(-2),"NEP-145 selected reference differs");
+            BigInteger price=selectedRpc.gasPrice(block);require(price.signum()>0,"NEP-145 Gas quote is invalid");
+            BigInteger fee=price.multiply(BigInteger.valueOf(100_000_000_000_000L));
+            var unsigned=new MpcNearTransactionCodec.Registration(network,status.path("genesis_hash").asText(),payer.getAddress(),Math.addExact(access.path("nonce").asLong(),1),
+                    payment.recipient(),contract,deposit,TOKEN_GAS,height,Math.addExact(height,validity),block,publicKey);
+            draft=new NearRegistrationPayload(op,payment,source.getId(),source.getAddress(),decimals,fee,unsigned);
         }
-        return total;
-    }
-    private static long blockHeight(JsonNode result) {
-        long height = result.path("transaction_outcome").path("block_height").asLong(0L);
-        for (JsonNode receipt : result.path("receipts_outcome")) {
-            height = Math.max(height, receipt.path("block_height").asLong(0L));
+        registrations.reserve(op,source,draft);registrations.sign(op);var selected=registrations.commit(op);var p=registrations.payload(op);
+        var actual=selectedRpc.status();requireNetwork(p.unsigned().network(),actual.path("chain_id").asText());
+        require(p.unsigned().genesisHash().equals(actual.path("genesis_hash").asText()),"NEP-145 RPC genesis differs from original intent");
+        boolean known;
+        try {var answer=selectedRpc.knownTransaction(selected.txHash(),p.unsigned().sender());known=selected.txHash().equals(answer.path("transaction").path("hash").asText());require(known,"NEP-145 lookup returned another transaction");}
+        catch(IllegalStateException error){if(!NearRpcClient.isUnknownTransactionError(error.getMessage()))throw error;known=false;}
+        if(!known) {
+            require(selectedRpc.latestFinalBlockHeight()<=p.unsigned().validUntilHeight(),"NEP-145 original reference expired; retain original registration and parent");
+            var sent=selectedRpc.sendTransaction(selected.signedTransactionBase64());require(selected.txHash().equals(sent.path("transaction").path("hash").asText()),"NEP-145 node returned another hash");
         }
-        return height;
+        var proof=registrations.proof(op).orElseGet(()->{
+            var execution=selectedRpc.finalTransaction(selected.txHash(),p.unsigned().sender());var receipts=new HashMap<String,JsonNode>();var headers=new HashMap<String,JsonNode>();
+            var root=execution.path("transaction_outcome");String block=root.path("block_hash").asText();headers.put(block,selectedRpc.block(block).path("header"));
+            for(var item:execution.path("receipts_outcome")) {String id=item.path("id").asText();receipts.put(id,selectedRpc.receipt(id));block=item.path("block_hash").asText();headers.put(block,selectedRpc.block(block).path("header"));}
+            return new NearStorageReceipt.Proof(execution,headers,receipts);
+        });
+        var profile=profiles.findByChainAndNetwork("NEAR",p.unsigned().network()).orElseThrow();
+        require(registrations.settle(op,proof,selectedRpc.latestFinalBlockHeight(),profile.getWithdrawConfirmations()),"NEP-145 registration did not finish with settled tenant Gas");
     }
-    public static BigInteger toYocto(BigDecimal amount) {
-        return amount.movePointRight(DECIMALS).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
+    private static byte[] jsonArgs(String key,String value) {
+        var json=new tools.jackson.databind.ObjectMapper();var args=json.createObjectNode();if(key!=null)args.put(key,value);return json.writeValueAsBytes(args);
     }
-    public static BigDecimal fromYocto(BigInteger amount) {
-        return new BigDecimal(amount == null ? BigInteger.ZERO : amount)
-                .movePointLeft(DECIMALS)
-                .stripTrailingZeros();
+    private static BigInteger positive(JsonNode value) {
+        String text=value.asText();require(text.length()<=39 && text.matches("[1-9][0-9]*"),"NEP-145 amount must be a positive u128");
+        var amount=new BigInteger(text);require(amount.bitLength()<=128,"NEP-145 amount exceeds u128");return amount;
     }
-    public static BigInteger toAtomic(BigDecimal amount, int decimals) {
-        return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
+    private static void requireNetwork(String network,String actual) {
+        require(actual!=null && !actual.isBlank() && (Set.of("localnet","regtest").contains(network)?!Set.of("mainnet","testnet","betanet").contains(actual):network.equals(actual)),"NEAR RPC network differs from configured intent");
     }
-    private byte[] jsonBytes(JsonNode json) {
-        try {
-            return objectMapper.writeValueAsBytes(json);
-        } catch (JacksonException e) {
-            throw new IllegalStateException("NEAR JSON serialization failed", e);
-        }
-    }
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("NEAR wait interrupted", e);
-        }
-    }
-    public record DeployResult(String txHash, long nonce, JsonNode result) {
-    }
+    public static BigInteger toYocto(BigDecimal amount){return toAtomic(amount,24);}
+    public static BigDecimal fromYocto(BigInteger amount){return new BigDecimal(Objects.requireNonNull(amount)).movePointLeft(24).stripTrailingZeros();}
+    public static BigInteger toAtomic(BigDecimal amount,int decimals){return amount.movePointRight(decimals).toBigIntegerExact();}
+    private static void require(boolean condition,String message){if(!condition)throw new IllegalStateException(message);}
 }

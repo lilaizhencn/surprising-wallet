@@ -26,6 +26,13 @@ import java.util.Map;
  */
 @RestControllerAdvice(basePackages = "com.surprising.wallet")
 public class CustodyExceptionHandler {
+    @ExceptionHandler(com.surprising.wallet.model.mpc.MpcPendingException.class)
+    public ResponseEntity<Map<String, Object>> mpcPending(com.surprising.wallet.model.mpc.MpcPendingException pending) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header("Retry-After", "2").body(Map.of(
+                "error", Map.of("code", "MPC_PENDING", "message", pending.getMessage(),
+                        "reference", pending.reference(), "state", pending.state())));
+    }
+
     @ExceptionHandler(CustodyWithdrawalRefusedException.class)
     public ResponseEntity<Map<String, Object>> refused(CustodyWithdrawalRefusedException refusal) {
         return ResponseEntity.unprocessableEntity().body(Map.of("rejection", Map.of(

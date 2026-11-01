@@ -53,7 +53,7 @@ class Evm7702RpcCapabilityIntegrationTest {
             Credentials delegate = Credentials.create(Keys.createEcKeyPair());
             BigInteger authorityNonce = web3j.ethGetTransactionCount(
                     authority.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
-            AuthorizationTuple authorization = new Evm7702AuthorizationService().authorize(
+            AuthorizationTuple authorization = new com.surprising.wallet.testutil.Evm7702TestSigning().authorize(
                     actualChainId, delegate.getAddress(), authorityNonce, authority);
 
             BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();

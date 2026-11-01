@@ -20,9 +20,9 @@ class TronScannerTest {
      */
     @Test
     void transactionInfoLog_shouldDecodeTrc20Transfer() {
-        String contractHex = TronTridentKeyFactory.toHexAddress(ECKey.fromPrivate(BigInteger.valueOf(70), true));
-        String from = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(71), true));
-        String to = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(72), true));
+        String contractHex = TronPublicTestAddress.toHexAddress(ECKey.fromPrivate(BigInteger.valueOf(70), true));
+        String from = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(71), true));
+        String to = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(72), true));
 
         Response.TransactionInfo txInfo = Response.TransactionInfo.newBuilder()
                 .setBlockNumber(12345L)

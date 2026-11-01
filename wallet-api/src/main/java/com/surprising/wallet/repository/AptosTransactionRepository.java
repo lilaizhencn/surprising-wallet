@@ -27,40 +27,39 @@ public class AptosTransactionRepository {
         return jdbc.update("""
                 insert into aptos_transaction(
                     chain, tx_hash, sender, receiver, asset_symbol, coin_type,
-                    amount, gas_used, gas_unit_price, version, sequence_number,
+                    amount, gas_used, gas_unit_price, fee_octas, version, sequence_number,
                     confirmations, status, raw_payload, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict (chain, tx_hash) do update set
                     gas_used = greatest(aptos_transaction.gas_used, excluded.gas_used),
                     gas_unit_price = greatest(aptos_transaction.gas_unit_price, excluded.gas_unit_price),
+                    fee_octas = case when excluded.version is not null then excluded.fee_octas else aptos_transaction.fee_octas end,
                     version = coalesce(excluded.version, aptos_transaction.version),
                     sequence_number = coalesce(excluded.sequence_number, aptos_transaction.sequence_number),
                     confirmations = greatest(aptos_transaction.confirmations, excluded.confirmations),
-                    status = excluded.status, raw_payload = coalesce(excluded.raw_payload, aptos_transaction.raw_payload),
+                    status = case when aptos_transaction.status in ('CONFIRMED','FAILED') then aptos_transaction.status else excluded.status end,
+                    raw_payload = coalesce(aptos_transaction.raw_payload, excluded.raw_payload),
                     updated_at = excluded.updated_at
                 """, tx.getChain(), tx.getTxHash(), tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
-                tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getGasUnitPrice(), tx.getVersion(),
+                tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getGasUnitPrice(), tx.getFeeOctas()==null?0L:tx.getFeeOctas(), tx.getVersion(),
                 tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), now, now);
     }
 
-    /** 标记 Aptos 交易已确认。 */
-    public int markConfirmed(String chain, String txHash, long version, long gasUsed,
-                             long gasUnitPrice, String rawPayload) {
-        return jdbc.update("""
-                update aptos_transaction
-                   set confirmations = greatest(confirmations, 1), status = 'CONFIRMED',
-                       version = ?, gas_used = ?, gas_unit_price = ?,
-                       raw_payload = coalesce(?, raw_payload), updated_at = ?
-                 where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
-                """, version, gasUsed, gasUnitPrice, rawPayload, Timestamp.from(Instant.now()), chain, txHash);
+    public Optional<AptosTransactionRecord> findSigned(String hash) {
+        return jdbc.query("select * from aptos_transaction where chain='APTOS' and tx_hash=? and raw_payload is not null",
+                (rs,n)->AptosTransactionRecord.builder().chain("APTOS").txHash(rs.getString("tx_hash")).sender(rs.getString("sender")).receiver(rs.getString("receiver"))
+                        .assetSymbol(rs.getString("asset_symbol")).coinType(rs.getString("coin_type")).amount(rs.getBigDecimal("amount"))
+                        .gasUsed(rs.getLong("gas_used")).gasUnitPrice(rs.getLong("gas_unit_price")).feeOctas(rs.getLong("fee_octas"))
+                        .version(rs.getObject("version",Long.class)).sequenceNumber(rs.getLong("sequence_number")).status(rs.getString("status")).rawPayload(rs.getString("raw_payload")).build(),hash).stream().findFirst();
     }
+    public int markSubmitted(String hash){return jdbc.update("update aptos_transaction set status='SENT',updated_at=now() where chain='APTOS' and tx_hash=? and status='PREPARED'",hash);}
 
     /** 查询已确认交易的原子 Gas 费用。 */
     public Optional<BigDecimal> findConfirmedFeeAtomic(String chain, String txHash) {
         List<BigDecimal> rows = jdbc.queryForList("""
-                select gas_used::numeric * gas_unit_price::numeric
+                select fee_octas::numeric
                   from aptos_transaction
-                 where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                 where chain = ? and tx_hash = ? and status in ('CONFIRMED','FAILED') and version is not null
                  limit 1
                 """, BigDecimal.class, chain, txHash);
         return rows.stream().findFirst();

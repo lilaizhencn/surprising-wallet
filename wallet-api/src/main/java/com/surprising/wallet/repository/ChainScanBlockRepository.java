@@ -6,6 +6,8 @@ import org.springframework.stereotype.Repository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import com.surprising.wallet.chain.model.ChainScanPoint;
 
 /** chain_scan_block 单表仓储。 */
 @Repository
@@ -52,4 +54,35 @@ public class ChainScanBlockRepository {
     }
 
     public record CanonicalBlock(long height, String hash) { }
+
+    public void insertNative(String chain, String scannerName, ChainScanPoint point, String parentHash) {
+        jdbc.update("""
+                insert into chain_scan_block(chain,scanner_name,block_height,block_slot,block_hash,parent_hash)
+                values (?,?,?,?,?,?)
+                """, chain, scannerName, point.height(), point.slot(), point.hash(), parentHash);
+    }
+
+    public Optional<NativeBlock> nativePoint(String chain, String scannerName, long height) {
+        return jdbc.query("""
+                select block_height,block_slot,block_hash,parent_hash from chain_scan_block
+                 where chain=? and scanner_name=? and block_height=? and block_slot is not null
+                """, (row, index) -> new NativeBlock(new ChainScanPoint(row.getLong("block_height"),
+                row.getLong("block_slot"), row.getString("block_hash")), row.getString("parent_hash")),
+                chain, scannerName, height).stream().findFirst();
+    }
+
+    public List<NativeBlock> recentNative(String chain, String scannerName, int limit) {
+        if (limit < 1 || limit > 1_000) throw new IllegalArgumentException("invalid native scan intersection count");
+        return jdbc.query("""
+                select block_height,block_slot,block_hash,parent_hash from chain_scan_block
+                 where chain=? and scanner_name=? and block_slot is not null order by block_height desc limit ?
+                """, (row, index) -> new NativeBlock(new ChainScanPoint(row.getLong("block_height"),
+                row.getLong("block_slot"), row.getString("block_hash")), row.getString("parent_hash")), chain, scannerName, limit);
+    }
+
+    public int removeAbove(String chain, String scannerName, long height) {
+        return jdbc.update("delete from chain_scan_block where chain=? and scanner_name=? and block_height>?", chain, scannerName, height);
+    }
+
+    public record NativeBlock(ChainScanPoint point, String parentHash) { }
 }

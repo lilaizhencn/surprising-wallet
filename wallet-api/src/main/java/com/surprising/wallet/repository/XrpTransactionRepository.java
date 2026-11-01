@@ -35,11 +35,27 @@ public class XrpTransactionRepository {
                     ledger_index = coalesce(excluded.ledger_index, xrp_transaction.ledger_index),
                     sequence_number = coalesce(excluded.sequence_number, xrp_transaction.sequence_number),
                     confirmations = greatest(xrp_transaction.confirmations, excluded.confirmations),
-                    status = excluded.status, raw_payload = coalesce(excluded.raw_payload, xrp_transaction.raw_payload),
+                    status = case when xrp_transaction.status in ('CONFIRMED','FAILED') then xrp_transaction.status else excluded.status end,
+                    raw_payload = coalesce(xrp_transaction.raw_payload, excluded.raw_payload),
                     updated_at = excluded.updated_at
                 """, tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
                 tx.getIssuerAddress(), tx.getCurrencyCode(), tx.getAmount(), tx.getFeeDrops(), tx.getLedgerIndex(),
                 tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), now, now);
+    }
+
+    /** The selected signed binary is immutable across observations and recovery. */
+    public Optional<XrpTransactionRecord> findSigned(String hash) {
+        return jdbc.query("select * from xrp_transaction where chain='XRP' and tx_hash=? and raw_payload is not null",
+                (rs,n)->XrpTransactionRecord.builder().chain("XRP").txHash(rs.getString("tx_hash"))
+                        .fromAddress(rs.getString("from_address")).toAddress(rs.getString("to_address"))
+                        .assetSymbol(rs.getString("asset_symbol")).issuerAddress(rs.getString("issuer_address"))
+                        .currencyCode(rs.getString("currency_code")).amount(rs.getBigDecimal("amount"))
+                        .feeDrops(rs.getObject("fee_drops",Long.class)).sequenceNumber(rs.getObject("sequence_number",Long.class))
+                        .status(rs.getString("status")).rawPayload(rs.getString("raw_payload")).build(),hash).stream().findFirst();
+    }
+
+    public int markSubmitted(String hash) {
+        return jdbc.update("update xrp_transaction set status='SENT',updated_at=now() where chain='XRP' and tx_hash=? and status='PREPARED'",hash);
     }
 
     /** 查询 XRP 交易资产。 */
@@ -54,7 +70,7 @@ public class XrpTransactionRepository {
     public Optional<BigDecimal> findConfirmedFeeAtomic(String chain, String txHash) {
         List<BigDecimal> rows = jdbc.queryForList("""
                 select fee_drops from xrp_transaction
-                 where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                 where chain = ? and tx_hash = ? and status in ('CONFIRMED','FAILED') and ledger_index is not null
                  limit 1
                 """, BigDecimal.class, chain, txHash);
         return rows.stream().findFirst();

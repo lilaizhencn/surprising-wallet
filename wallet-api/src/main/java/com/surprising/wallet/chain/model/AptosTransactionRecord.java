@@ -37,6 +37,7 @@ public class AptosTransactionRecord {
     private BigDecimal amount;
     private Long gasUsed;
     private Long gasUnitPrice;
+    private Long feeOctas;
     private Long version;
     private Long sequenceNumber;
     private Integer confirmations;

@@ -1,604 +1,130 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.chain.model.TonTransactionRecord;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.AccountSequenceRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
-import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.LedgerBalanceRepository;
-import com.surprising.wallet.repository.TokenConfigRepository;
-import com.surprising.wallet.repository.TonTransactionRepository;
-import com.surprising.wallet.repository.WithdrawalOrderRepository;
-import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.service.WithdrawalClaimService;
-import com.surprising.wallet.service.WithdrawalSettlementService;
-import java.math.BigDecimal;
-import java.math.BigInteger;
+import com.surprising.wallet.model.mpc.TonSigningPayload;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.service.*;
+import com.surprising.wallet.service.TonSubmissionService.Operation;
+import com.surprising.wallet.service.TonSubmissionService.Kind;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Optional;
-import java.util.UUID;
-import lombok.NonNull;
+import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.ton.ton4j.address.Address;
-import org.ton.ton4j.cell.Cell;
-import org.ton.ton4j.smartcontract.SendMode;
-import org.ton.ton4j.smartcontract.token.ft.JettonWalletV2;
-import org.ton.ton4j.smartcontract.types.WalletV4R2Config;
-import org.ton.ton4j.smartcontract.utils.MsgUtils;
-import org.ton.ton4j.smartcontract.wallet.v4.WalletV4R2;
-import org.ton.ton4j.tlb.Message;
-import org.ton.ton4j.tlb.StateInit;
+import tools.jackson.databind.JsonNode;
 
-/**
- * TON 交易服务，负责构建、签名和发送 TON Wallet V4R2 外部消息。
- *
- * <p>基于 ton4j 库实现，支持：
- * <ul>
- *   <li>原生 TON 转账（WalletV4R2 internal message，支持 text comment）</li>
- *   <li>Jetton 代币转账（TEP-74 jetton_transfer，通过 Jetton Wallet 合约）</li>
- *   <li>钱包部署（prepareDeployMsg）</li>
- *   <li>通用合约调用（prepareContractCall，支持 StateInit 和自定义 body）</li>
- *   <li>提现流程（seqno 预留、余额冻结、签名广播、外部消息确认）</li>
- *   <li>归集流程（原生币和 Jetton 归集到热钱包）</li>
- * </ul>
- *
- * <p>每条消息设置 validUntil = 当前时间 + 15 分钟，使用 seqno 递增防止重放。
- * 消息通过 BOC（Bag of Cells）序列化后经由 {@link TonCenterClient#sendBoc} 广播。
- * 确认时通过查询外部消息哈希在交易历史中的出现来判断消息是否已被处理。
- *
- * @see TonCenterClient
- * @see TonKeyService
- * @see WalletV4R2
- */
+/** Public preparation and original-message recovery. Business writes use short submission transactions. */
 @Service
 @RequiredArgsConstructor
 public class TonTransactionService {
-
-    /** TON 链标识 */
-    private static final String CHAIN = "TON";
-
-    /** Jetton 转账 forward_ton 金额（nanoTON），用于通知接收方 */
-    private static final BigInteger JETTON_FORWARD_TON = BigInteger.valueOf(10_000_000L);
-
-    /** Jetton 转账附加的 TON Gas 费（nanoTON） */
-    private static final BigInteger JETTON_GAS_TON = BigInteger.valueOf(70_000_000L);
-
-    /** 消息有效期（秒），过期消息将被拒绝 */
-    private static final long MESSAGE_VALIDITY_SECONDS = 15 * 60L;
-
-    /** 确认扫描时的交易查询上限 */
-    private static final int CONFIRMATION_SCAN_LIMIT = 100;
-
-    /** TON Center RPC 客户端 */
     private final TonCenterClient rpc;
+    private final TonSubmissionService submissions;
+    private final ChainProfileRepository profiles;
+    private final TokenConfigRepository tokens;
+    private final WithdrawalOrderRepository orders;
+    private final CollectionRecordRepository collections;
+    private final WalletRuntimeConfigService runtime;
 
-    /** 密钥服务 */
-    private final TonKeyService keyService;
-    private final AccountSequenceRepository accountSequenceRepository;
-    private final TonTransactionRepository tonTransactionRepository;
-    private final WithdrawalOrderRepository withdrawalOrderRepository;
-    private final LedgerBalanceRepository ledgerBalanceRepository;
-    private final WithdrawalClaimService withdrawalClaimService;
-    private final ChainProfileRepository chainProfileRepository;
-    private final TokenConfigRepository tokenConfigRepository;
-    private final CollectionRecordRepository collectionRecordRepository;
-
-
-    private final WithdrawalSettlementService settlements;
-
-    /** 运行时任务开关服务。 */
-    @NonNull
-    private final WalletRuntimeConfigService runtimeConfigService;
-
-    /**
-     * 准备原生 TON 转账消息（通过派生索引）。
-     *
-     * @param derivationIndex 派生索引
-     * @param toAddress       接收方地址
-     * @param amountNano      转账金额（nanoTON）
-     * @param comment         可选文本备注
-     * @return 准备好的转账对象
-     */
-
-    public PreparedTransfer prepareNative(long derivationIndex, String toAddress,
-                                          BigInteger amountNano, String comment) {
-        return prepareNative(0L, 0, derivationIndex, toAddress, amountNano, comment);
+    public String send(Operation op, ChainAddressRecord source) {
+        runtime.requireTaskEnabled("TON", WalletRuntimeConfigService.TASK_WITHDRAW, "TON withdrawal");
+        if (op.kind() != Kind.WITHDRAWAL) throw new IllegalArgumentException("withdrawal operation required");
+        return transfer(op, source);
     }
-
-    /**
-     * 准备原生 TON 转账消息（通过地址记录）。
-     *
-     * @param from       发送方地址记录
-     * @param toAddress  接收方地址
-     * @param amountNano 转账金额（nanoTON）
-     * @param comment    可选文本备注
-     * @return 准备好的转账对象
-     */
-    public PreparedTransfer prepareNative(ChainAddressRecord from, String toAddress,
-                                          BigInteger amountNano, String comment) {
-        return prepareNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
-                toAddress, amountNano, comment);
+    public String collect(UUID tenant, String reference, ChainAddressRecord source) {
+        runtime.requireTaskEnabled("TON", WalletRuntimeConfigService.TASK_COLLECTION, "TON collection");
+        var previous = collections.findTxHash(tenant, "TON", reference); if (previous.isPresent()) return previous.get();
+        if (collections.claimSigningDurable(tenant, "TON", reference) != 1) throw new IllegalStateException("TON collection is claimed; recovery owns the intent");
+        var op = new Operation(tenant, reference, Kind.COLLECTION);
+        try { String hash = transfer(op, source); submissions.restoreSent(op, hash); return hash; }
+        catch (RuntimeException error) { submissions.unknown(op, error.getClass().getSimpleName()); throw error; }
     }
-
-    private PreparedTransfer prepareNative(long userId, int biz, long derivationIndex,
-                                           String toAddress, BigInteger amountNano, String comment) {
-        WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
-        String from = friendly(wallet.getAddress(), false);
-        long chainSeqno = rpc.seqno(from);
-        long seqno = accountSequenceRepository.reserve(CHAIN, from, chainSeqno);
-        WalletV4R2Config config = WalletV4R2Config.builder()
-                .walletId(TonKeyService.WALLET_V4R2_SUBWALLET_ID)
-                .seqno(seqno)
-                .validUntil(Instant.now().plusSeconds(MESSAGE_VALIDITY_SECONDS).getEpochSecond())
-                .bounce(false)
-                .destination(Address.of(toAddress))
-                .amount(amountNano)
-                .comment(comment)
-                .sendMode(SendMode.PAY_GAS_SEPARATELY)
-                .build();
-        return prepare(wallet, config, seqno);
-    }
-
-    public PreparedTransfer prepareJetton(long derivationIndex, String sourceJettonWallet,
-                                          String destinationOwner, BigInteger tokenAmount,
-                                          String responseAddress, String comment) {
-        return prepareJetton(0L, 0, derivationIndex, sourceJettonWallet,
-                destinationOwner, tokenAmount, responseAddress, comment);
-    }
-
-    /**
-     * 准备 Jetton 代币转账消息（通过地址记录）。
-     *
-     * @param from               发送方地址记录
-     * @param sourceJettonWallet 源 Jetton Wallet 地址
-     * @param destinationOwner   目标所有者地址
-     * @param tokenAmount        转账金额（原子单位）
-     * @param responseAddress    超额退款地址
-     * @param comment            可选文本备注
-     * @return 准备好的转账对象
-     */
-    public PreparedTransfer prepareJetton(ChainAddressRecord from, String sourceJettonWallet,
-                                          String destinationOwner, BigInteger tokenAmount,
-                                          String responseAddress, String comment) {
-        return prepareJetton(from.getUserId(), from.getBiz(), from.getAddressIndex(),
-                sourceJettonWallet, destinationOwner, tokenAmount, responseAddress, comment);
-    }
-
-    private PreparedTransfer prepareJetton(long userId, int biz, long derivationIndex, String sourceJettonWallet,
-                                           String destinationOwner, BigInteger tokenAmount,
-                                           String responseAddress, String comment) {
-        WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
-        String from = friendly(wallet.getAddress(), false);
-        long chainSeqno = rpc.seqno(from);
-        long seqno = accountSequenceRepository.reserve(CHAIN, from, chainSeqno);
-        Cell forwardPayload = comment == null || comment.isBlank()
-                ? null : MsgUtils.createTextMessageBody(comment);
-        Cell jettonBody = JettonWalletV2.createTransferBody(
-                System.nanoTime(), tokenAmount, Address.of(destinationOwner), Address.of(responseAddress),
-                null, JETTON_FORWARD_TON, forwardPayload);
-        WalletV4R2Config config = WalletV4R2Config.builder()
-                .walletId(TonKeyService.WALLET_V4R2_SUBWALLET_ID)
-                .seqno(seqno)
-                .validUntil(Instant.now().plusSeconds(MESSAGE_VALIDITY_SECONDS).getEpochSecond())
-                .bounce(true)
-                .destination(Address.of(sourceJettonWallet))
-                .amount(JETTON_GAS_TON)
-                .body(jettonBody)
-                .sendMode(SendMode.PAY_GAS_SEPARATELY)
-                .build();
-        return prepare(wallet, config, seqno);
-    }
-    public PreparedTransfer prepareWalletDeploy(long derivationIndex) {
-        return prepareWalletDeploy(keyService.wallet(derivationIndex));
-    }
-    public PreparedTransfer prepareWalletDeploy(ChainAddressRecord from) {
-        return prepareWalletDeploy(keyService.wallet(
-                from.getUserId(), from.getBiz(), from.getAddressIndex()));
-    }
-    private PreparedTransfer prepareWalletDeploy(WalletV4R2 wallet) {
-        Message message = wallet.prepareDeployMsg();
-        byte[] boc = message.toCell().toBoc(false);
-        return new PreparedTransfer(0, boc,
-                java.util.Base64.getEncoder().encodeToString(boc),
-                java.util.HexFormat.of().formatHex(message.toCell().hash()));
-    }
-
-    public PreparedTransfer prepareContractCall(long derivationIndex, String destination,
-                                                BigInteger amountNano, StateInit stateInit,
-                                                Cell body, boolean bounce) {
-        WalletV4R2 wallet = keyService.wallet(derivationIndex);
-        return prepareContractCall(wallet, destination, amountNano, stateInit, body, bounce);
-    }
-
-    public PreparedTransfer prepareContractCall(ChainAddressRecord from, String destination,
-                                                BigInteger amountNano, StateInit stateInit,
-                                                Cell body, boolean bounce) {
-        WalletV4R2 wallet = keyService.wallet(from.getUserId(), from.getBiz(), from.getAddressIndex());
-        return prepareContractCall(wallet, destination, amountNano, stateInit, body, bounce);
-    }
-
-    private PreparedTransfer prepareContractCall(WalletV4R2 wallet, String destination,
-                                                 BigInteger amountNano, StateInit stateInit,
-                                                 Cell body, boolean bounce) {
-        String from = friendly(wallet.getAddress(), false);
-        long chainSeqno = rpc.seqno(from);
-        long seqno = accountSequenceRepository.reserve(CHAIN, from, chainSeqno);
-        WalletV4R2Config config = WalletV4R2Config.builder()
-                .walletId(TonKeyService.WALLET_V4R2_SUBWALLET_ID)
-                .seqno(seqno)
-                .validUntil(Instant.now().plusSeconds(MESSAGE_VALIDITY_SECONDS).getEpochSecond())
-                .bounce(bounce)
-                .destination(Address.of(destination))
-                .amount(amountNano)
-                .stateInit(stateInit)
-                .body(body)
-                .sendMode(SendMode.PAY_GAS_SEPARATELY)
-                .build();
-        return prepare(wallet, config, seqno);
-    }
-    /**
-     * 广播准备好的 BOC 消息到 TON 网络。
-     *
-     * @param transfer 准备好的转账对象
-     * @return 消息哈希
-     */
-    public String broadcast(PreparedTransfer transfer) {
-        return rpc.sendBoc(transfer.boc());
-    }
-
-    /**
-     * 广播消息并记录交易到数据库。
-     *
-     * <p>广播失败时使用 messageHashHex 作为 fallback。
-     *
-     * @param transfer 准备好的转账对象
-     * @param from     发送方地址
-     * @param to       接收方地址
-     * @param symbol   资产符号
-     * @param master   Jetton Master 地址（原生币为 null）
-     * @param amount   交易金额
-     * @return 消息哈希
-     */
-    public String broadcastAndRecord(PreparedTransfer transfer, String from, String to,
-                                     String symbol, String master, BigDecimal amount) {
-        String hash = broadcast(transfer);
-        if (hash == null || hash.isBlank()) {
-            hash = transfer.messageHashHex();
+    private String transfer(Operation op, ChainAddressRecord source) {
+        TonSigningPayload draft = null;
+        if (submissions.intent(op).isEmpty()) {
+            var payment = submissions.payment(op); var profile = profiles.findAccountByChain("TON").orElseThrow();
+            String owner = MpcTonTransactionCodec.canonicalAddress(source.getOwnerAddress());
+            String master = null, sourceWallet = null, recipientWallet = null; int decimals = 9;
+            if (!"TON".equals(payment.symbol())) {
+                var token = tokens.findDefinition("TON", profile.getNetwork(), payment.symbol()).orElseThrow();
+                master = MpcTonTransactionCodec.canonicalAddress(token.getContractAddress()); decimals = token.getDecimals();
+                sourceWallet = rpc.jettonWallet(owner, master); recipientWallet = rpc.jettonWallet(payment.recipient(), master);
+                var data = rpc.jettonData(sourceWallet);
+                if (!owner.equals(data.owner()) || !master.equals(data.master())) throw new IllegalStateException("TON source Jetton getter differs from configured owner/master");
+                if (!"TON".equals(source.getAssetSymbol()) && !sourceWallet.equals(MpcTonTransactionCodec.canonicalAddress(source.getAddress())))
+                    throw new IllegalStateException("TON materialized source differs from configured master getter");
+            }
+            byte[] identity = identity(op); long queryId = master == null ? 0 : Math.max(1, ByteBuffer.wrap(identity).getLong() & Long.MAX_VALUE);
+            String memo = op.kind().name().toLowerCase(Locale.ROOT) + ":" + HexFormat.of().formatHex(identity);
+            var unsigned = new MpcTonTransactionCodec.Unsigned(profile.getNetwork(), owner, payment.recipient(),
+                    payment.amount().movePointRight(decimals).toBigIntegerExact(), master, sourceWallet, recipientWallet,
+                    rpc.seqno(owner), Instant.now().plusSeconds(600).getEpochSecond(), queryId, memo, submissions.publicKey(source));
+            draft = new TonSigningPayload(payment.symbol(), payment.amount(), payment.customerFee(), decimals, source.getAddress(), unsigned);
         }
-        long fee = master == null ? profile().getDefaultFee() : JETTON_GAS_TON.longValue();
-        record(hash, from, to, symbol, master, amount, fee, null, "SENT", transfer.bocBase64());
-        return hash;
+        var request = submissions.reserve(op, source, draft); submissions.sign(op, request.id());
+        var signed = submissions.commit(op, request.id()); return broadcast(op, signed, submissions.payload(request));
     }
-    /**
-     * 确认已发送的外部消息是否被链上处理。
-     *
-     * <p>如果未找到，自动重广播原始 BOC；如果找到但没有 out_msgs，抛出异常（消息被消耗但无转账）。
-     *
-     * @param messageHash   外部消息哈希
-     * @param senderAddress 发送方地址
-     * @return true 表示消息已成功处理
-     */
-    public boolean confirmSentMessage(String messageHash, String senderAddress) {
-        Optional<tools.jackson.databind.JsonNode> transaction = rpc.findExternalMessageTransaction(
-                senderAddress, messageHash, CONFIRMATION_SCAN_LIMIT);
-        if (transaction.isEmpty()) {
-            rebroadcast(messageHash);
-            return false;
-        }
-        if (!transaction.get().path("out_msgs").isArray()
-                || transaction.get().path("out_msgs").isEmpty()) {
-            throw new IllegalStateException("TON external message was processed without an outgoing transfer: "
-                    + messageHash);
-        }
-        tonTransactionRepository.markConfirmed(CHAIN, messageHash);
-        accountSequenceRepository.synchronize(CHAIN, senderAddress, rpc.seqno(senderAddress));
-        return true;
+    public boolean recover(Operation op) {
+        var request = submissions.intent(op); if (request.isEmpty()) return false;
+        submissions.sign(op, request.get().id()); var signed = submissions.commit(op, request.get().id());
+        String hash = broadcast(op, signed, submissions.payload(request.get())); submissions.restoreSent(op, hash); return true;
     }
-    private void rebroadcast(String messageHash) {
-        tonTransactionRepository.findRawPayload(CHAIN, messageHash).ifPresent(rawPayload -> {
-            try {
-                rpc.sendBoc(Base64.getDecoder().decode(rawPayload));
-            } catch (RuntimeException e) {
-                String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase(java.util.Locale.ROOT);
-                if (!message.contains("duplicate msg_seqno") && !message.contains("too old seqno")) {
-                    throw e;
+    public int releaseUnsigned(Operation op) { return submissions.releaseUnsigned(op); }
+    private String broadcast(Operation op, MpcTonTransactionCodec.Signed signed, TonSigningPayload payload) {
+        if (rpc.findExternalMessageTransaction(payload.unsigned().sender(), signed.messageHashHex(), 100).isEmpty()) {
+            if (Instant.now().getEpochSecond() >= payload.unsigned().validUntil()) throw new IllegalStateException("TON original message expired; reconciliation required");
+            String observed = rpc.sendBoc(Base64.getDecoder().decode(signed.bocBase64()));
+            if (!TonCenterClient.sameHash(observed, signed.messageHashHex())) throw new IllegalStateException("TON node returned a different selected message hash");
+        }
+        submissions.observed(op, signed.messageHashHex()); return signed.messageHashHex();
+    }
+    public boolean confirmWithdrawal(UUID tenant, String reference) { return confirm(new Operation(tenant, reference, Kind.WITHDRAWAL)); }
+    public boolean confirmCollection(UUID tenant, String reference) { return confirm(new Operation(tenant, reference, Kind.COLLECTION)); }
+    private boolean confirm(Operation op) {
+        var profile = profiles.findAccountByChain("TON").orElseThrow();
+        if (submissions.proof(op).isPresent()) return submissions.settle(op, null, masterSeqno(), profile.getWithdrawConfirmations());
+        var request = submissions.intent(op).orElseThrow(); var payment = submissions.payload(request).unsigned();
+        String hash = (op.kind() == Kind.WITHDRAWAL ? orders.findTxHash("TON", op.reference(), op.tenantId())
+                : collections.findTxHash(op.tenantId(), "TON", op.reference())).orElseThrow();
+        var ownerReceipt = rpc.findExternalMessageTransaction(payment.sender(), hash, 100); if (ownerReceipt.isEmpty()) return false;
+        var owner = TonExecutionReceipt.read(ownerReceipt.get(), payment.sender());
+        JsonNode sourceReceipt = null, recipientReceipt = null; var refunds = new ArrayList<JsonNode>();
+        if (!owner.outgoing().isEmpty()) {
+            if (owner.outgoing().size() != 1) throw new IllegalStateException("TON payment has unexpected owner messages");
+            var first = owner.outgoing().getFirst();
+            if (payment.jettonMaster() == null) {
+                var recipient = rpc.findIncomingMessageTransaction(payment.recipient(), first.hash(), 100); if (recipient.isEmpty()) return false;
+                recipientReceipt = recipient.get();
+            } else {
+                var source = rpc.findIncomingMessageTransaction(payment.sourceJettonWallet(), first.hash(), 100); if (source.isEmpty()) return false;
+                sourceReceipt = source.get(); var execution = TonExecutionReceipt.read(sourceReceipt, payment.sourceJettonWallet());
+                if(execution.transaction().getDescription() instanceof org.ton.ton4j.tlb.TransactionDescriptionOrdinary d && d.isAborted()) {
+                    if(execution.outgoing().size()!=1)return false;
+                    var refund=rpc.findIncomingMessageTransaction(payment.sender(),execution.outgoing().getFirst().hash(),100);if(refund.isEmpty())return false;
+                    return submissions.settle(op,new TonExecutionReceipt.Trace(ownerReceipt.get(),sourceReceipt,null,List.of(refund.get())),masterSeqno(),profile.getWithdrawConfirmations());
+                }
+                var transfer = execution.outgoing().stream().filter(m -> payment.recipientJettonWallet().equals(m.message().getInfo().getDestinationAddress())).toList();
+                if (transfer.size() != 1) return false;
+                var recipient = rpc.findIncomingMessageTransaction(payment.recipientJettonWallet(), transfer.getFirst().hash(), 100); if (recipient.isEmpty()) return false;
+                recipientReceipt = recipient.get();
+                for (var message : TonExecutionReceipt.read(recipientReceipt, payment.recipientJettonWallet()).outgoing()) {
+                    if (!payment.sender().equals(message.message().getInfo().getDestinationAddress())) continue;
+                    var excess = rpc.findIncomingMessageTransaction(payment.sender(), message.hash(), 100); if (excess.isEmpty()) return false;
+                    refunds.add(excess.get());
                 }
             }
-        });
+        }
+        return submissions.settle(op, new TonExecutionReceipt.Trace(ownerReceipt.get(), sourceReceipt, recipientReceipt, refunds),
+                masterSeqno(), profile.getWithdrawConfirmations());
     }
-
-    /**
-     * 执行 TON 原生币提现（冻结、签名、广播、状态追踪全流程）。
-     *
-     * @param tenantId  租户 ID
-     * @param orderNo   提现订单号
-     * @param userId    用户 ID
-     * @param from      源地址记录
-     * @param toAddress 目标地址
-     * @param amount    提现金额（TON）
-     * @param memo      可选备注
-     * @return 消息哈希
-     */
-    public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
-                                 String toAddress, BigDecimal amount, String memo) {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "ton withdrawNative");
-        Optional<String> existing = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        long feeNano = profile().getDefaultFee();
-        BigDecimal fee = displayAmount(feeNano, 9);
-        if (withdrawalOrderRepository.createForTenant(
-                tenantId,
-                orderNo,
-                userId,
-                CHAIN,
-                "TON",
-                from.getAddress(),
-                from.getAccountId(),
-                toAddress,
-                amount,
-                fee) == 0) {
-            return withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId)
-                    .orElseThrow(() -> new IllegalStateException("TON withdrawal already claimed"));
-        }
-        BigDecimal debit = amount.add(fee);
-        if (!ledgerBalanceRepository.freeze(CHAIN, "TON", from.getAccountId(), debit, tenantId)) {
-            withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FAILED", from.getAddress(), null, "insufficient TON ledger balance");
-            throw new IllegalStateException("insufficient TON ledger balance");
-        }
-        withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
-        try {
-            if (withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
-                throw new IllegalStateException("TON withdrawal is not signable: " + orderNo);
-            }
-            PreparedTransfer prepared = prepareNative(from, toAddress, atomicAmount(amount, 9), memo);
-            String hash = broadcast(prepared);
-            if (withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), hash) != 1) {
-                throw new IllegalStateException("TON withdrawal state changed before SENT: " + orderNo);
-            }
-            record(hash, from.getAddress(), toAddress, "TON", null, amount, feeNano,
-                    null, "SENT", prepared.bocBase64());
-            return hash;
-        } catch (RuntimeException e) {
-            withdrawalOrderRepository.markBroadcastUnknown(tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
-            throw e;
-        }
+    private long masterSeqno() {
+        long value = rpc.masterchainInfo().path("last").path("seqno").asLong();
+        if (value <= 0) throw new IllegalStateException("TON masterchain sequence is absent"); return value;
     }
-
-    /**
-     * 执行 Jetton 代币提现。
-     *
-     * @param tenantId         租户 ID
-     * @param orderNo          提现订单号
-     * @param userId           用户 ID
-     * @param from             源地址记录
-     * @param jettonMaster     Jetton Master 合约地址
-     * @param destinationOwner 目标所有者地址
-     * @param amount           提现金额（代币单位）
-     * @param memo             可选备注
-     * @return 消息哈希
-     */
-    public String withdrawJetton(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
-                                 String jettonMaster, String destinationOwner,
-                                 BigDecimal amount, String memo) {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "ton withdrawJetton");
-        Optional<String> existing = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
-                CHAIN,
-                configuredNetworkProfile.getNetwork(),
-                jettonMaster))
-                .orElseThrow(() -> new IllegalArgumentException("unconfigured Jetton " + jettonMaster));
-        if (withdrawalOrderRepository.createForTenant(
-                tenantId,
-                orderNo,
-                userId,
-                CHAIN,
-                token.getSymbol(),
-                from.getOwnerAddress(),
-                from.getAccountId(),
-                destinationOwner,
-                amount,
-                BigDecimal.ZERO) == 0) {
-            return withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId)
-                    .orElseThrow(() -> new IllegalStateException("Jetton withdrawal already claimed"));
-        }
-        if (!ledgerBalanceRepository.freeze(CHAIN, token.getSymbol(), from.getAccountId(), amount, tenantId)) {
-            withdrawalOrderRepository.updateStatus(
-                    tenantId,
-                    CHAIN,
-                    orderNo,
-                    "FAILED",
-                    from.getOwnerAddress(),
-                    null,
-                    "insufficient Jetton ledger balance");
-            throw new IllegalStateException("insufficient Jetton ledger balance");
-        }
-        withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
-        try {
-            if (withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getOwnerAddress()) != 1) {
-                throw new IllegalStateException("Jetton withdrawal is not signable: " + orderNo);
-            }
-            PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
-                    destinationOwner, atomicAmount(amount, token.getDecimals()), from.getOwnerAddress(), memo);
-            String hash = broadcast(prepared);
-            if (withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getOwnerAddress(), hash) != 1) {
-                throw new IllegalStateException("Jetton withdrawal state changed before SENT: " + orderNo);
-            }
-            record(hash, from.getAddress(), destinationOwner, token.getSymbol(), jettonMaster,
-                    amount, JETTON_GAS_TON.longValue(), null,
-                    "SENT", prepared.bocBase64());
-            return hash;
-        } catch (RuntimeException e) {
-            withdrawalOrderRepository.markBroadcastUnknown(tenantId, CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
-            throw e;
-        }
-    }
-
-    /** senderAccountId 只用于确认外部消息，扣款账户由结算用例读取订单。 */
-    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String senderAccountId) {
-        String hash = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
-        if (!confirmSentMessage(hash, senderAccountId)) {
-            return false;
-        }
-        if (settlements.confirm(tenantId, CHAIN, orderNo, hash)) {
-            tonTransactionRepository.markConfirmed(CHAIN, hash);
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 归集原生 TON 到热钱包。
-     *
-     * @param tenantId      租户 ID
-     * @param collectionNo  归集编号
-     * @param from          源地址记录
-     * @param hotAddress    热钱包地址
-     * @param amount        归集金额（TON）
-     * @param memo          可选备注
-     * @return 消息哈希
-     */
-    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
-                                String hotAddress, BigDecimal amount, String memo) {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "ton collectNative");
-        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        long feeNano = profile().getDefaultFee();
-        BigDecimal fee = displayAmount(feeNano, 9);
-        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
-                    .orElseThrow(() -> new IllegalStateException("TON collection is not retryable"));
-        }
-        try {
-            PreparedTransfer prepared = prepareNative(from, hotAddress, atomicAmount(amount, 9), memo);
-            String hash = broadcast(prepared);
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
-            record(hash, from.getAddress(), hotAddress, "TON", null, amount, feeNano,
-                    null, "SENT", prepared.bocBase64());
-            return hash;
-        } catch (RuntimeException e) {
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
-            throw e;
-        }
-    }
-
-    /**
-     * 归集 Jetton 代币到热钱包。
-     *
-     * @param tenantId        租户 ID
-     * @param collectionNo    归集编号
-     * @param from            源地址记录
-     * @param jettonMaster    Jetton Master 合约地址
-     * @param hotOwnerAddress 热钱包所有者地址
-     * @param amount          归集金额（代币单位）
-     * @param memo            可选备注
-     * @return 消息哈希
-     */
-    public String collectJetton(java.util.UUID tenantId, String collectionNo,
-                                ChainAddressRecord from, String jettonMaster,
-                                String hotOwnerAddress, BigDecimal amount, String memo) {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "ton collectJetton");
-        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
-                CHAIN,
-                configuredNetworkProfile.getNetwork(),
-                jettonMaster))
-                .orElseThrow(() -> new IllegalArgumentException("unconfigured Jetton " + jettonMaster));
-        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
-                    .orElseThrow(() -> new IllegalStateException("TON Jetton collection is not retryable"));
-        }
-        try {
-            PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
-                    hotOwnerAddress, atomicAmount(amount, token.getDecimals()), from.getOwnerAddress(), memo);
-            String hash = broadcast(prepared);
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
-            record(hash, from.getAddress(), hotOwnerAddress, token.getSymbol(), jettonMaster,
-                    amount, JETTON_GAS_TON.longValue(), null, "SENT", prepared.bocBase64());
-            return hash;
-        } catch (RuntimeException e) {
-            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
-            throw e;
-        }
-    }
-    /**
-     * 确认归集交易。
-     *
-     * @param tenantId      租户 ID
-     * @param collectionNo  归集编号
-     * @param senderAddress 发送方地址
-     * @return true 表示确认成功
-     */
-    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String senderAddress) {
-        String hash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
-        if (!confirmSentMessage(hash, senderAddress)) {
-            return false;
-        }
-        if (collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, hash) == 1) {
-            return true;
-        }
-        return false;
-    }
-    private PreparedTransfer prepare(WalletV4R2 wallet, WalletV4R2Config config, long seqno) {
-        Message message = wallet.prepareExternalMsg(config);
-        byte[] boc = message.toCell().toBoc(false);
-        return new PreparedTransfer(seqno, boc,
-                java.util.Base64.getEncoder().encodeToString(boc),
-                java.util.HexFormat.of().formatHex(message.toCell().hash()));
-    }
-    private AccountChainProfile profile() {
-        return chainProfileRepository.findAccountByChain(CHAIN)
-                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-    }
-    private static BigInteger atomicAmount(BigDecimal amount, int decimals) {
-        return amount.movePointRight(decimals).toBigIntegerExact();
-    }
-    private static BigDecimal displayAmount(long atomicAmount, int decimals) {
-        return BigDecimal.valueOf(atomicAmount).movePointLeft(decimals);
-    }
-
-    private void record(String hash, String from, String to, String symbol, String master,
-                        BigDecimal amount, long fee, BigInteger lt, String status, String rawPayload) {
-        tonTransactionRepository.upsert(TonTransactionRecord.builder()
-                .chain(CHAIN)
-                .txHash(hash)
-                .fromAddress(from)
-                .toAddress(to)
-                .assetSymbol(symbol)
-                .jettonMaster(master)
-                .amount(amount)
-                .feeNano(fee)
-                .logicalTime(lt)
-                .confirmations(0)
-                .status(status)
-                .rawPayload(rawPayload)
-                .build());
-    }
-    private String friendly(Address address, boolean bounceable) {
-        boolean testnet = profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
-        return address.toString(true, true, bounceable, testnet);
-    }
-    /**
-     * 准备好的 TON 转账对象。
-     *
-     * @param seqno           使用的 seqno
-     * @param boc             BOC 字节数组
-     * @param bocBase64       BOC 的 Base64 编码（用于广播）
-     * @param messageHashHex  外部消息哈希（Hex 格式，用于确认追踪）
-     */
-    public record PreparedTransfer(long seqno, byte[] boc, String bocBase64, String messageHashHex) {
+    private static byte[] identity(Operation op) {
+        try { return MessageDigest.getInstance("SHA-256").digest((op.tenantId() + ":" + op.kind() + ":" + op.reference()).getBytes(StandardCharsets.UTF_8)); }
+        catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
 }

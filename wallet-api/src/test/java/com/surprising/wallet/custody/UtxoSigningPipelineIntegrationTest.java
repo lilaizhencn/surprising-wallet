@@ -4,22 +4,13 @@ import com.surprising.wallet.chain.BitcoinLikeSettlementService;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.chain.model.UtxoSigningTransaction;
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.common.queue.*;
 import com.surprising.wallet.common.signing.*;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.*;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import com.surprising.wallet.service.*;
-import com.surprising.wallet.sig.first.FirstSignerRegistry;
-import com.surprising.wallet.sig.first.config.PubKeyConfig;
-import com.surprising.wallet.sig.first.service.*;
-import com.surprising.wallet.sig.second.SecondSignerRegistry;
-import com.surprising.wallet.sig.second.Sig2KeyDerivation;
-import com.surprising.wallet.sig.second.impl.*;
-import com.surprising.wallet.sig.second.service.SecondSigningService;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.crypto.ECKey;
@@ -46,7 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-/** Actual PGMQ stages and two independent signing keys, with only the chain RPC mocked. */
+/** Actual PGMQ/MPC metadata and ledger; native crypto is an explicit test-only substitute. */
 @EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
 class UtxoSigningPipelineIntegrationTest {
     private static final UUID TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -63,8 +54,8 @@ class UtxoSigningPipelineIntegrationTest {
     private UtxoSigningSubmissionService submissions;
     private UtxoBroadcastService broadcasts;
     private BitcoinLikeSettlementService settlement;
-    private FirstSigningService first;
-    private SecondSigningService second;
+    private UtxoMpcSigningService mpc;
+    private com.surprising.wallet.testutil.MpcSigningTestSupport fixture;
     private WithdrawalQueueService done;
     private RbfBumpService rbf;
 
@@ -80,7 +71,10 @@ class UtxoSigningPipelineIntegrationTest {
             jdbc.execute("truncate pgmq.q_" + stage.queueName() + ", pgmq.a_" + stage.queueName()
                     + ", pgmq.q_" + stage.queueName() + "_dead, pgmq.a_" + stage.queueName() + "_dead");
         }
-        var manager = new DataSourceTransactionManager(ds);
+        jdbc.update("update chain_profile set enabled=false where chain in ('BTC','LTC','DOGE','BCH')");
+        jdbc.update("update chain_profile set enabled=true where network='regtest' and chain in ('BTC','LTC','DOGE','BCH')");
+        fixture = new com.surprising.wallet.testutil.MpcSigningTestSupport(jdbc);
+        var manager = fixture.manager;
         queue = new PgmqClient(jdbc);
         var worker = new QueueWorker(queue, manager);
         signing = new ChainSigningTransactionRepository(jdbc, json);
@@ -92,6 +86,11 @@ class UtxoSigningPipelineIntegrationTest {
             UtxoSignedTransaction signed = call.getArgument(1);
             var tx = Transaction.read(ByteBuffer.wrap(HexFormat.of().parseHex(signed.transactionHex())));
             assertEquals(signed.txId(), tx.getTxId().toString());
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive(), "chain RPC must not hold the processing transaction");
+            var owner = signing.listPendingConfirmation(call.<com.surprising.wallet.common.chain.AssetRuntimeMetadata>getArgument(0).chain()).stream()
+                    .filter(row -> signed.txId().equals(row.txId())).findFirst().orElseThrow();
+            assertEquals(signed,owner.signed());
+            for(var payment:owner.request().payments()) assertEquals(signed.txId(),orders.find(owner.request().asset().chain(),payment.reference(),TENANT).orElseThrow().getTxHash());
             return signed.txId();
         });
         var switches = mock(WalletRuntimeConfigService.class);
@@ -117,6 +116,12 @@ class UtxoSigningPipelineIntegrationTest {
         context.registerBean(QueuedUtxoWithdrawalService.class, () -> mock(QueuedUtxoWithdrawalService.class));
         context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(BitcoinLikeSettlementService.class);
+        context.registerBean(MpcSigningService.class, () -> fixture.signing);
+        context.registerBean(com.surprising.wallet.chain.signing.MpcNodes.class, () -> fixture.nodes);
+        context.registerBean(WalletMpcSignRequestRepository.class, () -> new WalletMpcSignRequestRepository(jdbc));
+        context.registerBean(ChainAddressRepository.class, () -> new ChainAddressRepository(jdbc));
+        context.registerBean(ChainProfileRepository.class, () -> new ChainProfileRepository(jdbc));
+        context.registerBean(UtxoMpcSigningService.class);
         context.registerBean(UtxoBroadcastService.class);
         context.registerBean(UtxoSigningSubmissionService.class);
         context.registerBean(WithdrawalQueueService.class);
@@ -127,17 +132,7 @@ class UtxoSigningPipelineIntegrationTest {
         settlement = context.getBean(BitcoinLikeSettlementService.class);
         done = context.getBean(WithdrawalQueueService.class);
         rbf = context.getBean(RbfBumpService.class);
-        var firstKeys = WalletKeyMaterialProvider.forSig1(seed(0x11),
-                Bip32Node.getMasterKey(bytes(0x22)).pubSerialize(0, false),
-                Bip32Node.getMasterKey(bytes(0x33)).pubSerialize(0, false));
-        var publicKeys = new PubKeyConfig(firstKeys);
-        var secondKeys = new Sig2KeyDerivation(WalletKeyMaterialProvider.forSig2(seed(0x22)));
-        first = new FirstSigningService(worker, json, new FirstSignerRegistry(List.of(
-                new BtcFirstSignService(publicKeys, firstKeys), new LtcFirstSignService(publicKeys, firstKeys),
-                new BchFirstSignService(publicKeys, firstKeys), new DogeFirstSignService(publicKeys, firstKeys))));
-        second = new SecondSigningService(worker, new SecondSignerRegistry(List.of(
-                new BtcSecondSignService(secondKeys), new LtcSecondSignService(secondKeys),
-                new BchSecondSignService(secondKeys), new DogeSecondSignService(secondKeys))), json);
+        mpc = context.getBean(UtxoMpcSigningService.class);
     }
 
     @AfterEach void close() { if (context != null) context.close(); }
@@ -173,28 +168,72 @@ class UtxoSigningPipelineIntegrationTest {
         assertEquals("BROADCAST_UNKNOWN", orderStatus("BTC"));
         assertEquals(result.transaction().txId(), current(transaction).txId());
         assertEquals(1, signing.listPendingConfirmation("BTC").size());
-        broadcasts.apply(UtxoSigningResult.failure(new UtxoSigningTask(transaction.id(), transaction.request()), "late failure"));
+        assertThrows(IllegalStateException.class, () -> applyFailure(UtxoSigningResult.failure(new UtxoSigningTask(transaction.id(), transaction.request()), "late failure")));
         assertEquals("LOCKED", inputStatus("BTC"));
         assertTrue(balances.find(TENANT, "BTC", "BTC", account("BTC")).orElseThrow().getLockedBalance().signum() > 0);
         settlement.settleConfirmed("BTC", transaction.id(), result.transaction().txId());
         assertConfirmed(transaction, result.transaction().txId());
     }
 
-    @Test void firstSigningFailureReleasesOnlyTheUnbroadcastIntent() {
-        var transaction = prepare("BTC", true);
-        var result = sign(transaction);
-        assertFalse(result.successful());
+    @Test void unknownBroadcastRetriesOnlyTheCommittedBytesAndBindsHashBeforeRpc() {
+        var original=prepare("BTC",false);
+        var result=sign(original);
+        var raw=new ArrayList<String>();
+        doAnswer(call->{
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            UtxoSignedTransaction signed=call.getArgument(1);
+            assertEquals(signed,current(original).signed());
+            assertEquals(signed.txId(),orders.find("BTC","WD-PIPELINE",TENANT).orElseThrow().getTxHash());
+            raw.add(signed.transactionHex());
+            return raw.size()==1 ? "":signed.txId();
+        }).when(runtime).broadcastSignedTransaction(any(),any());
         done.broadcast();
-        assertEquals(Constants.DELETE, current(transaction).status());
-        assertEquals("FAILED", orderStatus("BTC"));
-        assertEquals("AVAILABLE", inputStatus("BTC"));
-        var balance = balances.find(TENANT, "BTC", "BTC", account("BTC")).orElseThrow();
-        assertEquals(0, balance.getLockedBalance().signum());
-        assertEquals(0, BigDecimal.ONE.compareTo(balance.getAvailableBalance()));
+        assertEquals("BROADCAST_UNKNOWN",orderStatus("BTC"));
+        assertEquals(1,queueCount("q_wallet_sign_done"));
+        assertEquals(0,queueCount("a_wallet_sign_done"));
+        assertEquals("LOCKED",inputStatus("BTC"));
+        jdbc.execute("update pgmq.q_wallet_sign_done set vt=now()-interval '1 second'");
+        done.broadcast();
+        assertEquals(List.of(result.transaction().transactionHex(),result.transaction().transactionHex()),raw);
+        assertEquals("SENT",orderStatus("BTC"));
+        assertEquals(0,queueCount("q_wallet_sign_done"));
+        assertEquals(1,queueCount("a_wallet_sign_done"));
+        assertEquals(1,queueCount("q_wallet_withdraw_event"));
+    }
+
+    @Test void activeBroadcastLeaseCannotDiscardTheOnlyRecoveryMessage() {
+        var original=prepare("BTC",false);
+        sign(original);
+        var message=queue.read(WalletQueue.SIGN_DONE,300,1).getFirst();
+        var result=json.readValue(message.body(),UtxoSigningResult.class);
+        assertNotNull(broadcasts.prepare(result,message));
+        jdbc.update("update chain_signing_transaction set broadcast_owner='other-process',broadcast_lease_until=now()+interval '1 minute' where id=?",original.id());
+        jdbc.execute("update pgmq.q_wallet_sign_done set vt=now()-interval '1 second'");
+        done.broadcast();
+        verifyNoInteractions(runtime);
+        assertEquals(1,queueCount("q_wallet_sign_done"));
+        assertEquals(0,queueCount("a_wallet_sign_done"));
+        jdbc.update("update chain_signing_transaction set broadcast_lease_until=now()-interval '1 second' where id=?",original.id());
+        jdbc.execute("update pgmq.q_wallet_sign_done set vt=now()-interval '1 second'");
+        done.broadcast();
+        assertEquals("SENT",orderStatus("BTC"));
+        assertEquals(0,queueCount("q_wallet_sign_done"));
+        assertEquals(1,queueCount("a_wallet_sign_done"));
+        verify(runtime,times(1)).broadcastSignedTransaction(any(),any());
+    }
+
+    @Test void invalidDustIntentCannotCreateAnyMpcRequestOrQueueReceipt() {
+        var original = prepare("BTC", true);
+        assertThrows(IllegalArgumentException.class, () -> submissions.enqueue(TENANT,"BTC",original.id(),original.request().requestId()));
+        assertEquals(0, jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        assertEquals(0, queueCount("q_wallet_mpc_sign"));
+        assertNull(current(original).enqueuedRequestId());
+        assertEquals("SIGNING", orderStatus("BTC"));
+        assertEquals("LOCKED", inputStatus("BTC"));
         verifyNoInteractions(runtime);
     }
 
-    @Test void eventQueueFailureRollsBackBusinessStateAndRetriesTheSameSignedTransaction() {
+    @Test void eventQueueFailureRetainsCommittedRawAndHashWhileRollingBackCompletion() {
         var transaction = prepare("BTC", false);
         var result = sign(transaction);
         jdbc.execute("alter table pgmq.q_wallet_withdraw_event rename to q_wallet_withdraw_event_unavailable");
@@ -204,7 +243,8 @@ class UtxoSigningPipelineIntegrationTest {
             jdbc.execute("alter table pgmq.q_wallet_withdraw_event_unavailable rename to q_wallet_withdraw_event");
         }
         assertEquals(Constants.SIGNING, current(transaction).status());
-        assertNull(current(transaction).signed());
+        assertEquals(result.transaction(), current(transaction).signed());
+        assertEquals(result.transaction().txId(), orders.find("BTC","WD-PIPELINE",TENANT).orElseThrow().getTxHash());
         assertEquals("SIGNING", orderStatus("BTC"));
         assertEquals("LOCKED", inputStatus("BTC"));
         assertEquals(1, queueCount("q_wallet_sign_done"));
@@ -218,6 +258,51 @@ class UtxoSigningPipelineIntegrationTest {
         assertEquals(0, queueCount("q_wallet_sign_done"));
         settlement.settleConfirmed("BTC", transaction.id(), result.transaction().txId());
         assertConfirmed(transaction, result.transaction().txId());
+    }
+
+    @Test void confirmingObservedDuringRpcCannotBeRegressedByAnUnknownOrSentReply() {
+        var original=prepare("BTC",false);
+        var result=sign(original);
+        doAnswer(call->{
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            settlement.markConfirming("BTC",original.id(),result.transaction().txId());
+            return "";
+        }).when(runtime).broadcastSignedTransaction(any(),any());
+        done.broadcast();
+        assertEquals("CONFIRMING",orderStatus("BTC"));
+        assertEquals(1,queueCount("q_wallet_sign_done"));
+        assertEquals(0,queueCount("q_wallet_withdraw_event"));
+        doReturn(result.transaction().txId()).when(runtime).broadcastSignedTransaction(any(),any());
+        jdbc.execute("update pgmq.q_wallet_sign_done set vt=now()-interval '1 second'");
+        done.broadcast();
+        assertEquals("CONFIRMING",orderStatus("BTC"));
+        assertEquals(0,queueCount("q_wallet_sign_done"));
+        assertEquals(0,queueCount("q_wallet_withdraw_event"));
+        settlement.settleConfirmed("BTC",original.id(),result.transaction().txId());
+        assertConfirmed(original,result.transaction().txId());
+    }
+
+    @Test void businessHashBindingFailureRollsBackTheRawReceiptBeforeAnyRpc() {
+        var original=prepare("BTC",false);
+        sign(original);
+        jdbc.execute("create function wallet_test_reject_utxo_hash() returns trigger language plpgsql as $$ begin raise exception 'injected UTXO hash failure'; end $$");
+        jdbc.execute("create trigger wallet_test_reject_utxo_hash before update of tx_hash on withdrawal_order for each row execute function wallet_test_reject_utxo_hash()");
+        try {done.broadcast();}
+        finally {
+            jdbc.execute("drop trigger wallet_test_reject_utxo_hash on withdrawal_order");
+            jdbc.execute("drop function wallet_test_reject_utxo_hash()");
+        }
+        assertNull(current(original).signed());
+        assertNull(orders.find("BTC","WD-PIPELINE",TENANT).orElseThrow().getTxHash());
+        assertEquals("SIGNING",orderStatus("BTC"));
+        assertEquals("LOCKED",inputStatus("BTC"));
+        assertEquals(1,queueCount("q_wallet_sign_done"));
+        assertEquals(0,queueCount("a_wallet_sign_done"));
+        verifyNoInteractions(runtime);
+        jdbc.execute("update pgmq.q_wallet_sign_done set vt=now()-interval '1 second'");
+        done.broadcast();
+        assertEquals("SENT",orderStatus("BTC"));
+        verify(runtime,times(1)).broadcastSignedTransaction(any(),any());
     }
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
@@ -240,7 +325,7 @@ class UtxoSigningPipelineIntegrationTest {
         assertConfirmed(transaction, original.transaction().txId());
         if (!broadcastReplacement) {
             var obsolete = new UtxoSigningTask(transaction.id(), replacement.request());
-            broadcasts.apply(UtxoSigningResult.failure(obsolete, "obsolete failure"));
+            applyFailure(UtxoSigningResult.failure(obsolete, "obsolete failure"));
             assertConfirmed(transaction, original.transaction().txId());
         }
     }
@@ -275,16 +360,16 @@ class UtxoSigningPipelineIntegrationTest {
         assertThrows(DataAccessException.class, () -> signing.create(foreign, "FOREIGN"));
     }
 
-    @Test void unsignedFailureReleasesPrincipalAndItsRefundProofExactlyOnce() {
+    @Test void admittedSigningErrorCannotReleaseInputsOrPrincipal() {
         var original=prepare("BTC",false);
+        submissions.enqueue(TENANT,"BTC",original.id(),original.request().requestId());
         var failure=UtxoSigningResult.failure(new UtxoSigningTask(original.id(),original.request()),"synthetic unsigned rejection");
-        broadcasts.apply(failure);
-        broadcasts.apply(failure);
-        assertEquals("FAILED",orderStatus("BTC"));
-        assertTrue(jdbc.queryForObject("select funds_released from withdrawal_order where tenant_id=? and order_no='WD-PIPELINE'",Boolean.class,TENANT));
+        assertThrows(IllegalStateException.class,()->applyFailure(failure));
+        assertEquals("SIGNING",orderStatus("BTC"));
+        assertFalse(jdbc.queryForObject("select funds_released from withdrawal_order where tenant_id=? and order_no='WD-PIPELINE'",Boolean.class,TENANT));
+        assertEquals("LOCKED",inputStatus("BTC"));
         var balance=balances.find(TENANT,"BTC","BTC",account("BTC")).orElseThrow();
-        assertEquals(0,balance.getLockedBalance().signum());
-        assertEquals(0,BigDecimal.ONE.compareTo(balance.getAvailableBalance()));
+        assertTrue(balance.getLockedBalance().signum()>0);
         verifyNoInteractions(runtime);
     }
 
@@ -292,41 +377,89 @@ class UtxoSigningPipelineIntegrationTest {
         var original=prepare("BTC",false);
         jdbc.update("update withdrawal_order set debit_account_id=null where tenant_id=? and order_no='WD-PIPELINE'",TENANT);
         var failure=UtxoSigningResult.failure(new UtxoSigningTask(original.id(),original.request()),"synthetic unsigned rejection");
-        assertThrows(IllegalStateException.class,()->broadcasts.apply(failure));
+        assertThrows(IllegalStateException.class,()->applyFailure(failure));
         assertEquals("SIGNING",orderStatus("BTC"));
         assertFalse(jdbc.queryForObject("select funds_released from withdrawal_order where tenant_id=? and order_no='WD-PIPELINE'",Boolean.class,TENANT));
         assertTrue(balances.find(TENANT,"BTC","BTC",account("BTC")).orElseThrow().getLockedBalance().signum()>0);
         assertEquals("LOCKED",inputStatus("BTC"));
     }
 
+    @Test void pendingNativeResultRetriesTheSameInputIntentWithoutReleasingPrincipal() {
+        var original=prepare("BTC",false);
+        submissions.enqueue(TENANT,"BTC",original.id(),original.request().requestId());
+        UUID id=jdbc.queryForObject("select id from wallet_mpc_sign_request",UUID.class);
+        fixture.signingPending.set(true);
+        mpc.process();
+        assertEquals(1,queueCount("q_wallet_mpc_sign"));
+        assertEquals(0,queueCount("q_wallet_sign_done"));
+        assertEquals("LOCKED",inputStatus("BTC"));
+        assertTrue(balances.find(TENANT,"BTC","BTC",account("BTC")).orElseThrow().getLockedBalance().signum()>0);
+        fixture.signingPending.set(false);
+        jdbc.execute("update pgmq.q_wallet_mpc_sign set vt=now()-interval '1 second'");
+        mpc.process();
+        assertEquals(id,jdbc.queryForObject("select id from wallet_mpc_sign_request",UUID.class));
+        assertEquals(1,jdbc.queryForObject("select count(*) from wallet_mpc_sign_attempt",Integer.class));
+        assertEquals(0,queueCount("q_wallet_mpc_sign"));
+        assertEquals(1,queueCount("q_wallet_sign_done"));
+        done.broadcast();
+        assertEquals("SENT",orderStatus("BTC"));
+    }
+
+    @Test void staleClaimCannotPublishItsCompletedRemoteResultAndNewClaimReusesTheSignature() {
+        var original=prepare("BTC",false);
+        submissions.enqueue(TENANT,"BTC",original.id(),original.request().requestId());
+        fixture.beforeSignature=()->{
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            jdbc.execute("update pgmq.q_wallet_mpc_sign set vt=now()-interval '1 second'");
+            assertEquals(2,queue.read(WalletQueue.MPC_SIGN,300,1).getFirst().reads());
+            fixture.beforeSignature=()->{ };
+        };
+        mpc.process();
+        assertEquals("COMPLETED",jdbc.queryForObject("select state from wallet_mpc_sign_request",String.class));
+        assertEquals(1,queueCount("q_wallet_mpc_sign"));
+        assertEquals(0,queueCount("q_wallet_sign_done"));
+        jdbc.execute("update pgmq.q_wallet_mpc_sign set vt=now()-interval '1 second'");
+        mpc.process();
+        assertEquals(1,queueCount("q_wallet_sign_done"));
+        assertEquals(1,jdbc.queryForObject("select count(*) from wallet_mpc_sign_attempt",Integer.class));
+        done.broadcast();
+        assertEquals("SENT",orderStatus("BTC"));
+    }
+
+    private void applyFailure(UtxoSigningResult result) {
+        long messageId=queue.send(WalletQueue.SIGN_DONE,JacksonJson.writeValue(json,result),QueueTenant.headers(result.tenantId()));
+        var claim=queue.read(WalletQueue.SIGN_DONE,300,100).stream().filter(message->message.id()==messageId).findFirst().orElseThrow();
+        assertNull(broadcasts.prepare(result,claim));
+    }
+
     private UtxoSigningTransaction prepare(String chain, boolean dustOutput) {
         int coinType = switch (chain) { case "BTC" -> 0; case "LTC" -> 2; case "DOGE" -> 3; default -> 145; };
-        var asset = new UtxoSigningRequest.Asset(chain, BitcoinLikeNetwork.REGTEST, 1, 8, coinType);
+        var profile = new ChainProfileRepository(jdbc).findAccountByChain(chain).orElseThrow();
+        var asset = new UtxoSigningRequest.Asset(chain, BitcoinLikeNetwork.REGTEST, profile.getRuntimeCurrencyId(), 8, coinType);
+        var source = fixture.address(jdbc, TENANT, com.surprising.wallet.common.chain.ChainType.valueOf(chain), 100, 0, "HOT");
         String recipient = LegacyAddress.fromKey(asset.network().parameters(chain), ECKey.fromPrivate(BigInteger.valueOf(5))).toBase58();
         var input = new BigDecimal(chain.equals("DOGE") ? "10" : "1");
         var amount = new BigDecimal(dustOutput ? "0.00000001" : chain.equals("DOGE") ? "5" : "0.005");
         var fee = new BigDecimal("0.001");
         var request = new UtxoSigningRequest(TENANT, UUID.randomUUID(), asset, UtxoSigningRequest.Operation.WITHDRAWAL,
-                null, List.of(new UtxoSigningRequest.Input(INPUT, 0, "source", input, new UtxoSigningRequest.Key(100, 0, 0, null))),
-                List.of(new UtxoSigningRequest.Payment("WD-PIPELINE", 100, recipient, amount, fee)), recipient,
-                chain.equals("DOGE") ? DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE : 10, 546);
-        assertTrue(orders.createForTenant(TENANT, "WD-PIPELINE", 100, chain, chain, "source", account(chain), recipient, amount, fee) > 0L);
-        assertEquals(1, orders.updateStatus(TENANT, chain, "WD-PIPELINE", "SIGNING", "source", null, null));
+                null, List.of(new UtxoSigningRequest.Input(INPUT, 0, source.getAddress(), input, new UtxoSigningRequest.Key(100, source.getBiz(), 0, null))),
+                List.of(new UtxoSigningRequest.Payment("WD-PIPELINE", 100, recipient, amount, fee)), source.getAddress(),
+                chain.equals("DOGE") ? DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE : 10, profile.getDustThreshold());
+        assertTrue(orders.createForTenant(TENANT, "WD-PIPELINE", 100, chain, chain, source.getAddress(), account(chain), recipient, amount, fee) > 0L);
+        assertEquals(1, orders.updateStatus(TENANT, chain, "WD-PIPELINE", "SIGNING", source.getAddress(), null, null));
         jdbc.update("insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance, total_balance) values (?, ?, ?, ?, ?, ?)",
                 TENANT, chain, chain, account(chain), input, input);
         assertTrue(balances.freeze(chain, chain, account(chain), amount.add(fee), TENANT));
         var transaction = signing.create(request, "WD-PIPELINE");
-        utxos.upsert(chain, chain, INPUT, 0, "source", input, 1, "block", 6, true);
+        utxos.upsert(chain, chain, INPUT, 0, source.getAddress(), input, 1, "block", 6, true);
         assertEquals(1, utxos.lock(chain, INPUT, 0, Integer.toString(transaction.id())));
         return transaction;
     }
 
     private UtxoSigningResult sign(UtxoSigningTransaction transaction) {
         submissions.enqueue(TENANT, transaction.request().asset().chain(), transaction.id(), transaction.request().requestId());
-        first.process();
-        second.process();
-        assertEquals(0, queueCount("q_wallet_sign_first"));
-        assertEquals(0, queueCount("q_wallet_sign_second"));
+        mpc.process();
+        assertEquals(0, queueCount("q_wallet_mpc_sign"));
         assertEquals(1, queueCount("q_wallet_sign_done"));
         return json.readValue(jdbc.queryForObject("select message::text from pgmq.q_wallet_sign_done", String.class), UtxoSigningResult.class);
     }

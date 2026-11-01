@@ -3,7 +3,7 @@ package com.surprising.wallet.custody;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.chain.model.TokenConfiguration;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.WalletConfigOverviewService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
@@ -113,12 +113,13 @@ class WalletConfigOverviewServiceTest {
             var tokenRows = mock(TokenConfigRepository.class);
             var assetRows = mock(ChainAssetRepository.class);
             var rpcRows = mock(ChainRpcNodeRepository.class);
-            var keys = mock(WalletKeyMaterialProvider.class);
+            var keys = mock(MpcNodes.class);
             when(profileRows.listAll()).thenAnswer(ignored -> List.copyOf(profiles));
             when(tokenRows.listAll()).thenAnswer(ignored -> List.copyOf(tokens));
             when(assetRows.listNonNativeOverview()).thenAnswer(ignored -> List.copyOf(assets));
             when(rpcRows.listOverview()).thenAnswer(ignored -> List.copyOf(nodes));
-            when(keys.hasApiKeyMaterial()).thenReturn(true);
+            when(keys.parties()).thenReturn(List.of("one", "two", "three"));
+            when(keys.clients()).thenReturn(List.of(mock(com.surprising.wallet.common.signing.MpcClient.class), mock(com.surprising.wallet.common.signing.MpcClient.class), mock(com.surprising.wallet.common.signing.MpcClient.class)));
             return new WalletConfigOverviewService(settings, profileRows, tokenRows, assetRows, rpcRows, audits,
                     keys, environment, new WalletRuntimeConfigService(profileRows, settings));
         }

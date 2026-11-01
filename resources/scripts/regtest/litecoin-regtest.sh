@@ -64,12 +64,19 @@ init_funder() {
       '.[] | select(. == $wallet)' >/dev/null; then
     cli loadwallet "${WALLET}" >/dev/null
   fi
-  local height address blocks
+  local height address blocks mweb_address
   height=$(cli getblockcount)
-  if (( height < 101 )); then
+  # Core's first MWEB block needs a peg-in, even on regtest (upstream issue #807).
+  # Initialize it before long signing matrices cross activation height 432.
+  if (( height < 432 )); then
     address=$(wallet_cli getnewaddress)
-    blocks=$((101 - height))
-    cli generatetoaddress "${blocks}" "${address}" >/dev/null
+    blocks=$((431 - height))
+    if (( blocks > 0 )); then
+      cli generatetoaddress "${blocks}" "${address}" >/dev/null
+    fi
+    mweb_address=$(wallet_cli getnewaddress mpc-regtest-bootstrap mweb)
+    wallet_cli sendtoaddress "${mweb_address}" 1 >/dev/null
+    cli generatetoaddress 1 "${address}" >/dev/null
   fi
   wallet_cli getwalletinfo
 }

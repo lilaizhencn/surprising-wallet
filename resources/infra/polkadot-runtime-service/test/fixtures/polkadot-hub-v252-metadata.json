@@ -1,0 +1,314 @@
+{
+  "extrinsicMetadata": {
+    "versions": "0x0405",
+    "addressType": 0,
+    "callType": 8,
+    "signatureType": 317,
+    "transactionExtensionsByVersion": {
+      "0": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "1": [
+        13,
+        14,
+        0,
+        15,
+        16,
+        17,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    "transactionExtensions": [
+      {
+        "identifier": "AuthorizeCall",
+        "type": 491,
+        "implicit": 4
+      },
+      {
+        "identifier": "CheckNonZeroSender",
+        "type": 492,
+        "implicit": 4
+      },
+      {
+        "identifier": "CheckSpecVersion",
+        "type": 493,
+        "implicit": 14
+      },
+      {
+        "identifier": "CheckTxVersion",
+        "type": 494,
+        "implicit": 14
+      },
+      {
+        "identifier": "CheckGenesis",
+        "type": 495,
+        "implicit": 16
+      },
+      {
+        "identifier": "CheckMortality",
+        "type": 496,
+        "implicit": 16
+      },
+      {
+        "identifier": "CheckNonce",
+        "type": 498,
+        "implicit": 4
+      },
+      {
+        "identifier": "CheckWeight",
+        "type": 499,
+        "implicit": 4
+      },
+      {
+        "identifier": "ChargeAssetTxPayment",
+        "type": 500,
+        "implicit": 4
+      },
+      {
+        "identifier": "PrevalidateAttests",
+        "type": 501,
+        "implicit": 4
+      },
+      {
+        "identifier": "CheckMetadataHash",
+        "type": 502,
+        "implicit": 463
+      },
+      {
+        "identifier": "EthSetOrigin",
+        "type": 504,
+        "implicit": 4
+      },
+      {
+        "identifier": "StorageWeightReclaim",
+        "type": 4,
+        "implicit": 4
+      },
+      {
+        "identifier": "UnitTransactionExtension",
+        "type": 4,
+        "implicit": 4
+      },
+      {
+        "identifier": "VerifyMultiSignature",
+        "type": 505,
+        "implicit": 4
+      },
+      {
+        "identifier": "AsPgas",
+        "type": 506,
+        "implicit": 4
+      },
+      {
+        "identifier": "AsDotnsGateway",
+        "type": 509,
+        "implicit": 4
+      },
+      {
+        "identifier": "RestrictOrigins",
+        "type": 512,
+        "implicit": 4
+      }
+    ]
+  },
+  "extensionTypeDefs": [
+    {
+      "identifier": "AuthorizeCall",
+      "type": 491,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "CheckNonZeroSender",
+      "type": 492,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "CheckSpecVersion",
+      "type": 493,
+      "implicit": 14,
+      "typeDef": "Null",
+      "implicitDef": "u32"
+    },
+    {
+      "identifier": "CheckTxVersion",
+      "type": 494,
+      "implicit": 14,
+      "typeDef": "Null",
+      "implicitDef": "u32"
+    },
+    {
+      "identifier": "CheckGenesis",
+      "type": 495,
+      "implicit": 16,
+      "typeDef": "Null",
+      "implicitDef": "H256"
+    },
+    {
+      "identifier": "CheckMortality",
+      "type": 496,
+      "implicit": 16,
+      "typeDef": "Era",
+      "implicitDef": "H256"
+    },
+    {
+      "identifier": "CheckNonce",
+      "type": 498,
+      "implicit": 4,
+      "typeDef": "Compact<u32>",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "CheckWeight",
+      "type": 499,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "ChargeAssetTxPayment",
+      "type": 500,
+      "implicit": 4,
+      "typeDef": "{\"tip\":\"Compact<u128>\",\"assetId\":\"Option<StagingXcmV5Location>\"}",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "PrevalidateAttests",
+      "type": 501,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "CheckMetadataHash",
+      "type": 502,
+      "implicit": 463,
+      "typeDef": "{\"mode\":\"FrameMetadataHashExtensionMode\"}",
+      "implicitDef": "Option<[u8;32]>"
+    },
+    {
+      "identifier": "EthSetOrigin",
+      "type": 504,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "StorageWeightReclaim",
+      "type": 4,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "UnitTransactionExtension",
+      "type": 4,
+      "implicit": 4,
+      "typeDef": "Null",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "VerifyMultiSignature",
+      "type": 505,
+      "implicit": 4,
+      "typeDef": "{\"_enum\":{\"Disabled\":\"Null\",\"Signed\":\"{\\\"signature\\\":\\\"SpRuntimeMultiSignature\\\",\\\"account\\\":\\\"AccountId32\\\"}\"}}",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "AsPgas",
+      "type": 506,
+      "implicit": 4,
+      "typeDef": "Option<IndivPalletPgasExtensionAsPgasInfo>",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "AsDotnsGateway",
+      "type": 509,
+      "implicit": 4,
+      "typeDef": "Option<IndivPalletDotnsGatewayExtensionAsDotnsGatewayInfo>",
+      "implicitDef": "Null"
+    },
+    {
+      "identifier": "RestrictOrigins",
+      "type": 512,
+      "implicit": 4,
+      "typeDef": "bool",
+      "implicitDef": "Null"
+    }
+  ],
+  "genesisHash": "0x68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f",
+  "specName": "statemint",
+  "specVersion": "2005002",
+  "transactionVersion": "15",
+  "extrinsicVersion": 4,
+  "extensions": [
+    "AuthorizeCall",
+    "CheckNonZeroSender",
+    "CheckSpecVersion",
+    "CheckTxVersion",
+    "CheckGenesis",
+    "CheckMortality",
+    "CheckNonce",
+    "CheckWeight",
+    "ChargeAssetTxPayment",
+    "PrevalidateAttests",
+    "CheckMetadataHash",
+    "EthSetOrigin",
+    "StorageWeightReclaim",
+    "UnitTransactionExtension",
+    "VerifyMultiSignature",
+    "AsPgas",
+    "AsDotnsGateway",
+    "RestrictOrigins"
+  ],
+  "extraFields": {
+    "era": "ExtrinsicEra",
+    "nonce": "Compact<Index>",
+    "tip": "Compact<Balance>",
+    "assetId": "TAssetConversion",
+    "mode": "u8"
+  },
+  "additionalSignedFields": {
+    "specVersion": "u32",
+    "transactionVersion": "u32",
+    "genesisHash": "Hash",
+    "blockHash": "Hash",
+    "metadataHash": "Option<[u8;32]>"
+  },
+  "nativeDecimals": 10,
+  "existentialDeposit": "100000000",
+  "nativeCall": "0x0a03",
+  "assetCall": "0x3208",
+  "provenance": {
+    "captured": "2026-10-31",
+    "endpoint": "wss://polkadot-asset-hub-rpc.polkadot.io",
+    "runtimeSource": "https://github.com/polkadot-fellows/runtimes/blob/ce6db29838fa8536c12bffb478f3b93501c9b384/system-parachains/asset-hubs/asset-hub-polkadot/src/lib.rs#L1831",
+    "note": "Public metadata only. V4 uses TxExtensionV0; V1 general-transaction fields must not be whitelisted as empty."
+  }
+}

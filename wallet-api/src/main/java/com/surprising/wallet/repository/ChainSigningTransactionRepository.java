@@ -103,9 +103,19 @@ public class ChainSigningTransactionRepository {
         return jdbc.update("""
                 update chain_signing_transaction
                    set broadcast_owner = ?, broadcast_lease_until = now() + interval '5 minutes', update_date = now()
-                 where chain = ? and id = ? and status = 1 and error_message is null
+                 where chain = ? and id = ? and status = 1 and (error_message is null or signed_transaction is not null)
                    and (broadcast_lease_until is null or broadcast_lease_until <= now() or broadcast_owner = ?)
                 """, ownerId, chain, id, ownerId) == 1;
+    }
+
+    public int recordPrepared(UtxoSigningTransaction transaction, String owner) {
+        String signed = JacksonJson.writeValue(json, transaction.signed());
+        return jdbc.update("""
+                update chain_signing_transaction set signed_transaction=?::jsonb,error_message=null,update_date=now()
+                 where chain=? and id=? and tenant_id=? and status=1 and broadcast_owner=?
+                   and request->>'requestId'=? and (signed_transaction is null or signed_transaction=?::jsonb)
+                """, signed,transaction.request().asset().chain(),transaction.id(),transaction.request().tenantId(),owner,
+                transaction.request().requestId().toString(),signed);
     }
 
     public int update(UtxoSigningTransaction transaction) {

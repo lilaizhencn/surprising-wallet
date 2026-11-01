@@ -28,7 +28,7 @@ as_builder env JAVA_HOME="$JAVA_HOME" MAVEN_SKIP_RC=true LANG=C.UTF-8 MAVEN_OPTS
 STAGING=$(mktemp -d /var/tmp/wallet-source-release.XXXXXX)
 trap 'rm -rf -- "$STAGING"' EXIT
 install -m 0600 wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar "$STAGING/wallet-server.jar"
-install -m 0600 resources/infra/systemd/surprising-wallet-all.service "$STAGING/"
+install -m 0600 resources/infra/systemd/surprising-wallet.service "$STAGING/"
 # The build is complete before the existing service is restarted; activation rolls back on failure.
 bash scripts/deploy/backend-deploy.sh "$SHA" "$STAGING"
 install -o root -g root -m 0750 scripts/deploy/backend-auto-update.sh /usr/local/sbin/surprising-wallet-auto-update

@@ -76,6 +76,15 @@ public class UtxoRepository {
                 """, chain, txHash, vout, lockRef).isEmpty();
     }
 
+    /** The input value and address must be checked under the original batch lock before MPC admission. */
+    public Optional<UtxoOutput> lockInput(String chain, String txHash, int vout, String lockRef) {
+        return jdbc.query("""
+                select tx_hash, vout, address, amount, block_height, block_hash, confirmations
+                  from utxo_record where chain=? and asset_symbol=? and tx_hash=? and vout=?
+                    and state='LOCKED' and lock_ref=? for update
+                """, (rs, row) -> observation(rs), chain, chain, txHash, vout, lockRef).stream().findFirst();
+    }
+
     /** 查询 UTXO 的地址，供 Service 层完成租户归属校验。 */
     public Optional<String> findAddress(String chain, String txHash, int vout) {
         return jdbc.queryForList("""

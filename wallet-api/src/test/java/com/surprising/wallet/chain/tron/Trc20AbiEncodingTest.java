@@ -21,7 +21,7 @@ class Trc20AbiEncodingTest {
      */
     @Test
     void transfer_shouldEncodeFunctionSelectorAndAmount() {
-        String recipient = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(50), true));
+        String recipient = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(50), true));
         String encoded = Trc20AbiCodec.encodeTransfer(recipient, new BigDecimal("1.25"), 6);
         assertTrue(encoded.startsWith("a9059cbb"));
         assertTrue(encoded.endsWith("00000000000000000000000000000000000000000000000000000000001312d0"));
@@ -32,9 +32,9 @@ class Trc20AbiEncodingTest {
      */
     @Test
     void transferEvent_shouldDecodeTopicsAndAmount() {
-        String contract = TronTridentKeyFactory.toHexAddress(ECKey.fromPrivate(BigInteger.valueOf(51), true));
-        String from = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(52), true));
-        String to = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(53), true));
+        String contract = TronPublicTestAddress.toHexAddress(ECKey.fromPrivate(BigInteger.valueOf(51), true));
+        String from = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(52), true));
+        String to = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(53), true));
         String data = Numeric.toHexStringNoPrefixZeroPadded(BigInteger.valueOf(12_500_000L), 64);
 
         Trc20AbiCodec.TransferLog log = Trc20AbiCodec.decodeTransferLog(contract, List.of(
@@ -55,7 +55,7 @@ class Trc20AbiEncodingTest {
      */
     @Test
     void amountWithTooManyDecimals_shouldFail() {
-        String recipient = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(54), true));
+        String recipient = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(54), true));
         assertThrows(IllegalArgumentException.class,
                 () -> Trc20AbiCodec.encodeTransfer(recipient, new BigDecimal("0.0000001"), 6));
     }

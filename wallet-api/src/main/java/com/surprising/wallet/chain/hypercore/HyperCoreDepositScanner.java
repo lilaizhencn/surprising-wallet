@@ -7,11 +7,7 @@ import com.surprising.wallet.repository.HyperCoreTokenMetadataRepository;
 import com.surprising.wallet.repository.HyperCoreSpotAssetRepository;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,10 +16,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * HyperCore 充值扫描器，通过查询 spotClearinghouseState 接口对比余额变化识别充值。
- *
- * <p>扫描策略：遍历平台托管的存款地址，查询每个地址在各资产上的当前余额（total），
- * 与数据库中上次记录值对比，差额部分即为充值金额。同时同步代币元数据和交易对信息。</p>
+ * Scan actual spot ledger transfers. Network reads stay outside the deposit/cursor transaction.
  *
  * @see HyperCoreApiClient
  */
@@ -44,26 +37,19 @@ public class HyperCoreDepositScanner {
     private final ObjectMapper objectMapper = new ObjectMapper();
     public void scanAndCredit(AccountChainProfile profile) {
         syncSpotMetadata(profile.getNetwork());
-        List<ChainAddressRecord> addresses = chainAddressRepository.listEnabled(CHAIN).stream()
-                .filter(ChainAddressRecord::getEnabled)
+        List<ChainAddressRecord> addresses = chainAddressRepository.listMpcAddresses(CHAIN).stream()
                 .filter(address -> address.getUserId() != null && address.getUserId() != 0L)
                 .filter(address -> "DEPOSIT".equalsIgnoreCase(address.getWalletRole()))
                 .toList();
-        Map<String, JsonNode> stateByAddress = new LinkedHashMap<>();
         for (ChainAddressRecord address : addresses) {
-            JsonNode state = stateByAddress.computeIfAbsent(
-                    address.getAddress().toLowerCase(Locale.ROOT),
-                    ignored -> spotState(address.getAddress()));
-            Map<String, BigDecimal> balances = balancesBySymbol(state);
-            BigDecimal observed = balances.getOrDefault(
-                    address.getAssetSymbol().toUpperCase(Locale.ROOT), BigDecimal.ZERO);
-            deposits.recordObservedBalance(
-                    address,
-                    address.getAssetSymbol(),
-                    observed,
-                    state.toString())
-                    .ifPresent(delta -> log.info("HyperCore deposit credited chain={} symbol={} address={} amount={}",
-                            CHAIN, address.getAssetSymbol(), address.getAddress(), delta));
+          for(String symbol:deposits.assets(profile.getNetwork())) {
+            for(int page=0;page<10;page++) {
+                long cursor=deposits.position(address,profile.getNetwork(),symbol);
+                JsonNode records=apiClient.postInfo(objectMapper.createObjectNode().put("type","userNonFundingLedgerUpdates")
+                        .put("user",address.getAddress()).put("startTime",cursor));
+                if(!deposits.recordPage(address,profile.getNetwork(),symbol,cursor,records) || records.size()<HyperCoreDepositService.LEDGER_PAGE_THRESHOLD)break;
+            }
+          }
         }
     }
 
@@ -111,24 +97,4 @@ public class HyperCoreDepositScanner {
         }
     }
 
-    private Map<String, BigDecimal> balancesBySymbol(JsonNode state) {
-        Map<String, BigDecimal> balances = new LinkedHashMap<>();
-        for (JsonNode balance : state.path("balances")) {
-            String symbol = balance.path("coin").asText(balance.path("token").asText(""));
-            if (symbol == null || symbol.isBlank()) {
-                continue;
-            }
-            BigDecimal total = decimal(balance.path("total").asText(
-                    balance.path("free").asText("0")));
-            balances.put(symbol.toUpperCase(Locale.ROOT), total);
-        }
-        return balances;
-    }
-
-    private static BigDecimal decimal(String value) {
-        if (value == null || value.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        return new BigDecimal(value);
-    }
 }

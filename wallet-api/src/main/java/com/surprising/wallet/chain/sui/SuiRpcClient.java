@@ -64,9 +64,9 @@ public class SuiRpcClient {
     /** 单笔交易查询的 FieldMask，只拉取必要字段 */
     private static final FieldMask TRANSACTION_READ_MASK = FieldMask.newBuilder()
             .addPaths("digest")
-            .addPaths("transaction.sender")
-            .addPaths("effects.status")
-            .addPaths("effects.gas_used")
+            .addPaths("transaction")
+            .addPaths("signatures")
+            .addPaths("effects")
             .addPaths("checkpoint")
             .addPaths("balance_changes")
             .build();
@@ -83,9 +83,9 @@ public class SuiRpcClient {
     private static final FieldMask CHECKPOINT_TRANSACTION_READ_MASK = FieldMask.newBuilder()
             .addPaths("sequence_number")
             .addPaths("transactions.digest")
-            .addPaths("transactions.transaction.sender")
-            .addPaths("transactions.effects.status")
-            .addPaths("transactions.effects.gas_used")
+            .addPaths("transactions.transaction")
+            .addPaths("transactions.signatures")
+            .addPaths("transactions.effects")
             .addPaths("transactions.checkpoint")
             .addPaths("transactions.balance_changes")
             .build();
@@ -108,9 +108,14 @@ public class SuiRpcClient {
         this.rpcNodeService = rpcNodeService;
     }
     public long latestCheckpoint() {
-        return call(context -> ledger(context).getServiceInfo(
-                        LedgerServiceOuterClass.GetServiceInfoRequest.getDefaultInstance()))
-                .getCheckpointHeight();
+        return serviceInfo().checkpoint();
+    }
+    public record ChainInfo(String chainIdentifier,String chain,long epoch,long checkpoint) { }
+    public ChainInfo serviceInfo() {
+        var info=call(context -> ledger(context).getServiceInfo(LedgerServiceOuterClass.GetServiceInfoRequest.getDefaultInstance()));
+        if(!info.hasChainId() || !info.hasCheckpointHeight() || !info.hasEpoch())
+            throw new IllegalStateException("Sui chain identity or finalized state is absent");
+        return new ChainInfo(info.getChainId(),info.getChain(),info.getEpoch(),info.getCheckpointHeight());
     }
     public long referenceGasPrice() {
         LedgerServiceOuterClass.GetEpochRequest request = LedgerServiceOuterClass.GetEpochRequest.newBuilder()
@@ -196,12 +201,8 @@ public class SuiRpcClient {
         if (!response.hasTransaction()) {
             throw new IllegalStateException("Sui gRPC execution returned no transaction");
         }
-        JsonNode transaction = toLegacyTransaction(response.getTransaction());
-        if (!"success".equals(transaction.path("effects").path("status").path("status").asText())) {
-            throw new IllegalStateException("Sui transaction execution failed: "
-                    + transaction.path("effects").path("status").path("error").asText("unknown error"));
-        }
-        return transaction;
+        // A committed VM failure still consumes the gas object. The owning workflow settles its proof.
+        return toLegacyTransaction(response.getTransaction());
     }
     private List<SuiCoin> listCoins(GrpcContext context, String owner, String coinType, int limit) {
         List<SuiCoin> result = new ArrayList<>();
@@ -232,6 +233,7 @@ public class SuiRpcClient {
     }
     private ObjectNode toLegacyTransaction(ExecutedTransactionOuterClass.ExecutedTransaction source) {
         ObjectNode transaction = objectMapper.createObjectNode();
+        transaction.put("executedTransactionBase64", Base64.getEncoder().encodeToString(source.toByteArray()));
         transaction.put("digest", source.getDigest());
         transaction.put("checkpoint", source.hasCheckpoint() ? source.getCheckpoint() : 0L);
         transaction.putObject("transaction").putObject("data")

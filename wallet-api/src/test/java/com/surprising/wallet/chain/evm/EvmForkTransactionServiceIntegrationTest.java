@@ -1,12 +1,10 @@
 package com.surprising.wallet.chain.evm;
 
-import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
@@ -18,7 +16,6 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,7 +31,6 @@ import org.web3j.abi.datatypes.Address;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.generated.Uint256;
-import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.Request;
@@ -79,9 +75,11 @@ class EvmForkTransactionServiceIntegrationTest {
         String originalNetwork = originalProfile.getNetwork();
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
         EvmHttpServiceFactory httpServices = new EvmHttpServiceFactory();
+        var mpc = new com.surprising.wallet.testutil.MpcNativeTestSupport(jdbc);
+        assertEquals(TENANT, mpc.tenant);
         var context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
-        context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(jdbc.getDataSource()));
+        context.registerBean(PlatformTransactionManager.class, () -> mpc.manager);
         context.registerBean(WithdrawalOrderRepository.class, () -> repository.withdrawalOrderRepository);
         context.registerBean(LedgerBalanceRepository.class, () -> repository.ledgerBalanceRepository);
         context.registerBean(WithdrawalSettlementService.class);
@@ -89,7 +87,10 @@ class EvmForkTransactionServiceIntegrationTest {
         context.registerBean(com.surprising.wallet.repository.EvmTransactionRepository.class, () -> repository.evmTransactionRepository);
         context.registerBean(com.surprising.wallet.repository.EvmNonceRepository.class, () -> new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
         context.registerBean(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class, () -> new com.surprising.wallet.repository.CustodyAssetRecoveryRepository(jdbc));
-        context.registerBean(com.surprising.wallet.service.EvmSubmissionService.class);
+        context.registerBean(com.surprising.wallet.service.EvmSubmissionService.class, () -> new com.surprising.wallet.service.EvmSubmissionService(
+                repository.withdrawalOrderRepository, repository.collectionRecordRepository, repository.evmTransactionRepository,
+                new com.surprising.wallet.repository.EvmNonceRepository(jdbc), new com.surprising.wallet.repository.CustodyAssetRecoveryRepository(jdbc),
+                mpc.requests, mpc.signing, mpc.nodes, mpc.json, repository.chainProfileRepository));
         context.refresh();
         try {
             List<String> accounts = web3j.ethAccounts().send().getAccounts();
@@ -103,13 +104,7 @@ class EvmForkTransactionServiceIntegrationTest {
                             + "where chain = ? and network = ?",
                     chain.name(), originalNetwork);
             AccountChainProfile localProfile = repository.chainProfileRepository.findAccountByChain(chain.name()).orElseThrow();
-            AccountSecp256k1KeyService keyService =
-                    new AccountSecp256k1KeyService(WalletKeyTestFixture.provider());
-            ChainAddressRecord from = addressRecord(localProfile, chain);
-            Credentials credentials = credentials(keyService, localProfile, from);
-            from.setAddress(credentials.getAddress());
-            from.setAccountId(credentials.getAddress().toLowerCase(java.util.Locale.ROOT));
-            from.setOwnerAddress(credentials.getAddress());
+            ChainAddressRecord from = mpc.address(chain, 93001L + chain.ordinal(), 0L, "FORK_SERVICE_TEST");
 
             ChainRpcNodeService rpcNodes = fixedRpcNodes(localProfile);
             EvmAccountTransactionService service = new EvmAccountTransactionService(
@@ -119,7 +114,6 @@ class EvmForkTransactionServiceIntegrationTest {
                     repository.chainProfileRepository,
                     repository.chainAssetRepository,
                     rpcNodes,
-                    keyService,
                     new EvmTransactionBuilder(),
                     httpServices,
                     context.getBean(WithdrawalSettlementService.class),
@@ -160,6 +154,7 @@ class EvmForkTransactionServiceIntegrationTest {
                     "service must reserve consecutive nonces for configured asset transfers");
         } finally {
             context.close();
+            mpc.close();
             httpServices.close();
             jdbc.update("update chain_profile set network = ?, updated_at = now() "
                             + "where chain = ? and network = 'local'",
@@ -180,7 +175,7 @@ class EvmForkTransactionServiceIntegrationTest {
                 from.getAddress(),account,recipient,amount,fee);
         assertTrue(repository.ledgerBalanceRepository.freeze(profile.getChain(),symbol,account,debit,TENANT));
         assertEquals(1,repository.withdrawalOrderRepository.updateStatus(TENANT,profile.getChain(),orderNo,"FROZEN",from.getAddress(),null,null));
-        assertEquals(1,repository.withdrawalOrderRepository.claimSigningEvm(TENANT,profile.getChain(),orderNo,from.getAddress()));
+        assertEquals(1,repository.withdrawalOrderRepository.claimSigningDurable(TENANT,profile.getChain(),orderNo,from.getAddress()));
         return new com.surprising.wallet.service.EvmSubmissionService.Operation(TENANT,orderNo,com.surprising.wallet.service.EvmSubmissionService.Kind.WITHDRAWAL);
     }
 
@@ -212,32 +207,6 @@ class EvmForkTransactionServiceIntegrationTest {
         assertEquals(0, BigDecimal.ONE.compareTo(balance.getTotalBalance()));
         assertEquals("CONFIRMED", jdbc.queryForObject("select status from evm_tx where chain=? and tx_hash=?",
                 String.class, profile.getChain(), hash));
-    }
-
-    /**
-     * 创建与生产账户派生路径一致的测试地址记录。
-     */
-    private static ChainAddressRecord addressRecord(AccountChainProfile profile, ChainType chain) {
-        return ChainAddressRecord.builder()
-                .tenantId(TENANT)
-                .chain(chain.name())
-                .assetSymbol(profile.getNativeSymbol())
-                .userId(93001L + chain.ordinal())
-                .biz(1)
-                .addressIndex(0L)
-                .walletRole("FORK_SERVICE_TEST")
-                .derivationPath("m/44/60/1/" + (93001L + chain.ordinal()) + "/0")
-                .enabled(true)
-                .build();
-    }
-
-    /**
-     * 使用与生产签名服务完全相同的 BIP44 路径生成 EVM 凭证。
-     */
-    private static Credentials credentials(AccountSecp256k1KeyService keyService,
-                                           AccountChainProfile profile, ChainAddressRecord address) {
-        ECKey key = keyService.key(profile, address);
-        return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
     }
 
     /**

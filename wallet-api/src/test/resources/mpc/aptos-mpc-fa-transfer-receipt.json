@@ -1,0 +1,73 @@
+{
+  "hash": "0xd5d096559a614d79fab22bc62f66a4350e78a8b2de1b818df920d2225047b332",
+  "sender": "0x693dc004958f42d3bae1700c16d226fb2122c835f71dc37eca0addaff04f22fe",
+  "sequence_number": "1",
+  "max_gas_amount": "50000",
+  "gas_unit_price": "100",
+  "expiration_timestamp_secs": "1793407180",
+  "payload": {
+    "function": "0x1::primary_fungible_store::transfer",
+    "type_arguments": [
+      "0x1::fungible_asset::Metadata"
+    ],
+    "arguments": [
+      {
+        "inner": "0x76a7c9b4cc4ea620dda3fa17177a60f51377e9beb2dd84b55d4ad7ace333cc8d"
+      },
+      "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "1000000"
+    ],
+    "type": "entry_function_payload"
+  },
+  "signature": {
+    "public_key": "0x34cf253cf88f5bb53eb5f5b97fed390af2f038eddb10067bd78a5a993083f401",
+    "signature": "0x9a9794f6d5a6e9a87a54842e927f0a81d92a625febf543c73c226f7a0935128fb2f295e92c39a13e9891a140c808f4f01830806380e2091a424abe6abebe000c",
+    "type": "ed25519_signature"
+  },
+  "type": "user_transaction",
+  "success": true,
+  "vm_status": "Executed successfully",
+  "version": "1190",
+  "gas_used": "5432",
+  "events": [
+    {
+      "guid": {
+        "creation_number": "0",
+        "account_address": "0x0"
+      },
+      "sequence_number": "0",
+      "type": "0x1::fungible_asset::Withdraw",
+      "data": {
+        "amount": "1000000",
+        "store": "0x3defc19d2411c7de023884328dc6c50f008afc81cc6c87a9532f2bd8dd00215e"
+      }
+    },
+    {
+      "guid": {
+        "creation_number": "0",
+        "account_address": "0x0"
+      },
+      "sequence_number": "0",
+      "type": "0x1::fungible_asset::Deposit",
+      "data": {
+        "amount": "1000000",
+        "store": "0x31614e9962441937b4357ffb849df7490899624fb9a3dbb0e8075cb7b7e59cb9"
+      }
+    },
+    {
+      "guid": {
+        "creation_number": "0",
+        "account_address": "0x0"
+      },
+      "sequence_number": "0",
+      "type": "0x1::transaction_fee::FeeStatement",
+      "data": {
+        "execution_gas_units": "38",
+        "io_gas_units": "71",
+        "storage_fee_octas": "532400",
+        "storage_fee_refund_octas": "0",
+        "total_charge_gas_units": "5432"
+      }
+    }
+  ]
+}

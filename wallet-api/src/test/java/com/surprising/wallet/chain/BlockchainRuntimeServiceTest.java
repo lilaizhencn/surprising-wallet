@@ -9,6 +9,7 @@ import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.util.Optional;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -40,15 +41,12 @@ class BlockchainRuntimeServiceTest {
 
     @ParameterizedTest
     @EnumSource(ChainType.class)
-    void fixedIndexGenerationReachesTheRealEngineForEveryChain(ChainType type) {
+    void addressValidationRoutesToThePublicRuntimeForEveryChain(ChainType type) {
         when(profiles.findAccountByChain(type.name())).thenReturn(Optional.of(profile(type)));
-        var selected = service.requireProfile(type.name());
-        ChainAddressRecord expected = ChainAddressRecord.builder().id(7L).addressIndex(7L).build();
-        boolean utxo = type == ChainType.BTC || type == ChainType.BCH || type == ChainType.LTC || type == ChainType.DOGE;
-        if (utxo) when(bitcoinLike.generateDepositAddressAtIndex(selected, 41L, 9, 7L)).thenReturn(expected);
-        else when(addresses.generateDepositAddressAtIndex(selected, 41L, 9, 7L)).thenReturn(expected);
-
-        assertSame(expected, service.generateDepositAddressAtIndex(selected, 41L, 9, 7L));
+        boolean utxo = List.of(ChainType.BTC, ChainType.LTC, ChainType.DOGE, ChainType.BCH).contains(type);
+        if (utxo) when(bitcoinLike.checkAddress(type,"fixture-address")).thenReturn(true);
+        else when(addresses.checkAddress(type,"fixture-address")).thenReturn(true);
+        assertTrue(service.checkAddress(type.name(),"fixture-address"));
         if (utxo) verifyNoInteractions(addresses);
         else verifyNoInteractions(bitcoinLike);
     }
@@ -68,7 +66,6 @@ class BlockchainRuntimeServiceTest {
         BitcoinLikeChainRuntime runtime = new BitcoinLikeChainRuntime(
                 repository.chainProfileRepository,
                 repository.chainAssetRepository,
-                mock(com.surprising.wallet.config.PubKeyConfig.class),
                 mock(com.surprising.wallet.chain.rpc.BtcCommand.class),
                 mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
                 mock(com.surprising.wallet.chain.rpc.DogeCommand.class),

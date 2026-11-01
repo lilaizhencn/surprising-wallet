@@ -324,7 +324,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         RealTx withdrawTx = sendAndMine(root, chain, withdrawAddress, chain.withdrawAmount());
         findOutput(withdrawTx.raw(), withdrawAddress, chain.withdrawAmount());
         var signed = new UtxoSignedTransaction(withdrawTx.raw().path("hex").asText(), withdrawTx.txid(),
-                chain.withdrawFee().movePointRight(8).longValueExact(), 0, 0, new UtxoPartialSignature.Estimates(0, 0, 0));
+                chain.withdrawFee().movePointRight(8).longValueExact(), 0, 0, new UtxoSignedTransaction.Estimates(0, 0, 0));
         assertEquals(1, signingRepository.update(signing.withSigned(signed, Constants.SENT)));
         assertTrue(signingRepository.exists(chainName, withdrawTx.txid()));
         assertTrue(signingRepository.findByTxId(chainName, withdrawTx.txid()).isPresent());

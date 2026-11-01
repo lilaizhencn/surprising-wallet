@@ -1,0 +1,319 @@
+{
+  "provenance": "Original public proofs from actual independent three-node cb-mpc on official isolated Asset Hub; current custody business uses Asset Hub for DOT and tokens. Source native account/nonce retained; full token balances collected; no wallet key reconstructed.",
+  "payments": [
+    {
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+        "publicKeyHex": "a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7",
+        "recipient": "5FFAKpZFPp1dcuEgVsRYECbMEAp6fQ4khx72gjjyrmo12So5",
+        "amountAtomic": 97948964604146,
+        "assetId": null,
+        "nonce": 11,
+        "eraPeriod": 64,
+        "blockHeight": 6121,
+        "blockHash": "0x414524a1e155cbf1bcd7be5aaa88239878b236c589b3ea15aa18c0d642d5b0cd",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x0a03",
+          "allowDeath": "0x0a00"
+        },
+        "keepAlive": true
+      },
+      "selected": {
+        "extrinsicHex": "0x4d028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7003318531af487c73508a952ca07c61963bb1fdd312e4c8aba02d31699ea7b366a40f7641ec0887f561f963f43768511e653e1bf1f29c59f7657f8335021073a0195022c0000000a03008cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f0bf2c83d851559",
+        "txHash": "0xc77c0a2f961cb44f7c3526f032e9c8c5198d559c50805e894b3493813a3d365e"
+      },
+      "proof": {
+        "found": true,
+        "events": [
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3410508425"
+            ],
+            "index": 2,
+            "method": "Withdraw",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "5FFAKpZFPp1dcuEgVsRYECbMEAp6fQ4khx72gjjyrmo12So5",
+              "97948964604146"
+            ],
+            "index": 2,
+            "method": "Transfer",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5EYCAe5gKBMwLZyq5dw41Hw3V68nsCVTZQ2d4AYfbMb4kF29",
+              "3410508425"
+            ],
+            "index": 2,
+            "method": "Deposit",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3410508425",
+              "0"
+            ],
+            "index": 2,
+            "method": "TransactionFeePaid",
+            "section": "transactionPayment"
+          },
+          {
+            "data": [
+              "{\"weight\":{\"refTime\":383866000,\"proofSize\":4781},\"class\":\"Normal\",\"paysFee\":\"Yes\"}"
+            ],
+            "index": 2,
+            "method": "ExtrinsicSuccess",
+            "section": "system"
+          }
+        ],
+        "txHash": "0xc77c0a2f961cb44f7c3526f032e9c8c5198d559c50805e894b3493813a3d365e",
+        "blockHash": "0xc662d067a431869a02f1322e2a6530b951eb4fb3b613be8ddb89a9cd007adef4",
+        "eventsHex": "0x280208091367120000000000000000000265cd1d0002000000010000000000c2bfac2d551702000000020000000a08a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7893a48cb0000000000000000000000000000020000000a02a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda78cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079ff2c83d851559000000000000000000000000020000000a076d6f646c6461702f627566661c73746167696e67000000000000000000000000893a48cb0000000000000000000000000000020000000b00a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7893a48cb0000000000000000000000000000000000000000000000000000000000000200000000004252855bb54a000000010a026d6f646c6461702f627566661c73746167696e670000000000000000000000006d6f646c6461702f627566660000000000000000000000000000000000000000893a48cb00000000000000000000000000016402893a48cb00000000000000000000000000",
+        "headerHex": "0x12b0ead9402ddb3c57459123ac4c828a45a9c51fe85eb483e55e84e88de401cbad5f9b0aa3519cee069dbae612e4da0e550288e520b830da92ca3134c553b8e16c6943c95ee4f3ad504cfb37a88984fd2c25fa036da191bf93aad99d576d16c72c06080661757261201352740400000000045250535290057616b329a3f875814c809566aef101321b8a3eef6ba73a716e97c8fe5f664136214547",
+        "parentHash": "0x12b0ead9402ddb3c57459123ac4c828a45a9c51fe85eb483e55e84e88de401cb",
+        "blockHeight": 6123,
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "extrinsicHex": "0x4d028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7003318531af487c73508a952ca07c61963bb1fdd312e4c8aba02d31699ea7b366a40f7641ec0887f561f963f43768511e653e1bf1f29c59f7657f8335021073a0195022c0000000a03008cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f0bf2c83d851559",
+        "extrinsicIndex": 2,
+        "finalizedHeight": 6123,
+        "transactionVersion": 16
+      }
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+        "publicKeyHex": "a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7",
+        "recipient": "5FFAKpZFPp1dcuEgVsRYECbMEAp6fQ4khx72gjjyrmo12So5",
+        "amountAtomic": 17000000,
+        "assetId": "10001",
+        "nonce": 12,
+        "eraPeriod": 64,
+        "blockHeight": 6125,
+        "blockHash": "0x5b3a465b3d4fcbe1b5728d4f84bbb166f3ca4af1977984146f81a8348627e756",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x3209",
+          "allowDeath": "0x3208"
+        },
+        "keepAlive": false
+      },
+      "selected": {
+        "extrinsicHex": "0x49028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda700eda73466e3b2a166fff02a269aa7977487326f70408d04cffe41631335f8eb569a37431383078ac42682d077bac37b2c9279a326fcae6498d7efc030b9211406d502300000003208459c008cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f02990d04",
+        "txHash": "0xf213e307198ceed277c8c6472b7337ea6858fcd0b4b4bf3d3d7bf915b490532b"
+      },
+      "proof": {
+        "found": true,
+        "events": [
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3756094148"
+            ],
+            "index": 2,
+            "method": "Withdraw",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "10001",
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "5FFAKpZFPp1dcuEgVsRYECbMEAp6fQ4khx72gjjyrmo12So5",
+              "17000000"
+            ],
+            "index": 2,
+            "method": "Transferred",
+            "section": "assets"
+          },
+          {
+            "data": [
+              "5EYCAe5gKBMwLZyq5dw41Hw3V68nsCVTZQ2d4AYfbMb4kF29",
+              "3756094148"
+            ],
+            "index": 2,
+            "method": "Deposit",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3756094148",
+              "0"
+            ],
+            "index": 2,
+            "method": "TransactionFeePaid",
+            "section": "transactionPayment"
+          },
+          {
+            "data": [
+              "{\"weight\":{\"refTime\":922099000,\"proofSize\":6067},\"class\":\"Normal\",\"paysFee\":\"Yes\"}"
+            ],
+            "index": 2,
+            "method": "ExtrinsicSuccess",
+            "section": "system"
+          }
+        ],
+        "txHash": "0xf213e307198ceed277c8c6472b7337ea6858fcd0b4b4bf3d3d7bf915b490532b",
+        "blockHash": "0x339ae8dcff2c52779167ac9fbbc984201e41c69c68dee35f09d3bb8d38d31c11",
+        "eventsHex": "0x28020809276a120000000000000000000265cd1d0002000000010000000000c2bfac2d551702000000020000000a08a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7c472e1df000000000000000000000000000002000000320211270000a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda78cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f406603010000000000000000000000000000020000000a076d6f646c6461702f627566661c73746167696e67000000000000000000000000c472e1df0000000000000000000000000000020000000b00a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7c472e1df000000000000000000000000000000000000000000000000000000000000020000000000e274d8dbcd5e000000010a026d6f646c6461702f627566661c73746167696e670000000000000000000000006d6f646c6461702f627566660000000000000000000000000000000000000000c472e1df00000000000000000000000000016402c472e1df00000000000000000000000000",
+        "headerHex": "0xcd23c14cbeba3c0cfb74fb06c66fdfd5d43dc22a969ed9b6314687eb34e8034abd5fb8769093a8bb6242b2df0911681d68fb18221e0847c57ccf3d37510a03929ed2b8c512d678e4dd6fc8bc0ef076bbb7ba0c97340a0cc91ee6ba69367c18dd6167080661757261201752740400000000045250535290670a69384b7f0911c6dc2bff206902d9d250916aef44416c3deee26bce36766f76214547",
+        "parentHash": "0xcd23c14cbeba3c0cfb74fb06c66fdfd5d43dc22a969ed9b6314687eb34e8034a",
+        "blockHeight": 6127,
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "extrinsicHex": "0x49028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda700eda73466e3b2a166fff02a269aa7977487326f70408d04cffe41631335f8eb569a37431383078ac42682d077bac37b2c9279a326fcae6498d7efc030b9211406d502300000003208459c008cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f02990d04",
+        "extrinsicIndex": 2,
+        "finalizedHeight": 6127,
+        "transactionVersion": 16
+      }
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+        "publicKeyHex": "a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7",
+        "recipient": "5FFAKpZFPp1dcuEgVsRYECbMEAp6fQ4khx72gjjyrmo12So5",
+        "amountAtomic": 17000000,
+        "assetId": "10002",
+        "nonce": 13,
+        "eraPeriod": 64,
+        "blockHeight": 6128,
+        "blockHash": "0xcaf66e3e0f419a95c5b63a0884f247b5ef028bba21c9a1a9168c107869052201",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x3209",
+          "allowDeath": "0x3208"
+        },
+        "keepAlive": false
+      },
+      "selected": {
+        "extrinsicHex": "0x49028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7001e70ec93c1c01995414f09b020d4f4d55cede8bffd8a1695a6166486864c144e754918dda2b9275cfa0101d50bc6726025200a31f69caafeafb6b02b2d0ae5040503340000003208499c008cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f02990d04",
+        "txHash": "0xe24fa1cf0dc73b2205ac76631fe9d630cd309b9be63e54653779900a208ec050"
+      },
+      "proof": {
+        "found": true,
+        "events": [
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3756012675"
+            ],
+            "index": 2,
+            "method": "Withdraw",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "10002",
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "5FFAKpZFPp1dcuEgVsRYECbMEAp6fQ4khx72gjjyrmo12So5",
+              "17000000"
+            ],
+            "index": 2,
+            "method": "Transferred",
+            "section": "assets"
+          },
+          {
+            "data": [
+              "5EYCAe5gKBMwLZyq5dw41Hw3V68nsCVTZQ2d4AYfbMb4kF29",
+              "3756012675"
+            ],
+            "index": 2,
+            "method": "Deposit",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3756012675",
+              "0"
+            ],
+            "index": 2,
+            "method": "TransactionFeePaid",
+            "section": "transactionPayment"
+          },
+          {
+            "data": [
+              "{\"weight\":{\"refTime\":922099000,\"proofSize\":6067},\"class\":\"Normal\",\"paysFee\":\"Yes\"}"
+            ],
+            "index": 2,
+            "method": "ExtrinsicSuccess",
+            "section": "system"
+          }
+        ],
+        "txHash": "0xe24fa1cf0dc73b2205ac76631fe9d630cd309b9be63e54653779900a208ec050",
+        "blockHash": "0x6f4bfbec098bba92aaa478159b2697de288da7f9bc95cb0ad1292d76386c9041",
+        "eventsHex": "0x28020809b16b120000000000000000000265cd1d0002000000010000000000c2bfac2d551702000000020000000a08a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda78334e0df000000000000000000000000000002000000320212270000a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda78cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f406603010000000000000000000000000000020000000a076d6f646c6461702f627566661c73746167696e670000000000000000000000008334e0df0000000000000000000000000000020000000b00a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda78334e0df000000000000000000000000000000000000000000000000000000000000020000000000e274d8dbcd5e000000010a026d6f646c6461702f627566661c73746167696e670000000000000000000000006d6f646c6461702f6275666600000000000000000000000000000000000000008334e0df000000000000000000000000000164028334e0df00000000000000000000000000",
+        "headerHex": "0xcaf66e3e0f419a95c5b63a0884f247b5ef028bba21c9a1a9168c107869052201c55fc3f8640f6be5c49bc0c23bcc28b1214fed51ad82564376e4dffb0a5680aaa3558855d06143f64038fb6a66fc96a94812f2b4f698964608df61ed574ca0bf718f0806617572612019527404000000000452505352909b0d05fc0ac2bf2ebcf8618557a2549dc679322203a86ab82499a021366ba7cf96214547",
+        "parentHash": "0xcaf66e3e0f419a95c5b63a0884f247b5ef028bba21c9a1a9168c107869052201",
+        "blockHeight": 6129,
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "extrinsicHex": "0x49028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7001e70ec93c1c01995414f09b020d4f4d55cede8bffd8a1695a6166486864c144e754918dda2b9275cfa0101d50bc6726025200a31f69caafeafb6b02b2d0ae5040503340000003208499c008cae410c80d149e0beb9c9bb2efecbc113d5e3bd905894396a7f4f319a0a079f02990d04",
+        "extrinsicIndex": 2,
+        "finalizedHeight": 6130,
+        "transactionVersion": 16
+      }
+    }
+  ]
+}

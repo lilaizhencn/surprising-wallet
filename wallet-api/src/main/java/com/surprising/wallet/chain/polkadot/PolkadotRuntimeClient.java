@@ -25,27 +25,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Polkadot 运行时客户端，通过 Sidecar/Substrate 运行时 HTTP API 与链交互。
- *
- * <p>不直接调用 Substrate RPC，而是通过一个中间运行时服务（TypeScript/Deno 实现）
- * 完成交易签名和广播。支持三条目的线：原生 RPC（relay chain）、Asset Hub RPC、
- * 和运行时服务本身的故障转移。</p>
- *
- * <p>提供区块高度查询、余额查询、资产信息、原生/资产转账、转账扫描等功能。</p>
- */
+/** Public metadata, balances, finalized events and externally signed wire transport. */
 @Component
 @RequiredArgsConstructor
 public class PolkadotRuntimeClient {
 
     /** 链标识 */
-    static final String CHAIN = "DOT";
+    public static final String CHAIN = "DOT";
 
     /** 中继链 RPC 目的标识 */
-    private static final String PURPOSE_NATIVE_RPC = "rpc";
+    private static final String PURPOSE_NATIVE_RPC = "relay_rpc";
 
     /** Asset Hub RPC 目的标识 */
-    private static final String PURPOSE_ASSET_RPC = "asset_rpc";
+    private static final String PURPOSE_ASSET_RPC = "rpc";
 
     /** 运行时服务目的标识 */
     private static final String PURPOSE_RUNTIME = "runtime";
@@ -61,16 +53,14 @@ public class PolkadotRuntimeClient {
             .version(HttpClient.Version.HTTP_1_1)
             .build();
     public long latestFinalizedHeight() {
-        return latestFinalizedHeight(PURPOSE_NATIVE_RPC);
-    }
-    public long latestAssetHubFinalizedHeight() {
         return latestFinalizedHeight(PURPOSE_ASSET_RPC);
     }
     public BigInteger nativeBalance(String address) {
-        return nativeBalance(address, PURPOSE_NATIVE_RPC);
+        return nativeBalance(MpcPolkadotTransactionCodec.Role.ASSET_HUB,address);
     }
-    public BigInteger assetHubNativeBalance(String address) {
-        return nativeBalance(address, PURPOSE_ASSET_RPC);
+    /** Explicit relay access is a public protocol diagnostic; custody DOT always uses Asset Hub. */
+    public BigInteger nativeBalance(MpcPolkadotTransactionCodec.Role role,String address) {
+        return nativeBalance(address,purpose(role));
     }
     public BigInteger assetBalance(String assetId, String address) {
         ObjectNode body = baseBody();
@@ -94,41 +84,9 @@ public class PolkadotRuntimeClient {
                 result.path("decimals").asInt(0));
     }
 
-    public AssetCreateResult createAsset(String secretSeedHex, String expectedFrom,
-                                         String assetId, String name, String symbol,
-                                         int decimals, BigInteger minBalance,
-                                         BigInteger initialSupply, boolean mintable) {
-        ObjectNode body = baseBody();
-        body.put("ss58Prefix", ss58Prefix(profile()));
-        body.put("secretSeedHex", secretSeedHex);
-        body.put("expectedFrom", expectedFrom);
-        body.put("assetId", normalizeAssetId(assetId));
-        body.put("name", name);
-        body.put("symbol", symbol);
-        body.put("decimals", decimals);
-        body.put("minBalance", minBalance.toString());
-        body.put("initialSupply", initialSupply.toString());
-        body.put("mintable", mintable);
-        body.put("waitFinalized", true);
-        JsonNode result = callRuntime("/v1/polkadot/asset-create", PURPOSE_ASSET_RPC, body);
-        SubmittedTransaction submitted = submitted(result);
-        return new AssetCreateResult(submitted.txHash(),
-                submitted.blockHeight(),
-                submitted.status(),
-                result.path("assetId").asText(assetId),
-                result.toString());
-    }
-
-    public List<TransferEvent> scanNativeTransfers(long fromBlock, long toBlock,
-                                                   Collection<String> addresses) {
-        return scanTransfers(PURPOSE_NATIVE_RPC, fromBlock, toBlock, addresses, List.of(), true, false);
-    }
-
-    public List<TransferEvent> scanAssetTransfers(long fromBlock, long toBlock,
-                                                  Collection<String> addresses,
-                                                  Map<String, TokenDefinition> tokensByAssetId) {
-        return scanTransfers(PURPOSE_ASSET_RPC, fromBlock, toBlock, addresses,
-                tokensByAssetId.keySet(), false, true);
+    public List<TransferEvent> scanTransfers(long fromBlock,long toBlock,Collection<String> addresses,
+                                            Map<String,TokenDefinition> tokensByAssetId) {
+        return scanTransfers(PURPOSE_ASSET_RPC,fromBlock,toBlock,addresses,tokensByAssetId.keySet(),true,!tokensByAssetId.isEmpty());
     }
     private long latestFinalizedHeight(String rpcPurpose) {
         return callRuntime("/v1/polkadot/latest-finalized", rpcPurpose, baseBody()).path("height").asLong();
@@ -168,77 +126,37 @@ public class PolkadotRuntimeClient {
                     amountPlanck(item.path("amountPlanck")),
                     item.path("blockHeight").asLong(),
                     item.path("eventIndex").asLong(),
-                    trim(item.path("assetId").asText(null)),
-                    item.toString()));
+                    item.path("assetId").isNull()?null:trim(item.path("assetId").asText()),
+                    item.path("blockHash").asText(),item.toString()));
         }
         return events;
     }
 
-    public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
-                                           String toAddress, BigInteger amountPlanck) {
-        return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, true);
+    public JsonNode networkInfo(MpcPolkadotTransactionCodec.Role role,String source,String assetId) {
+        ObjectNode body=baseBody();body.put("address",source);if(assetId!=null)body.put("assetId",normalizeAssetId(assetId));
+        return callRuntime("/v1/polkadot/network-info",purpose(role),body);
+    }
+    public BigInteger paymentInfo(MpcPolkadotTransactionCodec.Role role,String source,String recipient,
+                                  BigInteger amount,String assetId) {
+        ObjectNode body=baseBody();body.put("address",source);body.put("to",recipient);body.put("amountAtomic",amount.toString());
+        if(assetId!=null)body.put("assetId",normalizeAssetId(assetId));
+        return amountPlanck(callRuntime("/v1/polkadot/payment-info",purpose(role),body).path("feePlanck"));
+    }
+    public String broadcast(MpcPolkadotTransactionCodec.Role role,String extrinsicHex) {
+        ObjectNode body=baseBody();body.put("extrinsicHex",extrinsicHex);
+        return callRuntime("/v1/polkadot/broadcast-signed",purpose(role),body).path("txHash").asText();
+    }
+    public JsonNode proof(MpcPolkadotTransactionCodec.Unsigned u,String hash) {
+        ObjectNode body=baseBody();body.put("txHash",hash);body.put("fromBlock",u.blockHeight());body.put("validUntilHeight",u.validUntilHeight());
+        return callRuntime("/v1/polkadot/extrinsic-proof",purpose(u.role()),body);
+    }
+    public JsonNode finalized(MpcPolkadotTransactionCodec.Role role) {
+        return callRuntime("/v1/polkadot/latest-finalized",purpose(role),baseBody());
+    }
+    private static String purpose(MpcPolkadotTransactionCodec.Role role) {
+        return role==MpcPolkadotTransactionCodec.Role.RELAY?PURPOSE_NATIVE_RPC:PURPOSE_ASSET_RPC;
     }
 
-    public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
-                                           String toAddress, BigInteger amountPlanck,
-                                           boolean keepAlive) {
-        return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, keepAlive, PURPOSE_NATIVE_RPC);
-    }
-
-    public SubmittedTransaction sendAssetHubNative(String secretSeedHex, String expectedFrom,
-                                                   String toAddress, BigInteger amountPlanck,
-                                                   boolean keepAlive) {
-        return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, keepAlive, PURPOSE_ASSET_RPC);
-    }
-
-    private SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
-                                            String toAddress, BigInteger amountPlanck,
-                                            boolean keepAlive, String rpcPurpose) {
-        ObjectNode body = baseBody();
-        body.put("ss58Prefix", ss58Prefix(profile()));
-        body.put("secretSeedHex", secretSeedHex);
-        body.put("expectedFrom", expectedFrom);
-        body.put("to", toAddress);
-        body.put("amountPlanck", amountPlanck.toString());
-        body.put("keepAlive", keepAlive);
-        body.put("waitFinalized", true);
-        JsonNode result = callRuntime("/v1/polkadot/transfer", rpcPurpose, body);
-        return submitted(result);
-    }
-
-    public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
-                                          String assetId, String toAddress, BigInteger amountAtomic) {
-        return sendAsset(secretSeedHex, expectedFrom, assetId, toAddress, amountAtomic, true);
-    }
-
-    public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
-                                          String assetId, String toAddress, BigInteger amountAtomic,
-                                          boolean keepAlive) {
-        ObjectNode body = baseBody();
-        body.put("ss58Prefix", ss58Prefix(profile()));
-        body.put("secretSeedHex", secretSeedHex);
-        body.put("expectedFrom", expectedFrom);
-        body.put("assetId", assetId);
-        body.put("to", toAddress);
-        body.put("amount", amountAtomic.toString());
-        body.put("keepAlive", keepAlive);
-        body.put("waitFinalized", true);
-        JsonNode result = callRuntime("/v1/polkadot/asset-transfer", PURPOSE_ASSET_RPC, body);
-        return submitted(result);
-    }
-    public boolean transactionFinalized(String txHash, int maxRecentBlocks) {
-        return transactionFinalized(txHash, maxRecentBlocks, PURPOSE_NATIVE_RPC);
-    }
-    public boolean assetTransactionFinalized(String txHash, int maxRecentBlocks) {
-        return transactionFinalized(txHash, maxRecentBlocks, PURPOSE_ASSET_RPC);
-    }
-    private boolean transactionFinalized(String txHash, int maxRecentBlocks, String rpcPurpose) {
-        ObjectNode body = baseBody();
-        body.put("txHash", txHash);
-        body.put("maxRecentBlocks", maxRecentBlocks);
-        return callRuntime("/v1/polkadot/transaction-status", rpcPurpose, body)
-                .path("finalized").asBoolean(false);
-    }
     private JsonNode callRuntime(String path, String rpcPurpose, ObjectNode body) {
         AccountChainProfile profile = profile();
         List<ChainRpcNode> substrateNodes = rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), rpcPurpose);
@@ -277,7 +195,7 @@ public class PolkadotRuntimeClient {
                         .POST(HttpRequest.BodyPublishers.ofString(requestBody));
                 rpcNodeService.applyAuthHeaders(builder, node);
                 HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-                if ((response.statusCode() == 429 || response.statusCode() / 100 == 5) && attempt < 4) {
+                if (!path.endsWith("/broadcast-signed") && (response.statusCode() == 429 || response.statusCode() / 100 == 5) && attempt < 4) {
                     Thread.sleep(attempt * 1_000L);
                     continue;
                 }
@@ -309,7 +227,7 @@ public class PolkadotRuntimeClient {
         return profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-    static int ss58Prefix(AccountChainProfile profile) {
+    public static int ss58Prefix(AccountChainProfile profile) {
         if (profile.getChainId() != null && profile.getChainId() >= 0 && profile.getChainId() <= 16_383) {
             return profile.getChainId().intValue();
         }
@@ -319,19 +237,14 @@ public class PolkadotRuntimeClient {
         }
         return 42;
     }
-    static String normalizeAssetId(String value) {
+    public static String normalizeAssetId(String value) {
         String assetId = trim(value);
         return assetId.isBlank() ? "" : assetId;
     }
     static BigInteger amountPlanck(JsonNode node) {
-        String value = node == null || node.isMissingNode() || node.isNull() ? "0" : node.asText("0");
-        return new BigInteger(value);
-    }
-    private static SubmittedTransaction submitted(JsonNode result) {
-        return new SubmittedTransaction(result.path("txHash").asText(),
-                result.path("blockHeight").asLong(0L),
-                result.path("status").asText("FINALIZED"),
-                result.toString());
+        String value=node==null?"":node.asText();
+        if(!value.matches("0|[1-9][0-9]{0,38}"))throw new IllegalStateException("DOT public atomic balance is missing or malformed");
+        var amount=new BigInteger(value);if(amount.bitLength()>128)throw new IllegalStateException("DOT public balance exceeds u128");return amount;
     }
     private static String trim(String value) {
         return value == null ? "" : value.trim();
@@ -345,16 +258,10 @@ public class PolkadotRuntimeClient {
 
     public record TransferEvent(String txHash, String fromAddress, String toAddress,
                                 BigInteger amountPlanck, long blockHeight, long eventIndex,
-                                String assetId, String rawPayload) {
+                                String assetId, String blockHash, String rawPayload) {
     }
-    public record SubmittedTransaction(String txHash, long blockHeight, String status, String rawPayload) {
-    }
-
     public record AssetInfo(String assetId, boolean exists, BigInteger supply, BigInteger minBalance,
                             boolean sufficient, String name, String symbol, int decimals) {
     }
 
-    public record AssetCreateResult(String txHash, long blockHeight, String status, String assetId,
-                                    String rawPayload) {
-    }
 }

@@ -60,6 +60,19 @@ class AccountChainDepositSchedulingTest {
         verify(f.solana, times(2)).scanAndCredit();
     }
 
+    @Test void observedSuiDepositsStillConfirmWhenNewScanningIsOff() {
+        var f=new Fixture();when(f.runtime.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_SCAN)).thenReturn(false);
+        f.workflow.scanDueDeposits();verify(f.sui).confirmObserved();verify(f.sui,never()).scanAndCredit();
+        verify(f.near).confirmObserved();verify(f.near,never()).scanAndCredit();
+        verify(f.runtime,never()).enabledAccountProfiles();
+    }
+
+    @Test void moneroObservedOutputsRefreshBeforeTheNewScanSwitch() {
+        var f=new Fixture();when(f.runtime.isTaskEnabled("XMR",WalletRuntimeConfigService.TASK_SCAN)).thenReturn(false);
+        f.workflow.confirmMoneroObserved();f.workflow.scan(profile("XMR"));
+        verify(f.monero).confirmObserved();verify(f.monero,never()).scanAndCredit(any());
+    }
+
     private static AccountChainProfile profile(String chain) {
         return AccountChainProfile.builder().chain(chain).family("account").network("testnet")
                 .enabled(true).scanEnabled(true).build();
@@ -70,11 +83,13 @@ class AccountChainDepositSchedulingTest {
         final SolanaDepositScanner solana = mock(SolanaDepositScanner.class);
         final AptosDepositScanner aptos = mock(AptosDepositScanner.class);
         final MoneroDepositScanner monero = mock(MoneroDepositScanner.class);
+        final SuiDepositScanner sui = mock(SuiDepositScanner.class);
+        final NearDepositScanner near = mock(NearDepositScanner.class);
         final AccountChainDepositWorkflow workflow = new AccountChainDepositWorkflow(
                 mock(ChainAddressRepository.class), mock(ChainScanHeightRepository.class), mock(ChainProfileRepository.class),
                 mock(TokenConfigRepository.class), runtime, mock(EvmDepositScanner.class), mock(HyperCoreDepositScanner.class),
-                solana, aptos, mock(SuiDepositScanner.class), mock(TonDepositScanner.class), mock(XrpDepositScanner.class),
-                mock(CardanoDepositScanner.class), monero, mock(NearDepositScanner.class), mock(PolkadotDepositScanner.class),
+                solana, aptos, sui, mock(TonDepositScanner.class), mock(XrpDepositScanner.class),
+                mock(CardanoDepositScanner.class), monero, near, mock(PolkadotDepositScanner.class),
                 mock(TronClientFactory.class), mock(TronDepositScanner.class));
 
         Fixture() {

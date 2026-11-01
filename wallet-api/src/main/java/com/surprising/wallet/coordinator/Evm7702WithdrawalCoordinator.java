@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
+import com.surprising.wallet.chain.evm.Evm7702SignedBatchTransaction;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.service.CustodyGasAccountingService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
@@ -54,37 +54,69 @@ public class Evm7702WithdrawalCoordinator {
     private final CustodyGasAccountingService gasAccounting;
     private final CustodyGasUsageRepository gasUsages;
     private final LedgerBalanceRepository ledgerBalanceRepository;
+    private final com.surprising.wallet.service.Evm7702SigningService mpc;
+    private final com.surprising.wallet.service.CustodyCryptoService crypto;
+    private final EvmCollectionBatchRepository otherBatches;
+    private final tools.jackson.databind.ObjectMapper json;
     private final EvmNonceRepository nonces;
     private final WithdrawalSettlementService settlements;
     private final Evm7702ConfigurationService configurations;
 
-    /**
-     * 预留中继 nonce，保存已签名提现批次，并将逐笔网络费统一迁移到批次 Gas 预留。
-     */
+    public static com.surprising.wallet.service.Evm7702SigningService.Operation operation(Batch batch) {
+        return new com.surprising.wallet.service.Evm7702SigningService.Operation(batch.tenantId(),batch.id(),batch.chain(),
+                com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL);
+    }
+
     @Transactional(rollbackFor = Throwable.class)
-    public Evm7702BatchTransactionService.SignedBatchTransaction persistSignedAttempt(
-            Batch batch,
-            String relayerAddress,
-            BigInteger rpcPendingNonce,
-            SignedAttemptFactory factory) {
-        BigInteger reservedNonce = nonces.reserve(batch.chain(), relayerAddress.toLowerCase(), rpcPendingNonce);
-        SignedAttempt signedAttempt = factory.create(reservedNonce);
-        if (!reservedNonce.equals(signedAttempt.attempt().relayerNonce())) {
-            throw new IllegalStateException("signed payout attempt uses an unreserved relayer nonce");
-        }
-        saveSignedAttempt(batch, signedAttempt.attempt());
+    public com.surprising.wallet.service.Evm7702SigningService.Plan reserveSigningPlan(Batch batch,Object preparation,
+            BigInteger pendingNonce) {
+        requireOriginalClaim(batch);
+        return mpc.reserve(operation(batch),batch.config().chainId().longValueExact(),batch.relayerChainAddress(),pendingNonce,preparation);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public com.surprising.wallet.service.Evm7702SigningService.OuterPayload reserveOuter(Batch batch,
+            org.web3j.crypto.RawTransaction raw,long estimatedGas,BigDecimal fee) {
+        requireOriginalClaim(batch);
+        var payload=mpc.reserveOuter(operation(batch),raw,estimatedGas,fee);
         for (ClaimedItem item : batch.items()) {
-            gasUsages.find(
-                    batch.tenantId(),
-                    "WITHDRAWAL",
-                    item.custodyWithdrawalId()).ifPresent(usage -> gasAccounting.release(
-                    usage.tenantId(),
-                    usage.operationType(),
-                    usage.operationId(),
-                    "network fee consolidated into EIP-7702 withdrawal batch " + batch.id()));
+            gasUsages.find(batch.tenantId(),"WITHDRAWAL",item.custodyWithdrawalId()).ifPresent(usage ->
+                    gasAccounting.release(usage.tenantId(),usage.operationType(),usage.operationId(),"fee consolidated into original MPC batch "+batch.id()));
         }
-        gasAccounting.reserve(batch.tenantId(), "WITHDRAWAL_BATCH", batch.id(), signedAttempt.reservedFee());
-        return signedAttempt.signedTransaction();
+        gasAccounting.reserve(batch.tenantId(),"WITHDRAWAL_BATCH",batch.id(),payload.reservedFee());
+        return payload;
+    }
+
+    /** Verified selected bytes, batch ownership/hash, items and recovery receipt commit before RPC. */
+    @Transactional(rollbackFor = Throwable.class)
+    public Evm7702SignedBatchTransaction persistSignedAttempt(Batch batch) {
+        requireOriginalClaim(batch);
+        batchRepository.lockGasOperation(batch.tenantId(),batch.id()).orElseThrow();
+        var signed=mpc.selected(operation(batch));
+        var existing=batchRepository.find(batch.tenantId(),batch.id()).orElseThrow();
+        if(existing.canonicalTxHash()!=null) {
+            if(!existing.canonicalTxHash().equalsIgnoreCase(signed.transactionHash()))throw new IllegalStateException("selected batch hash changed");
+            return signed;
+        }
+        var selected=mpc.outerPayload(operation(batch));
+        var raw=selected.raw();
+        var dynamic=(org.web3j.crypto.transaction.type.Transaction1559)raw.getTransaction();
+        var prepared=mpc.preparation(operation(batch),com.surprising.wallet.model.mpc.Evm7702PayoutPayload.class);
+        var attempt=new PreparedAttempt(batch.tenantId(),batch.id(),selected.estimatedGas(),raw.getGasLimit().longValueExact(),
+                dynamic.getMaxFeePerGas(),dynamic.getMaxPriorityFeePerGas(),raw.getNonce(),signed.transactionHash(),
+                Hash.sha3(Numeric.prependHexPrefix(raw.getData())),crypto.encrypt(signed.rawTransaction()),"custody-v1", prepared.authorization()!=null, prepared.authorization()==null?null:prepared.authorization().nonce(),
+                prepared.request().operationNonce(),Instant.ofEpochSecond(prepared.request().deadline().longValueExact()));
+        saveSignedAttempt(batch,attempt);
+        if(batchRepository.markPrepared(batch.tenantId(),batch.id(),signed.transactionHash())!=1)
+            throw new IllegalStateException("selected batch raw/hash transition failed");
+        batchAttemptRepository.markUnknown(batch.tenantId(),batch.id(),"PREPARED","original selected MPC transaction awaits broadcast/reconciliation");
+        return signed;
+    }
+
+    private void requireOriginalClaim(Batch batch) {
+        String original=batchRepository.claimPayload(batch.tenantId(),batch.id()).orElseThrow();
+        if(!json.readTree(original).equals(json.readTree(json.writeValueAsString(batch))))
+            throw new IllegalArgumentException("batch differs from its immutable original claim");
     }
 
     /**
@@ -181,11 +213,7 @@ public class Evm7702WithdrawalCoordinator {
                 row.authorizationNonce(),
                 row.operationNonce().add(BigInteger.ONE),
                 txHash,
-                runtimeConfigRepository.find(
-                        row.chain(),
-                        row.network(),
-                        null,
-                        row.delegateVersion()).getFirst().payoutDelegateAddress(),
+                claimed(batch.tenantId(),batch.batchId()).orElseThrow().config().payoutDelegateAddress(),
                 row.delegateVersion());
         gasAccounting.settle(batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(), actualFee, "EVM_RECEIPT", txHash);
     }
@@ -251,11 +279,7 @@ public class Evm7702WithdrawalCoordinator {
         }
         batchAttemptRepository.markFailed(batch.tenantId(), batch.batchId(), txHash, "OUTER_REVERTED", errorHash);
         var row = batchRepository.find(batch.tenantId(), batch.batchId()).orElseThrow();
-        String delegateAddress = runtimeConfigRepository.find(
-                row.chain(),
-                row.network(),
-                null,
-                row.delegateVersion()).getFirst().payoutDelegateAddress();
+        String delegateAddress=claimed(batch.tenantId(),batch.batchId()).orElseThrow().config().payoutDelegateAddress();
         payoutAccountRepository.markReverted(
                 batch.tenantId(),
                 row.chain(),
@@ -276,6 +300,10 @@ public class Evm7702WithdrawalCoordinator {
      */
     @Transactional(rollbackFor = Throwable.class)
     public void failUnbroadcast(UnbroadcastBatch batch) {
+        var operation=new com.surprising.wallet.service.Evm7702SigningService.Operation(batch.tenantId(),batch.batchId(),batch.chain(),
+                com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL);
+        if(mpc.plan(operation).isPresent())throw new IllegalStateException("admitted MPC payout cannot refund as unsigned");
+
         List<BatchItemIdentity> items = listBatchItems(batch.tenantId(), batch.batchId());
         String error = batch.errorMessage() == null ? "EIP-7702 payout preparation failed" : batch.errorMessage();
         for (BatchItemIdentity item : items) {
@@ -313,8 +341,8 @@ public class Evm7702WithdrawalCoordinator {
      * 按链上原子费用和数据库中的原生资产精度计算提现批次账务费用。
      */
     private BigDecimal actualFee(String chain, BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee) {
-        var profile = chainProfileRepository.findAccountByChain(chain).orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chain));
-        var asset = chainAssetRepository.findActiveDefinition(
+        var profile = chainProfileRepository.listProfiles(false).stream().filter(row -> row.getChain().equals(chain)).findFirst().orElseThrow();
+        var asset = chainAssetRepository.findDefinition(
                 chain,
                 profile.getNativeSymbol()).orElseThrow(() -> new IllegalStateException("missing active native chain_asset for " + chain));
         if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {
@@ -326,6 +354,8 @@ public class Evm7702WithdrawalCoordinator {
     @Transactional(rollbackFor = Throwable.class)
     public Optional<Batch> claimNextBatch(String chain, String network) {
         var resolved = configurations.requireActive(chain, network);
+        nonces.lock7702Chain(chain,network);
+        if(batchRepository.existsPending(chain,network) || otherBatches.existsPending(chain,network))return Optional.empty();
         Configuration config = resolved.config();
         if (!config.batchWithdrawalEnabled()) {
             return Optional.empty();
@@ -407,6 +437,22 @@ public class Evm7702WithdrawalCoordinator {
                 network,
                 group.hotChainAddress().getId(),
                 group.hotWallet());
+        Instant deadline = Instant.now().plusSeconds(config.signatureTtlSeconds());
+        Batch batch = new Batch(
+                batchId,
+                group.tenantId(),
+                chain,
+                network,
+                group.assetSymbol(),
+                group.tokenContract(),
+                group.decimals(),
+                group.hotWallet(),
+                batchHash,
+                deadline,
+                group.hotChainAddress(),
+                config,
+                resolved.relayer(),
+                List.copyOf(items));
         batchRepository.insert(
                 batchId,
                 group.tenantId(),
@@ -419,8 +465,8 @@ public class Evm7702WithdrawalCoordinator {
                 config.relayerAddress(),
                 config.version(),
                 batchHash,
-                items.size());
-        Instant deadline = Instant.now().plusSeconds(config.signatureTtlSeconds());
+                items.size(),
+                json.writeValueAsString(batch));
         for (int index = 0; index < items.size(); index++) {
             ClaimedItem item = items.get(index);
             if (batchItemRepository.insert(
@@ -440,21 +486,17 @@ public class Evm7702WithdrawalCoordinator {
                 throw new IllegalStateException("withdrawal item claim lost");
             }
         }
-        return Optional.of(new Batch(
-                batchId,
-                group.tenantId(),
-                chain,
-                network,
-                group.assetSymbol(),
-                group.tokenContract(),
-                group.decimals(),
-                group.hotWallet(),
-                batchHash,
-                deadline,
-                group.hotChainAddress(),
-                config,
-                resolved.relayer(),
-                List.copyOf(items)));
+        return Optional.of(batch);
+    }
+
+    /** Resume the original public batch without consulting active configuration or reconstructing items. */
+    public Optional<Batch> claimed(UUID tenantId, UUID batchId) {
+        return batchRepository.claimPayload(tenantId, batchId).map(payload -> json.readValue(payload, Batch.class));
+    }
+
+    public List<Batch> listSigning(String chain, String network, int limit) {
+        return batchRepository.listSigning(chain, network, limit).stream()
+                .map(payload -> json.readValue(payload, Batch.class)).toList();
     }
 
     private void saveSignedAttempt(Batch batch, PreparedAttempt attempt) {
@@ -519,6 +561,7 @@ public class Evm7702WithdrawalCoordinator {
 
     @Transactional(rollbackFor = Throwable.class)
     public void releaseUnbroadcastBatch(Batch batch, String code, String message) {
+        if(mpc.plan(operation(batch)).isPresent())throw new IllegalStateException("admitted MPC batch cannot be released as unsigned");
         int attempts = batchAttemptRepository.countByBatch(batch.tenantId(), batch.id());
         if (attempts != 0) {
             throw new IllegalStateException("signed payout batch cannot be released");
@@ -741,15 +784,4 @@ public class Evm7702WithdrawalCoordinator {
         }
     }
 
-    @FunctionalInterface
-    public interface SignedAttemptFactory {
-
-        SignedAttempt create(BigInteger reservedNonce);
-    }
-
-    public record SignedAttempt(
-            Evm7702BatchTransactionService.SignedBatchTransaction signedTransaction,
-            PreparedAttempt attempt,
-            BigDecimal reservedFee) {
-    }
 }

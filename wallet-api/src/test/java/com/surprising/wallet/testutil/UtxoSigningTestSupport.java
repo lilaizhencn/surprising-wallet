@@ -1,7 +1,6 @@
 package com.surprising.wallet.testutil;
 
 import com.surprising.wallet.chain.model.UtxoSigningTransaction;
-import com.surprising.wallet.common.signing.UtxoPartialSignature;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
 import com.surprising.wallet.common.signing.UtxoSigningRequest;
 import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
@@ -29,7 +28,7 @@ public final class UtxoSigningTestSupport {
     }
 
     public static UtxoSignedTransaction signed(String hash, long fee) {
-        return new UtxoSignedTransaction("00", hash, fee, 636, 159, new UtxoPartialSignature.Estimates(0, 159, 636));
+        return new UtxoSignedTransaction("00", hash, fee, 636, 159, new UtxoSignedTransaction.Estimates(0, 159, 636));
     }
 
     public static UtxoSigningTransaction row(int id, UtxoSigningRequest request, short status,

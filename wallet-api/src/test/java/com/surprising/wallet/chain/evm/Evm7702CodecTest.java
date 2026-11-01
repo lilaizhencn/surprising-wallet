@@ -59,7 +59,7 @@ class Evm7702CodecTest {
                 BigInteger.valueOf(2_000_000_000L), BigInteger.valueOf(180_000L));
         Evm7702OperationSigner signer = new Evm7702OperationSigner();
         byte[] digest = signer.digest(BigInteger.valueOf(31337), request);
-        byte[] signature = signer.sign(BigInteger.valueOf(31337), request, AUTHORITY);
+        byte[] signature = com.surprising.wallet.testutil.Evm7702TestSigning.signDigest(signer.digest(BigInteger.valueOf(31337), request), AUTHORITY);
         Sign.SignatureData signatureData = new Sign.SignatureData(
                 signature[64], java.util.Arrays.copyOfRange(signature, 0, 32),
                 java.util.Arrays.copyOfRange(signature, 32, 64));
@@ -77,14 +77,14 @@ class Evm7702CodecTest {
      */
     @Test
     void shouldCreateChainBoundAuthorizationAndType4Transaction() throws Exception {
-        Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
+        com.surprising.wallet.testutil.Evm7702TestSigning authorizationService = new com.surprising.wallet.testutil.Evm7702TestSigning();
         AuthorizationTuple authorization = authorizationService.authorize(
                 BigInteger.valueOf(31337), DELEGATE, BigInteger.ZERO, AUTHORITY);
         assertEquals(AUTHORITY.getAddress(), Sign.recoverAuthorizationSigner(authorization));
         assertEquals(BigInteger.valueOf(31337), authorization.getChainId());
 
-        Evm7702BatchTransactionService.SignedType4Transaction signed =
-                new Evm7702BatchTransactionService().sign(
+        com.surprising.wallet.chain.evm.Evm7702SignedBatchTransaction signed =
+                new com.surprising.wallet.testutil.Evm7702TestSigning().sign(
                         31337L, BigInteger.ZERO, BigInteger.ONE, BigInteger.TWO,
                         BigInteger.valueOf(500_000L), COLLECTOR, "0x12345678",
                         List.of(authorization), RELAYER);

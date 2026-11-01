@@ -151,9 +151,11 @@ class EvmBatchRowsIntegrationTest {
     private UUID batch(boolean collection) {
         UUID id = UUID.randomUUID();
         if (collection) new EvmCollectionBatchRepository(jdbc).insert(id, tenant, "ETH", "sepolia", "ETH", ADDRESS,
-                18, ADDRESS, RECIPIENT, 1, HASH, 1);
+                18, ADDRESS, RECIPIENT, 1, HASH, 1,
+                com.surprising.wallet.testutil.CustodyTestSupport.evmClaimSnapshot(tenant,id,"ETH","sepolia",HASH));
         else new EvmWithdrawalBatchRepository(jdbc).insert(id, tenant, "ETH", "sepolia", "ETH", ADDRESS,
-                18, ADDRESS, RECIPIENT, 1, HASH, 1);
+                18, ADDRESS, RECIPIENT, 1, HASH, 1,
+                com.surprising.wallet.testutil.CustodyTestSupport.evmClaimSnapshot(tenant,id,"ETH","sepolia",HASH));
         return id;
     }
 

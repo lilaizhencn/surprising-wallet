@@ -61,68 +61,137 @@ class PgmqIntegrationTest {
         jdbc.execute("delete from chain_fee_rate");
     }
     @Test void competingConsumersClaimDistinctMessages() throws Exception {
-        for (int i = 0; i < 40; i++) client.send(WalletQueue.SIGN_FIRST, "{\"n\":" + i + "}", HEADERS);
+        for (int i = 0; i < 40; i++) client.send(WalletQueue.MPC_SIGN, "{\"n\":" + i + "}", HEADERS);
         Set<Long> ids = ConcurrentHashMap.newKeySet();
         try (var executor = Executors.newFixedThreadPool(4)) {
             var futures = new ArrayList<Future<?>>();
             for (int i = 0; i < 4; i++) futures.add(executor.submit(() -> {
-                for (var m : client.read(WalletQueue.SIGN_FIRST, 300, 10)) assertTrue(ids.add(m.id()));
+                for (var m : client.read(WalletQueue.MPC_SIGN, 300, 10)) assertTrue(ids.add(m.id()));
             }));
             for (var f : futures) f.get(10, TimeUnit.SECONDS);
         }
         assertEquals(40, ids.size());
     }
     @Test void expiredClaimRecoversAndRejectsStaleOwner() {
-        client.send(WalletQueue.SIGN_FIRST, "{}", HEADERS);
-        var old = client.read(WalletQueue.SIGN_FIRST, 300, 1).getFirst();
-        jdbc.execute("update pgmq.q_wallet_sign_first set vt = now() - interval '1 second'");
-        var current = client.read(WalletQueue.SIGN_FIRST, 300, 1).getFirst();
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        var old = client.read(WalletQueue.MPC_SIGN, 300, 1).getFirst();
+        jdbc.execute("update pgmq.q_wallet_mpc_sign set vt = now() - interval '1 second'");
+        var current = client.read(WalletQueue.MPC_SIGN, 300, 1).getFirst();
         assertEquals(old.id(), current.id()); assertEquals(old.reads() + 1, current.reads());
         transaction.executeWithoutResult(s -> {
-            assertFalse(client.lock(WalletQueue.SIGN_FIRST, old));
-            assertTrue(client.lock(WalletQueue.SIGN_FIRST, current));
-            client.archive(WalletQueue.SIGN_FIRST, current);
+            assertFalse(client.lock(WalletQueue.MPC_SIGN, old));
+            assertTrue(client.lock(WalletQueue.MPC_SIGN, current));
+            client.archive(WalletQueue.MPC_SIGN, current);
         });
-        assertEquals(0, count("pgmq.q_wallet_sign_first"));
-        assertEquals(1, count("pgmq.a_wallet_sign_first"));
+        assertEquals(0, count("pgmq.q_wallet_mpc_sign"));
+        assertEquals(1, count("pgmq.a_wallet_mpc_sign"));
     }
     @Test void lockedProcessingCannotBeReclaimedEvenAfterVisibilityExpires() throws Exception {
-        client.send(WalletQueue.SIGN_FIRST, "{}", HEADERS);
-        var message = client.read(WalletQueue.SIGN_FIRST, 300, 1).getFirst();
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        var message = client.read(WalletQueue.MPC_SIGN, 300, 1).getFirst();
         transaction.executeWithoutResult(s -> {
-            assertTrue(client.lock(WalletQueue.SIGN_FIRST, message));
-            jdbc.execute("update pgmq.q_wallet_sign_first set vt = now() - interval '1 second'");
+            assertTrue(client.lock(WalletQueue.MPC_SIGN, message));
+            jdbc.execute("update pgmq.q_wallet_mpc_sign set vt = now() - interval '1 second'");
             try (var executor = Executors.newSingleThreadExecutor()) {
-                assertTrue(executor.submit(() -> client.read(WalletQueue.SIGN_FIRST, 300, 1)).get(5, TimeUnit.SECONDS).isEmpty());
+                assertTrue(executor.submit(() -> client.read(WalletQueue.MPC_SIGN, 300, 1)).get(5, TimeUnit.SECONDS).isEmpty());
             } catch (Exception e) { throw new RuntimeException(e); }
-            client.archive(WalletQueue.SIGN_FIRST, message);
+            client.archive(WalletQueue.MPC_SIGN, message);
         });
     }
     @Test void handlerFailureRollsBackBusinessWriteAndRetries() {
-        client.send(WalletQueue.SIGN_FIRST, "{}", HEADERS);
-        worker.drain(WalletQueue.SIGN_FIRST, 1, m -> {
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        worker.drain(WalletQueue.MPC_SIGN, 1, m -> {
             jdbc.update("insert into chain_fee_rate(chain,fee_rate) values ('BTC',10)");
-            client.send(WalletQueue.SIGN_SECOND, "{}", m.headers());
+            client.send(WalletQueue.SIGN_DONE, "{}", m.headers());
             throw new IllegalStateException("simulated crash");
         });
         assertEquals(0, count("chain_fee_rate"));
-        assertEquals(0, count("pgmq.q_wallet_sign_second"));
-        assertEquals(1, count("pgmq.q_wallet_sign_first"));
-        assertEquals(0, count("pgmq.a_wallet_sign_first"));
-        assertTrue(client.read(WalletQueue.SIGN_FIRST, 300, 1).isEmpty());
+        assertEquals(0, count("pgmq.q_wallet_sign_done"));
+        assertEquals(1, count("pgmq.q_wallet_mpc_sign"));
+        assertEquals(0, count("pgmq.a_wallet_mpc_sign"));
+        assertTrue(client.read(WalletQueue.MPC_SIGN, 300, 1).isEmpty());
     }
     @Test void stageAdvanceAndArchiveCommitWithBusinessWriteAndTenant() {
-        client.send(WalletQueue.SIGN_FIRST, "{}", HEADERS);
-        worker.drain(WalletQueue.SIGN_FIRST, 1, m -> {
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        worker.drain(WalletQueue.MPC_SIGN, 1, m -> {
             jdbc.update("insert into chain_fee_rate(chain,fee_rate) values ('BTC',10)");
-            return new QueueWorker.Next(WalletQueue.SIGN_SECOND, "{\"signed\":true}");
+            return new QueueWorker.Next(WalletQueue.SIGN_DONE, "{\"signed\":true}");
         });
         assertEquals(1, count("chain_fee_rate"));
-        assertEquals(0, count("pgmq.q_wallet_sign_first"));
-        assertEquals(1, count("pgmq.a_wallet_sign_first"));
-        var next = client.read(WalletQueue.SIGN_SECOND, 300, 1).getFirst();
+        assertEquals(0, count("pgmq.q_wallet_mpc_sign"));
+        assertEquals(1, count("pgmq.a_wallet_mpc_sign"));
+        var next = client.read(WalletQueue.SIGN_DONE, 300, 1).getFirst();
         assertTrue(next.headers().contains("00000000-0000-0000-0000-000000000001"));
     }
+
+    @Test void remoteWorkSeesItsCommittedIntentAndCompletionCommitsNextStageWithArchive() {
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        worker.drainRemote(WalletQueue.MPC_SIGN, 1, message -> {
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            transaction.executeWithoutResult(status -> {
+                assertTrue(client.lock(WalletQueue.MPC_SIGN,message));
+                jdbc.update("insert into chain_fee_rate(chain,fee_rate) values ('BTC',10)");
+            });
+            // This query uses another connection: external work may only see the committed intent.
+            assertEquals(1, count("chain_fee_rate"));
+            return "observed";
+        }, (message, outcome) -> {
+            assertTrue(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            assertEquals("observed", outcome);
+            client.send(WalletQueue.SIGN_DONE, "{}", message.headers());
+            return true;
+        });
+        assertEquals(1, count("chain_fee_rate"));
+        assertEquals(1, count("pgmq.q_wallet_sign_done"));
+        assertEquals(1, count("pgmq.a_wallet_mpc_sign"));
+        assertEquals(0, count("pgmq.q_wallet_mpc_sign"));
+    }
+
+    @Test void remoteResultFromAnExpiredClaimCannotCompleteOrAcknowledgeTheNewClaim() {
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        worker.drainRemote(WalletQueue.MPC_SIGN, 1, message -> {
+            transaction.executeWithoutResult(status -> {
+                assertTrue(client.lock(WalletQueue.MPC_SIGN,message));
+                jdbc.update("insert into chain_fee_rate(chain,fee_rate) values ('BTC',10)");
+            });
+            jdbc.execute("update pgmq.q_wallet_mpc_sign set vt=now()-interval '1 second'");
+            var current = client.read(WalletQueue.MPC_SIGN, 300, 1).getFirst();
+            assertEquals(message.id(), current.id());
+            assertEquals(message.reads()+1, current.reads());
+            return "late result";
+        }, (message, outcome) -> {
+            fail("a stale external result may not complete the current claim");
+            return true;
+        });
+        assertEquals(1, count("chain_fee_rate"));
+        assertEquals(1, count("pgmq.q_wallet_mpc_sign"));
+        assertEquals(0, count("pgmq.a_wallet_mpc_sign"));
+        assertEquals(0, count("pgmq.q_wallet_sign_done"));
+    }
+
+    @Test void pendingRemoteOutcomeCommitsItsObservationAndDefersWithoutArchive() {
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        worker.drainRemote(WalletQueue.MPC_SIGN, 1, message -> "unknown", (message, outcome) -> {
+            assertEquals("unknown", outcome);
+            jdbc.update("insert into chain_fee_rate(chain,fee_rate) values ('BTC',10)");
+            return false;
+        });
+        assertEquals(1, count("chain_fee_rate"));
+        assertEquals(1, count("pgmq.q_wallet_mpc_sign"));
+        assertEquals(0, count("pgmq.a_wallet_mpc_sign"));
+        assertTrue(client.read(WalletQueue.MPC_SIGN, 300, 1).isEmpty());
+        assertEquals("Pending", jdbc.queryForObject("select headers->>'last_error' from pgmq.q_wallet_mpc_sign",String.class));
+    }
+
+    @Test void remoteQueueRejectsAnOuterTransactionBeforeClaimingOrCallingExternalWork() {
+        client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
+        transaction.executeWithoutResult(status -> assertThrows(IllegalStateException.class,
+                () -> worker.drainRemote(WalletQueue.MPC_SIGN, 1, message -> {
+                    fail("external work cannot run under the caller transaction"); return null;
+                }, (message, outcome) -> true)));
+        assertEquals(0, jdbc.queryForObject("select read_ct from pgmq.q_wallet_mpc_sign",Integer.class));
+    }
+
     @Test void poisonMessageIsDeadLetteredAndReplayIsAuditedAndIdempotent() {
         client.send(WalletQueue.RBF, "{\"transactionId\":123}", HEADERS);
         jdbc.execute("update pgmq.q_wallet_rbf set read_ct = 19");
@@ -137,10 +206,10 @@ class PgmqIntegrationTest {
     }
     @Test void enqueueRollsBackWithBusinessTransaction() {
         assertThrows(IllegalStateException.class, () -> transaction.executeWithoutResult(s -> {
-            client.send(WalletQueue.SIGN_FIRST, "{}", HEADERS);
+            client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
             throw new IllegalStateException();
         }));
-        assertEquals(0, count("pgmq.q_wallet_sign_first"));
+        assertEquals(0, count("pgmq.q_wallet_mpc_sign"));
     }
     @Test void signerRoleCanProcessButCannotReadBusinessTables() throws Exception {
         String role = "sw_test_signer_" + UUID.randomUUID().toString().replace("-", "");
@@ -148,22 +217,22 @@ class PgmqIntegrationTest {
         try {
             jdbc.execute("grant usage on schema pgmq to " + role);
             jdbc.execute("grant execute on all functions in schema pgmq to " + role);
-            jdbc.execute("grant select, update, delete on pgmq.q_wallet_sign_first to " + role);
-            jdbc.execute("grant insert, select(msg_id) on pgmq.a_wallet_sign_first, pgmq.q_wallet_sign_second, pgmq.q_wallet_sign_first_dead to " + role);
-            jdbc.execute("grant usage, select on sequence pgmq.q_wallet_sign_second_msg_id_seq, pgmq.q_wallet_sign_first_dead_msg_id_seq to " + role);
-            client.send(WalletQueue.SIGN_FIRST, "{}", HEADERS);
+            jdbc.execute("grant select, update, delete on pgmq.q_wallet_mpc_sign to " + role);
+            jdbc.execute("grant insert, select(msg_id) on pgmq.a_wallet_mpc_sign, pgmq.q_wallet_sign_done, pgmq.q_wallet_mpc_sign_dead to " + role);
+            jdbc.execute("grant usage, select on sequence pgmq.q_wallet_sign_done_msg_id_seq, pgmq.q_wallet_mpc_sign_dead_msg_id_seq to " + role);
+            client.send(WalletQueue.MPC_SIGN, "{}", HEADERS);
             try (var connection = DriverManager.getConnection("jdbc:postgresql://127.0.0.1:5432/" + database, username, password)) {
                 connection.createStatement().execute("set role " + role);
                 var ds = new org.springframework.jdbc.datasource.SingleConnectionDataSource(connection, true);
                 var signerJdbc = new JdbcTemplate(ds);
                 var signer = new PgmqClient(signerJdbc);
                 var signerWorker = new QueueWorker(signer, new DataSourceTransactionManager(ds));
-                signerWorker.drain(WalletQueue.SIGN_FIRST, 1, m -> new QueueWorker.Next(WalletQueue.SIGN_SECOND, "{}"));
+                signerWorker.drain(WalletQueue.MPC_SIGN, 1, m -> new QueueWorker.Next(WalletQueue.SIGN_DONE, "{}"));
                 assertThrows(org.springframework.dao.DataAccessException.class,
                         () -> signerJdbc.queryForList("select * from ledger_balance"));
             }
-            assertEquals(0, count("pgmq.q_wallet_sign_first"));
-            assertEquals(1, count("pgmq.q_wallet_sign_second"));
+            assertEquals(0, count("pgmq.q_wallet_mpc_sign"));
+            assertEquals(1, count("pgmq.q_wallet_sign_done"));
         } finally {
             jdbc.execute("drop owned by " + role);
             jdbc.execute("drop role " + role);

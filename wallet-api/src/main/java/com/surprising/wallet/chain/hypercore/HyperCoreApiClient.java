@@ -19,7 +19,7 @@ import java.time.Duration;
 /**
  * HyperCore 链 API 客户端，封装对 HyperCore 交易所后端 REST API 的 HTTP 调用。
  *
- * <p>HyperCore 是一个中心化交易所（CEX）模式的链，通过后端 API 提供
+ * <p>HyperCore 是 Hyperliquid 的 L1 执行层，通过 API 提供
  * spotClearinghouseState（账户状态查询）和 exchange（交易提交）等接口。</p>
  *
  * <p>所有请求均为 POST JSON 格式，支持多节点故障转移。</p>

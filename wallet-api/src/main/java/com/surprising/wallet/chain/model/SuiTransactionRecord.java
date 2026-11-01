@@ -19,7 +19,7 @@ import java.math.BigDecimal;
  *   <li>{@code txDigest} - 交易摘要（Sui 中使用 digest 代替 hash）</li>
  *   <li>{@code sender} / {@code receiver} - 发送方/接收方地址</li>
  *   <li>{@code assetSymbol} / {@code coinType} - 资产符号和 Coin 类型</li>
- *   <li>{@code amount} / {@code gasUsed} - 金额和消耗的 Gas</li>
+ *   <li>{@code amount} / {@code feeMist} - 金额和存储退款后的有符号净费用</li>
  *   <li>{@code checkpoint} - 检查点序号</li>
  *   <li>{@code status} - 交易状态</li>
  *   <li>{@code rawPayload} - 原始交易数据</li>
@@ -34,8 +34,9 @@ public class SuiTransactionRecord {
     private String assetSymbol;
     private String coinType;
     private BigDecimal amount;
-    private Long gasUsed;
+    private Long feeMist;
     private Long checkpoint;
     private String status;
     private String rawPayload;
+    private String executionReceipt;
 }

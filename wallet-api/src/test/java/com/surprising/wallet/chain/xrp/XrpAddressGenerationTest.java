@@ -33,14 +33,18 @@ class XrpAddressGenerationTest {
         ECKey firstKey = ECKey.fromPrivate(FIRST_PRIVATE_KEY);
         ECKey secondKey = ECKey.fromPrivate(SECOND_PRIVATE_KEY);
 
-        String first = XrpKeyService.address(firstKey);
-        String restarted = XrpKeyService.address(ECKey.fromPrivate(FIRST_PRIVATE_KEY));
-        String second = XrpKeyService.address(secondKey);
+        String first = address(firstKey);
+        String restarted = address(ECKey.fromPrivate(FIRST_PRIVATE_KEY));
+        String second = address(secondKey);
 
         assertEquals(first, restarted);
         assertNotEquals(first, second);
         assertTrue(first.startsWith("r"));
         Address.of(first).validateAddress();
         Address.of(second).validateAddress();
+    }
+    private String address(ECKey key) {
+        return com.surprising.wallet.chain.MpcPublicAddressCodec.encode(
+                com.surprising.wallet.common.chain.AccountChainProfile.builder().chain("XRP").network("testnet").build(),key.getPubKey());
     }
 }

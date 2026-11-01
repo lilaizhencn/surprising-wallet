@@ -1,38 +1,33 @@
 package com.surprising.wallet.config;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 /**
  * 钱包 RPC 策略，定义 RPC 节点的认证方式和用途管理。
  *
- * <p>提供 RPC 节点用途（purpose）的链级差异化管理（如 Polkadot 需要 rpc + runtime + asset_rpc）
+ * <p>提供 RPC 节点用途（purpose）的链级差异化管理（如 Polkadot 需要 Asset Hub rpc + runtime）
  * 和鉴权类型判定（API Key / User+Password / Public / 占位符）。
  */
 public final class WalletRpcPolicy {
-    private static final Set<String> API_KEY_AUTH = Set.of("BEARER", "API_KEY", "PROJECT_ID", "TOKEN");
+    private static final Set<String> API_KEY_AUTH = Set.of("BEARER", "API_KEY", "TOKEN");
     private static final Set<String> USER_PASSWORD_AUTH = Set.of("BASIC", "DIGEST");
     private WalletRpcPolicy() {
     }
     public static List<String> requiredPurposes(String chain, String network, boolean hasTokens) {
         if ("DOT".equalsIgnoreCase(chain)) {
-            List<String> purposes = new ArrayList<>(List.of("rpc", "runtime"));
-            if (hasTokens) {
-                purposes.add("asset_rpc");
-            }
-            return List.copyOf(purposes);
+            return List.of("rpc", "runtime");
         }
-        if ("XMR".equalsIgnoreCase(chain) && "regtest".equalsIgnoreCase(network)) {
-            return List.of("rpc", "faucet", "daemon");
+        if ("XMR".equalsIgnoreCase(chain)) {
+            return List.of("daemon");
         }
         if ("HYPERCORE".equalsIgnoreCase(chain)) {
             return List.of("info", "exchange");
         }
         return List.of("rpc");
     }
-    public static boolean requiresApiKey(String authType, String connectionType) {
-        return API_KEY_AUTH.contains(normalize(authType)) || "BLOCKFROST".equals(normalize(connectionType));
+    public static boolean requiresApiKey(String authType) {
+        return API_KEY_AUTH.contains(normalize(authType));
     }
     public static boolean requiresUsernamePassword(String authType) {
         return USER_PASSWORD_AUTH.contains(normalize(authType));

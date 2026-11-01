@@ -168,7 +168,7 @@ public class WalletRpcConfigService {
                 || WalletRpcPolicy.containsPlaceholder(value.getPassword())) {
             throw new IllegalArgumentException("RPC URL and credentials cannot contain placeholders");
         }
-        if (value.getEnabled() && WalletRpcPolicy.requiresApiKey(value.getAuthType(), value.getConnectionType())
+        if (value.getEnabled() && WalletRpcPolicy.requiresApiKey(value.getAuthType())
                 && blank(value.getApiKey())) {
             throw new IllegalArgumentException("API key is required by the selected RPC authentication");
         }
@@ -188,11 +188,11 @@ public class WalletRpcConfigService {
         String apiKey = secret(command.apiKey(), current == null ? null : current.getApiKey());
         String username = secret(command.username(), current == null ? null : current.getUsername());
         String password = secret(command.password(), current == null ? null : current.getPassword());
-        if ("NONE".equals(authType) && !"BLOCKFROST".equals(connectionType)) {
+        if ("NONE".equals(authType)) {
             apiKey = null;
             username = null;
             password = null;
-        } else if (WalletRpcPolicy.requiresApiKey(authType, connectionType)) {
+        } else if (WalletRpcPolicy.requiresApiKey(authType)) {
             username = null;
             password = null;
         } else if (WalletRpcPolicy.requiresUsernamePassword(authType)) {

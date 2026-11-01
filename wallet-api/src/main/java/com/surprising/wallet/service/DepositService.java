@@ -37,17 +37,23 @@ public class DepositService {
 
     @Transactional(rollbackFor = Throwable.class)
     public boolean recordAndCredit(DepositEvent event, long logIndex, int requiredConfirmations, String accountId) {
+        return recordAndCredit(event,logIndex,requiredConfirmations,accountId,true);
+    }
+
+    /** Preserve actual chain depth while a native output remains locked; confirmation alone cannot release it. */
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean recordAndCredit(DepositEvent event, long logIndex, int requiredConfirmations, String accountId, boolean unlocked) {
         String chain = event.chainType().name();
         UUID tenantId = requireTenant(chain, accountId, event.toAddress());
         if (isInternalCollectionTransfer(tenantId, chain, event.txId(), event.toAddress())) return false;
         String status = "CONFIRMED";
         if (event.confirmations() <= 0) status = "DETECTED";
-        else if (event.confirmations() < requiredConfirmations) status = "CONFIRMING";
+        else if (!unlocked || event.confirmations() < requiredConfirmations) status = "CONFIRMING";
         int recorded = deposits.upsert(tenantId, chain, event.assetSymbol(), event.txId(), logIndex,
                 event.fromAddress(), event.toAddress(), event.tokenAddress(), event.amount(), event.blockHeight(),
                 event.blockHash(), event.confirmations(), status, accountId, event.rawPayload());
         if (recorded != 1) throw new IllegalStateException("deposit record belongs to another tenant");
-        if (event.confirmations() < requiredConfirmations) return false;
+        if (!unlocked || event.confirmations() < requiredConfirmations) return false;
         var credit = deposits.markCredited(tenantId, chain, event.txId(), logIndex);
         if (credit.isEmpty()) return false;
         balances.increment(tenantId, chain, event.assetSymbol(), accountId, event.amount());
@@ -78,6 +84,17 @@ public class DepositService {
         }
         blocks.updateObservation(normalizedChain, scanner, blockHeight, hash, parentHash);
         return new BlockObservation(true, previous, hash, orphaned.size());
+    }
+
+    /** The scanner separately rewinds its headers/output state in this same transaction; no replacement block is invented. */
+    @Transactional(rollbackFor = Throwable.class)
+    public int rollbackAbove(String chain, long commonHeight, String commonHash) {
+        String normalized = requireText(chain, "chain").toUpperCase(Locale.ROOT);
+        if (commonHeight < 0) throw new IllegalArgumentException("negative common block height");
+        String reason = "canonical chain rolled back to " + commonHeight + ":" + requireText(commonHash, "commonHash");
+        var orphaned = deposits.listCanonicalAbove(normalized, commonHeight);
+        for (var deposit : orphaned) reverse(deposit, null, reason);
+        return orphaned.size();
     }
 
     private void reverse(DepositRecordRepository.ReorgRecord deposit, String replacementHash, String reason) {

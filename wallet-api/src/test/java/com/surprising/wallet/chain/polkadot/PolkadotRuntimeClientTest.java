@@ -46,5 +46,9 @@ class PolkadotRuntimeClientTest {
     void amountPlanckParsesStringJsonValues() throws Exception {
         assertEquals(new BigInteger("9997224699029"),
                 PolkadotRuntimeClient.amountPlanck(new ObjectMapper().readTree("\"9997224699029\"")));
+    }    @Test void missingNegativeOrOverflowingBalancesCannotBeSilentlyTreatedAsZero() {
+        var json=new ObjectMapper();for(String value:java.util.List.of("null","\"-1\"","\"340282366920938463463374607431768211456\""))
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,()->PolkadotRuntimeClient.amountPlanck(json.readTree(value)));
     }
+
 }

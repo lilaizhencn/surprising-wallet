@@ -120,13 +120,23 @@ public class CollectionRecordRepository {
                 """, rawPayload, Timestamp.from(Instant.now()), tenantId, chain, collectionNo);
     }
 
-    public int claimSigningEvm(UUID tenantId, String chain, String collectionNo) {
+    public int claimSigningDurable(UUID tenantId, String chain, String collectionNo) {
         return jdbc.update("update collection_record set status='SIGNING',durable_submission=true,error_message=null,updated_at=now() where tenant_id=? and chain=? and collection_no=? and status in ('CREATED','RETRYING')",
                 tenantId,chain,collectionNo);
     }
 
-    public int recoverUnsignedEvm(String chain) {
-        return jdbc.update("update collection_record set status='CREATED',error_message=null,updated_at=now() where chain=? and durable_submission and status='BROADCAST_UNKNOWN' and tx_hash is null",chain);
+    public int recoverUnsignedDurable(UUID tenant, String chain, String reference) {
+        return jdbc.update("update collection_record set status='CREATED',error_message=null,updated_at=now() where tenant_id=? and chain=? and collection_no=? and durable_submission and status='BROADCAST_UNKNOWN' and tx_hash is null",tenant,chain,reference);
+    }
+    public int failUnsignedPreparation(UUID tenant,String chain,String reference,String reason) {
+        return jdbc.update("update collection_record set status='FAILED',error_message=?,updated_at=now() where tenant_id=? and chain=? and collection_no=? and durable_submission and tx_hash is null and status in ('SIGNING','BROADCAST_UNKNOWN')",reason,tenant,chain,reference);
+    }
+
+    public int bindUtxoPreparedHash(UUID tenant, String chain, String reference, String expectedHash, String hash) {
+        return jdbc.update("""
+                update collection_record set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and collection_no=?
+                  and status in ('SIGNING','BROADCAST_UNKNOWN','CONFIRMING') and tx_hash is not distinct from ?
+                """,hash,tenant,chain,reference,expectedHash);
     }
 
     /** 按主键将归集记录标记为已发送。 */
@@ -150,13 +160,19 @@ public class CollectionRecordRepository {
                 chain,Timestamp.from(before));
     }
 
+    /** A late exception cannot regress a sent or confirmed collection. */
+    public int markSigningUnknown(UUID tenant,String chain,String reference,String reason) {
+        return jdbc.update("update collection_record set status='BROADCAST_UNKNOWN',error_message=?,updated_at=now() where tenant_id=? and chain=? and collection_no=? and status='SIGNING'",
+                reason,tenant,chain,reference);
+    }
+
     public Optional<ChainCollectionRecord> lockForSubmission(UUID tenantId, String chain, String collectionNo) {
         return jdbc.query("select " + COLUMNS + " from collection_record where tenant_id=? and chain=? and collection_no=? for update",
                 (rs,n) -> map(rs),tenantId,chain,collectionNo).stream().findFirst();
     }
 
     public int bindPrepared(UUID tenantId, String chain, String collectionNo, String hash) {
-        return jdbc.update("update collection_record set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and collection_no=? and status='SIGNING' and tx_hash is null",
+        return jdbc.update("update collection_record set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and collection_no=? and status in ('SIGNING','BROADCAST_UNKNOWN') and tx_hash is null",
                 hash,tenantId,chain,collectionNo);
     }
 

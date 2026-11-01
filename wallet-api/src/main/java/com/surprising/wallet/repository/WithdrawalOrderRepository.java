@@ -146,14 +146,17 @@ public class WithdrawalOrderRepository {
                 """, fromAddress, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
     }
 
-    public int claimSigningEvm(UUID tenantId, String chain, String orderNo, String fromAddress) {
+    public int claimSigningDurable(UUID tenantId, String chain, String orderNo, String fromAddress) {
         return jdbc.update("update withdrawal_order set status='SIGNING',durable_submission=true,from_address=coalesce(?,from_address),updated_at=now() where tenant_id=? and chain=? and order_no=? and status in ('FROZEN','RETRYING')",
                 fromAddress,tenantId,chain,orderNo);
     }
 
-    public int recoverUnsignedEvm(String chain) {
-        // Under this protocol, no hash means no signed bytes could have been broadcast. The row lock fences late workers.
-        return jdbc.update("update withdrawal_order set status='FROZEN',error_message=null,updated_at=now() where chain=? and durable_submission and status='BROADCAST_UNKNOWN' and tx_hash is null",chain);
+    public int recoverUnsignedDurable(UUID tenant, String chain, String orderNo) {
+        return jdbc.update("update withdrawal_order set status='FROZEN',error_message=null,updated_at=now() where tenant_id=? and chain=? and order_no=? and durable_submission and status='BROADCAST_UNKNOWN' and tx_hash is null",tenant,chain,orderNo);
+    }
+    /** The owning service has verified final preparation failure and absence of a payment intent. */
+    public int failUnsignedPreparation(UUID tenant,String chain,String reference,String reason) {
+        return jdbc.update("update withdrawal_order set status='FAILED',funds_released=true,error_message=?,updated_at=now() where tenant_id=? and chain=? and order_no=? and durable_submission and tx_hash is null and not funds_released and status in ('SIGNING','BROADCAST_UNKNOWN')",reason,tenant,chain,reference);
     }
 
     /** 更新非租户提现为签名中。 */
@@ -219,8 +222,16 @@ public class WithdrawalOrderRepository {
     /** Signed bytes and this hash are committed together before any broadcast. */
     public int bindPrepared(UUID tenantId, String chain, String orderNo, String txHash) {
         requireTransactionHash(txHash);
-        return jdbc.update("update withdrawal_order set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and order_no=? and status='SIGNING' and tx_hash is null",
+        return jdbc.update("update withdrawal_order set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and order_no=? and status in ('SIGNING','BROADCAST_UNKNOWN') and tx_hash is null",
                 txHash,tenantId,chain,orderNo);
+    }
+
+    public int bindUtxoPreparedHash(UUID tenantId, String chain, String orderNo, String expectedHash, String txHash) {
+        requireTransactionHash(txHash);
+        return jdbc.update("""
+                update withdrawal_order set tx_hash=?,updated_at=now() where tenant_id=? and chain=? and order_no=?
+                  and status in ('SIGNING','BROADCAST_UNKNOWN','CONFIRMING') and tx_hash is not distinct from ?
+                """,txHash,tenantId,chain,orderNo,expectedHash);
     }
 
     public int recoverPreparedSent(UUID tenantId, String chain, String orderNo, String txHash) {

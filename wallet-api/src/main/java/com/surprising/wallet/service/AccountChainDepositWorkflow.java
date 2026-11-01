@@ -69,6 +69,12 @@ public class AccountChainDepositWorkflow {
 
     /** Monero 由独立串行任务扫描，这里只执行其余已到期的账户链。 */
     public void scanDueDeposits() {
+        try { suiDepositScanner.confirmObserved(); }
+        catch (RuntimeException error) { log.warn("Sui observed deposit confirmation pending: {}",error.getMessage()); }
+        try { nearDepositScanner.confirmObserved(); }
+        catch (RuntimeException error) { log.warn("NEAR observed deposit confirmation pending: {}",error.getMessage()); }
+        try { cardanoDepositScanner.reconcileObserved(); }
+        catch (RuntimeException error) { log.warn("Cardano observed deposit reconciliation pending: {}",error.getMessage()); }
         if (!runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_SCAN)) {
             nextDepositScanAtMillis.clear();
             return;
@@ -124,6 +130,9 @@ public class AccountChainDepositWorkflow {
                     profile.getChain(), error.getMessage(), error);
         }
     }
+
+    /** Native XMR observations continue independently of admission of new scans. */
+    public void confirmMoneroObserved() {moneroDepositScanner.confirmObserved();}
 
     private void scanEvm(AccountChainProfile profile) throws Exception {
         ChainType chainType = ChainType.valueOf(profile.getChain());

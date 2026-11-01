@@ -103,7 +103,7 @@ class Evm7702Type4IntegrationTest {
             byte[] batchId = Hash.sha3("tenant-a:real-type4-batch".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             BigInteger deadline = BigInteger.valueOf(Instant.now().plus(Duration.ofMinutes(10)).getEpochSecond());
             Evm7702OperationSigner operationSigner = new Evm7702OperationSigner();
-            Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
+            com.surprising.wallet.testutil.Evm7702TestSigning authorizationService = new com.surprising.wallet.testutil.Evm7702TestSigning();
             List<Evm7702CollectionRequest> requests = new ArrayList<>();
             List<byte[]> signatures = new ArrayList<>();
             List<AuthorizationTuple> authorizations = new ArrayList<>();
@@ -114,7 +114,7 @@ class Evm7702Type4IntegrationTest {
                         token.address(), RELAYER.getAddress(), amounts.get(i), BigInteger.ZERO,
                         deadline, BigInteger.valueOf(180_000L));
                 requests.add(request);
-                signatures.add(operationSigner.sign(BigInteger.valueOf(chainId), request, authority));
+                signatures.add(com.surprising.wallet.testutil.Evm7702TestSigning.signDigest(operationSigner.digest(BigInteger.valueOf(chainId), request), authority));
                 BigInteger authorityNonce = web3j.ethGetTransactionCount(
                         authority.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
                 assertEquals(BigInteger.ZERO, authorityNonce);
@@ -123,8 +123,8 @@ class Evm7702Type4IntegrationTest {
             }
 
             String calldata = new Evm7702ContractCodec().encodeCollectBatch(requests, signatures);
-            Evm7702BatchTransactionService.SignedType4Transaction signed =
-                    new Evm7702BatchTransactionService().sign(
+            com.surprising.wallet.chain.evm.Evm7702SignedBatchTransaction signed =
+                    new com.surprising.wallet.testutil.Evm7702TestSigning().sign(
                             chainId, relayerNonce, BigInteger.valueOf(1_000_000_000L),
                             BigInteger.valueOf(4_000_000_000L), BigInteger.valueOf(1_500_000L),
                             collector, calldata, authorizations, RELAYER);

@@ -16,15 +16,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>wallet-api 是整个钱包系统的 HTTP 入口层，包含 Custody REST API、
  * Console 管理后台、定时任务调度（充值扫描、提现批处理、Gas 对账、Webhook 投递等）。
- * 组件按 {@code sw.wallet.mode} 加载：all、api、sig1 或 sig2。
- *
- * <p>启动时配置 TLS 命名组以兼容旧版签名库。
+ * Java 只运行 API 与业务调度；钱包签名由独立的 MPC 持有者服务完成。
  */
 @Slf4j
 @SpringBootConfiguration
 @EnableAutoConfiguration
-@Import({ApiComponents.class, FirstSignerComponents.class, SecondSignerComponents.class,
-        RuntimeKeyConfiguration.class, PgmqConfiguration.class})
+@Import({ApiComponents.class, PgmqConfiguration.class})
 @EnableConfigurationProperties
 @EnableScheduling
 public class WalletApiApplication {
@@ -33,17 +30,8 @@ public class WalletApiApplication {
      * 启动应用入口，先配置 TLS 曲线后由 Spring Boot 启动整个 wallet-api 模块。
      */
     public static void main(String[] args) {
-        configureTlsNamedGroups();
         initializeWeb3jAsyncExecutor();
         SpringApplication.run(WalletApiApplication.class, args);
-    }
-
-    /**
-     * 绑定指定 TLS 命名组，兼容老版本签名库和 JVM 环境。
-     */
-    private static void configureTlsNamedGroups() {
-        System.setProperty("jdk.tls.namedGroups",
-                "secp256r1,secp384r1,secp521r1,ffdhe2048,ffdhe3072");
     }
 
     /**

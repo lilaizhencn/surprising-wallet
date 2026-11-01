@@ -18,8 +18,8 @@ class TronAddressGenerationTest {
     @Test
     void generatedAddress_shouldBeValidBase58AndStable() {
         ECKey ecKey = ECKey.fromPrivate(BigInteger.valueOf(20260621), true);
-        String first = TronTridentKeyFactory.toBase58Address(ecKey);
-        String second = TronTridentKeyFactory.toBase58Address(ecKey);
+        String first = TronPublicTestAddress.toBase58Address(ecKey);
+        String second = TronPublicTestAddress.toBase58Address(ecKey);
 
         assertEquals(first, second);
         assertTrue(first.startsWith("T"));

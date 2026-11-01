@@ -8,7 +8,7 @@
 4. 系统从沙盒水龙头钱包向用户地址发起链上转账。
 5. 扫链任务发现充值并入账。
 6. 用户发起提现，提现地址仅允许本项目内地址。
-7. 定时任务执行冻结、双签、广播和确认。
+7. 定时任务委托业务服务执行冻结、MPC 签名、广播和确认。
 8. 归集任务把用户地址上的链上余额归集到系统热钱包。
 9. 站内划转只允许系统内注册用户之间发生。
 
@@ -25,8 +25,9 @@
 
 | 机器 | 建议规格 | 职责 |
 |---|---:|---|
-| 钱包服务机 | 现有 Windows 机器 | `wallet-api`、`wallet-sig1`、`wallet-sig2` |
-| 数据机 | 现有 Linux 机器 | PostgreSQL、PostgreSQL / PGMQ |
+| 钱包服务机 | 现有 Windows 机器 | `wallet-api` API 与业务调度，通过 mTLS 调用持有者 |
+| 签名持有者 | 三个独立 Linux 运行环境 | 原生 MPC；每方独立身份、加密份额与存储密钥；XMR 配套官方私有 wallet-rpc |
+| 数据机 | 现有 Linux 机器 | PostgreSQL 18 / PGMQ 1.11.1 |
 | 沙盒链机器 | 2C4G，系统盘 40G-80G，建议 4G-8G swap | 本地 regtest/dev 链、自动挖块、水龙头辅助进程 |
 
 2C2G 可以短期验证，但同时跑 BTC/LTC/DOGE/BCH regtest 和多条 EVM 本地链会很紧。建议直接使用 2C4G。
@@ -46,10 +47,10 @@
 项目已有脚本：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh init
-scripts/regtest/all-chain-regtest.sh status
-scripts/regtest/bitcoinlike-regtest.sh mine 1 btc ltc doge bch
-scripts/regtest/all-chain-regtest.sh test-xmr
+resources/scripts/regtest/all-chain-regtest.sh init
+resources/scripts/regtest/all-chain-regtest.sh status
+resources/scripts/regtest/bitcoinlike-regtest.sh mine 1 btc ltc doge bch
+resources/scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
 长期运行时需要把 regtest RPC 从仅本机访问调整为沙盒链机器内网可访问，并通过安全组只允许钱包服务机访问。
@@ -217,7 +218,7 @@ BTC/LTC/DOGE/BCH regtest 必须自动挖块，否则确认数不会增长。
 建议新增一个轻量定时任务或系统服务：
 
 ```bash
-scripts/regtest/bitcoinlike-regtest.sh mine 1 btc ltc doge bch
+resources/scripts/regtest/bitcoinlike-regtest.sh mine 1 btc ltc doge bch
 ```
 
 频率建议：

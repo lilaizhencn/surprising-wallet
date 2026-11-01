@@ -29,9 +29,8 @@ class CustodyOperationalQueriesIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
         var repository = new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc);
-        addresses = CustodyTestSupport.addresses(jdbc, mock(BlockchainRuntimeService.class),
-                mock(CustodyTenantChainService.class));
-        gas = CustodyTestSupport.gas(jdbc, addresses, mock(BlockchainRuntimeService.class));
+        addresses = CustodyTestSupport.addresses(jdbc, mock(CustodyTenantChainService.class));
+        gas = CustodyTestSupport.gas(jdbc, addresses);
     }
 
     @Test void addressTotalsAndDeepPagesUseTheCompleteDataset() {

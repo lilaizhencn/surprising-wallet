@@ -1,266 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="3040" viewBox="0 0 1100 3040">
-  <style>
-    .svc   { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 10; }
-    .lib   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 10; }
-    .chain { fill: #fefce8; stroke: #ca8a04; stroke-width: 1.5; rx: 8; }
-    .infra { fill: #faf5ff; stroke: #9333ea; stroke-width: 2; rx: 10; }
-    .label { font: 14px sans-serif; font-weight: 700; fill: #1e293b; }
-    .desc  { font: 11px sans-serif; fill: #475569; }
-    .title { font: 20px sans-serif; font-weight: 700; fill: #0f172a; }
-    .sep   { font: 13px sans-serif; font-weight: 600; fill: #94a3b8; }
-    .arrow { stroke: #94a3b8; stroke-width: 1.5; marker-end: url(#arr); }
-  </style>
-  <defs>
-    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,5 L8,2.5 z" fill="#94a3b8"/>
-    </marker>
-  </defs>
-
-  <text x="30" y="28" class="title">Surprising Wallet —  Architecture</text>
-
-  <!-- ====== 第一层：SDK & 共享库 ====== -->
-  <text x="30" y="58" class="sep"> 共享库 &amp; SDK</text>
-
-  <rect x="30"  y="70" width="200" height="78" class="lib"/>
-  <text x="130" y="98" text-anchor="middle" class="label">common</text>
-  <text x="130" y="118" text-anchor="middle" class="desc">UTXO 请求 · 部分签名 · 结果</text>
-  <text x="130" y="135" text-anchor="middle" class="desc">PGMQ JDBC 适配器 · 无 Web 依赖</text>
-
-  <rect x="250" y="70" width="200" height="78" class="lib"/>
-  <text x="350" y="98" text-anchor="middle" class="label">chain-sdks</text>
-  <text x="350" y="118" text-anchor="middle" class="desc">BitcoinJ · UTXO 多签 · BIP32</text>
-  <text x="350" y="135" text-anchor="middle" class="desc">RPC DTO · Ed25519 · TRON gRPC</text>
-
-  <!-- ====== 第二层：应用服务 ====== -->
-  <text x="30" y="180" class="sep"> 唯一 JAR：all / api / sig1 / sig2；箭头表示依赖方指向提供方</text>
-
-  <rect x="30"  y="194" width="665" height="118" class="svc"/>
-  <text x="362" y="219" text-anchor="middle" class="label">wallet-api · Spring MVC 单体应用</text>
-  <text x="362" y="241" text-anchor="middle" class="desc">Web：controller/** · job/** · config/** · exception/** · filter/** · model/**</text>
-  <text x="362" y="259" text-anchor="middle" class="desc">Application：单表仓储直达 · 归集计划 / UTXO 选择 / 提现领取 / 批次归属</text>
-  <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：链客户端（7702 共用 RPC / 费用回执）· 单表仓储 · 协调器</text>
-  <text x="362" y="295" text-anchor="middle" class="desc">查询：地址 / Gas 直接单表筛选分页 · 充提当前页批量组合</text>
-
-  <rect x="720" y="194" width="340" height="100" class="svc"/>
-  <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2 普通库</text>
-  <text x="890" y="244" text-anchor="middle" class="desc">all 共享池；独立模式各自数据库账号</text>
-  <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
-  <text x="890" y="280" text-anchor="middle" class="desc">构造器依赖 · 请求网络 · 角色密钥 · 无业务状态</text>
-
-  <line x1="695" y1="210" x2="720" y2="210" class="arrow"/>
-  <!-- consumers → providers -->
-  <line x1="270" y1="194" x2="130" y2="148" class="arrow"/>
-  <line x1="470" y1="194" x2="350" y2="148" class="arrow"/>
-  <line x1="810" y1="194" x2="130" y2="148" class="arrow"/>
-  <line x1="890" y1="194" x2="350" y2="148" class="arrow"/>
-
-  <!-- ====== 第三层：支持链 ====== -->
-  <text x="30" y="328" class="sep"> 扫描 Job → DepositWorkflow；提现 / 归集 → Workflow；共用 RuntimeConfig 顺序与开关</text>
-
-  <rect x="30" y="342" width="90" height="48" class="chain"/>
-  <text x="75" y="364" text-anchor="middle" class="label">BTC</text>
-  <text x="75" y="380" text-anchor="middle" class="desc">UTXO</text>
-
-  <rect x="130" y="342" width="90" height="48" class="chain"/>
-  <text x="175" y="364" text-anchor="middle" class="label">LTC</text>
-  <text x="175" y="380" text-anchor="middle" class="desc">UTXO</text>
-
-  <rect x="230" y="342" width="90" height="48" class="chain"/>
-  <text x="275" y="364" text-anchor="middle" class="label">DOGE</text>
-  <text x="275" y="380" text-anchor="middle" class="desc">UTXO</text>
-
-  <rect x="330" y="342" width="90" height="48" class="chain"/>
-  <text x="375" y="364" text-anchor="middle" class="label">BCH</text>
-  <text x="375" y="380" text-anchor="middle" class="desc">UTXO</text>
-
-  <rect x="430" y="342" width="90" height="48" class="chain"/>
-  <text x="475" y="364" text-anchor="middle" class="label">ETH</text>
-  <text x="475" y="380" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="530" y="342" width="90" height="48" class="chain"/>
-  <text x="575" y="364" text-anchor="middle" class="label">BNB</text>
-  <text x="575" y="380" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="630" y="342" width="90" height="48" class="chain"/>
-  <text x="675" y="364" text-anchor="middle" class="label">POLYGON</text>
-  <text x="675" y="380" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="730" y="342" width="90" height="48" class="chain"/>
-  <text x="775" y="364" text-anchor="middle" class="label">ARBITRUM</text>
-  <text x="775" y="380" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="830" y="342" width="90" height="48" class="chain"/>
-  <text x="875" y="364" text-anchor="middle" class="label">OPTIMISM</text>
-  <text x="875" y="380" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="930" y="342" width="90" height="48" class="chain"/>
-  <text x="975" y="364" text-anchor="middle" class="label">BASE</text>
-  <text x="975" y="380" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="30" y="400" width="90" height="48" class="chain"/>
-  <text x="75" y="422" text-anchor="middle" class="label">AVAX_C</text>
-  <text x="75" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="130" y="400" width="90" height="48" class="chain"/>
-  <text x="175" y="422" text-anchor="middle" class="label">HyperEVM</text>
-  <text x="175" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="230" y="400" width="90" height="48" class="chain"/>
-  <text x="275" y="422" text-anchor="middle" class="label">LINEA</text>
-  <text x="275" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="330" y="400" width="90" height="48" class="chain"/>
-  <text x="375" y="422" text-anchor="middle" class="label">SCROLL</text>
-  <text x="375" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="430" y="400" width="90" height="48" class="chain"/>
-  <text x="475" y="422" text-anchor="middle" class="label">UNICHAIN</text>
-  <text x="475" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="530" y="400" width="90" height="48" class="chain"/>
-  <text x="575" y="422" text-anchor="middle" class="label">X_LAYER</text>
-  <text x="575" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="630" y="400" width="90" height="48" class="chain"/>
-  <text x="675" y="422" text-anchor="middle" class="label">Robinhood</text>
-  <text x="675" y="438" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="730" y="400" width="90" height="48" class="chain"/>
-  <text x="775" y="422" text-anchor="middle" class="label">HyperCore</text>
-  <text x="775" y="438" text-anchor="middle" class="desc">Hyperliquid</text>
-
-  <rect x="830" y="400" width="90" height="48" class="chain"/>
-  <text x="875" y="422" text-anchor="middle" class="label">TRON</text>
-  <text x="875" y="438" text-anchor="middle" class="desc">TVM</text>
-
-  <rect x="930" y="400" width="90" height="48" class="chain"/>
-  <text x="975" y="422" text-anchor="middle" class="label">XRP</text>
-  <text x="975" y="438" text-anchor="middle" class="desc">XRPL</text>
-
-  <rect x="30" y="458" width="90" height="48" class="chain"/>
-  <text x="75" y="480" text-anchor="middle" class="label">SOLANA</text>
-  <text x="75" y="496" text-anchor="middle" class="desc">SVM</text>
-
-  <rect x="130" y="458" width="90" height="48" class="chain"/>
-  <text x="175" y="480" text-anchor="middle" class="label">TON</text>
-  <text x="175" y="496" text-anchor="middle" class="desc">TON</text>
-
-  <rect x="230" y="458" width="90" height="48" class="chain"/>
-  <text x="275" y="480" text-anchor="middle" class="label">APTOS</text>
-  <text x="275" y="496" text-anchor="middle" class="desc">Move</text>
-
-  <rect x="330" y="458" width="90" height="48" class="chain"/>
-  <text x="375" y="480" text-anchor="middle" class="label">SUI</text>
-  <text x="375" y="496" text-anchor="middle" class="desc">Move</text>
-
-  <rect x="430" y="458" width="90" height="48" class="chain"/>
-  <text x="475" y="480" text-anchor="middle" class="label">ADA</text>
-  <text x="475" y="496" text-anchor="middle" class="desc">UTXO</text>
-
-  <rect x="530" y="458" width="90" height="48" class="chain"/>
-  <text x="575" y="480" text-anchor="middle" class="label">DOT</text>
-  <text x="575" y="496" text-anchor="middle" class="desc">Substrate</text>
-
-  <rect x="630" y="458" width="90" height="48" class="chain"/>
-  <text x="675" y="480" text-anchor="middle" class="label">NEAR</text>
-  <text x="675" y="496" text-anchor="middle" class="desc">NEAR</text>
-
-  <rect x="730" y="458" width="90" height="48" class="chain"/>
-  <text x="775" y="480" text-anchor="middle" class="label">XMR</text>
-  <text x="775" y="496" text-anchor="middle" class="desc">CryptoNote</text>
-
-  <!-- ====== 第四层：基础设施 ====== -->
-  <text x="30" y="545" class="sep"> 基础设施</text>
-
-  <rect x="30"  y="558" width="230" height="58" class="infra"/>
-  <text x="145" y="580" text-anchor="middle" class="label">PostgreSQL</text>
-  <text x="145" y="600" text-anchor="middle" class="desc">多租户账本 · 数据库租约 · 入队凭据 · 审计</text>
-
-  <rect x="280" y="558" width="170" height="58" class="infra"/>
-  <text x="365" y="580" text-anchor="middle" class="label">PGMQ（PG 扩展）</text>
-  <text x="365" y="600" text-anchor="middle" class="desc">JDBC · 行锁 · 归档 · 死信</text>
-
-  <rect x="470" y="558" width="200" height="58" class="infra"/>
-  <text x="570" y="580" text-anchor="middle" class="label">Docker Regtest</text>
-  <text x="570" y="600" text-anchor="middle" class="desc">BTC/LTC/DOGE/BCH 本地节点</text>
-
-  <rect x="690" y="558" width="190" height="58" class="infra"/>
-  <text x="785" y="580" text-anchor="middle" class="label">Hardhat Fork</text>
-  <text x="785" y="600" text-anchor="middle" class="desc">EVM EIP-7702 回归测试</text>
-
-  <rect x="900" y="558" width="170" height="58" class="infra"/>
-  <text x="985" y="580" text-anchor="middle" class="label">Polkadot Sidecar</text>
-  <text x="985" y="600" text-anchor="middle" class="desc">Node.js Runtime 桥接</text>
-
-  <!-- 底部 -->
-  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 5 Java 模块 · Java 27 · Spring Boot 4.1 · 28 条链 · 13 个接入组</text>
-  <text x="30" y="770" class="desc">发布：GitHub Actions / JDK 27 → SSH 摘要校验 → Alibaba Cloud 单 JAR all · Nginx → loopback API / PostgreSQL</text>
-  <rect x="30" y="674" width="1040" height="64" fill="#f8fafc" stroke="#94a3b8" rx="8"/>
-  <text x="550" y="698" text-anchor="middle" class="desc">运行监控：systemd 每分钟 → Python 只读探针（资源 / 服务 / PostgreSQL / PGMQ / 日志 / HTTPS）→ Telegram</text>
-  <text x="550" y="720" text-anchor="middle" class="desc">全部监控运行于钱包主机，直接通知 Telegram；故障与恢复通知 / 每日摘要；日志按时间与容量轮转</text>
-<rect x="30" y="805" width="1040" height="108" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-<text x="50" y="832" style="font:14px sans-serif;fill:#1e293b">Cloudflare：Static Assets + Worker → 单租户 Durable Object / SQLite</text>
-<text x="50" y="860" style="font:14px sans-serif;fill:#1e293b">Worker ⇄ HTTPS Custody API / HMAC Webhook ⇄ Alibaba Cloud wallet-api</text>
-<text x="50" y="888" style="font:14px sans-serif;fill:#1e293b">GitHub master / resources/tenant-demo/** → 验证测试 Worker → cf deploy</text>
-  <rect x="30" y="932" width="1040" height="138" class="svc"/>
-  <text x="50" y="956" class="label">Console / API 认证与安全维护 · model/custody 类型记录</text>
-  <text x="50" y="981" class="desc">AuthService → 用户 / 租户 / 会话；ApiKeyService → 密钥 / 租户 / IP / nonce 单表仓储</text>
-  <text x="50" y="1006" class="desc">服务直接写审计；租户停用撤销会话；管理员按租户 / 角色 / 状态条件解锁</text>
-  <text x="50" y="1031" class="desc">单表仓储映射类型记录；安全域无总门面 / 安全门面转发；维护直接清理 nonce / 会话 / 幂等键</text>
-  <text x="50" y="1056" class="desc">列表投影无密码 / 密钥；nonce 原子占用；密文自带版本，删除两张表的闲置版本列</text>
-  <rect x="30" y="1090" width="1040" height="140" class="svc"/>
-  <text x="50" y="1116" class="label">Webhook：现有业务服务直接编排单表仓储；具体 HTTP 客户端负责协议</text>
-  <text x="50" y="1142" class="desc">WebhookService → 端点 / 投递 / 尝试 / 事件 / 审计；HttpClient → URL / UTF-8 HMAC / 超时 / 有界响应</text>
-  <text x="50" y="1168" class="desc">领取与回执同事务；结果按全局代次提交；状态 / 回执 / 端点时间原子更新</text>
-  <text x="50" y="1194" class="desc">HTTP 验证后才开启短事务激活；类型投影无密文；创建记录实际操作者</text>
-  <text x="50" y="1218" class="desc">移除闲置校验哈希；终态无重试时间；手动新周期保留全局历史；投递器仅一个正常构造器</text>
-  <rect x="30" y="1250" width="1040" height="100" class="svc"/>
-  <text x="50" y="1276" class="label">提现投影：现有对账服务直接编排；入口只传租户与提现 ID</text>
-  <text x="50" y="1302" class="desc">事务内锁定投影并读取当前订单；本金流水 / Gas / 事件一起提交；固定页扫描避免旧记录阻塞</text>
-  <text x="50" y="1328" class="desc">无状态快照 DTO / 总仓储转发 / 订单回写；当前订单决定扣款事实，失败整体回滚</text>
-  <rect x="30" y="1370" width="1040" height="120" class="svc"/>
-  <text x="50" y="1396" class="label">Gas：AccountingService 拥有资金事务；ReconciliationService 读取确认事实</text>
-  <text x="50" y="1422" class="desc">操作行锁 → 归属 / 收据 → Gas 账户锁 → 冻结 / 结算 + 状态 / 原生币流水原子提交</text>
-  <text x="50" y="1448" class="desc">重复预留复用收据；OVERDUE 按已观察费用补结算；未知交易保留锁，超时不等于完成</text>
-  <text x="50" y="1474" class="desc">分页对账避免旧预留阻塞；金额最多 18 位小数 / 54 位整数；不新增表 / 状态 / 兼容迁移</text>
-  <rect x="30" y="1530" width="1040" height="100" class="svc"/>
-  <text x="50" y="1556" class="label">提现结算：四个身份参数 → 所属订单行锁 → 订单扣款事实 → 余额 / 确认同事务</text>
-  <text x="50" y="1582" class="desc">链服务不再传币种 / 账户 / 扣款金额；重复确认无副作用；缺少账户拒绝结算</text>
-  <text x="50" y="1608" class="desc">UTXO 先核对上链请求与订单；提现 RBF 客户费用保持，归集按上链尝试恢复输出与矿工费</text>
-  <rect x="30" y="1650" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="1680" style="font:13px sans-serif;fill:#1e293b">托管控制面：删除通用 / 看板仓储门面；写入与查询由实际应用服务拥有</text>
-  <text x="50" y="1716" style="font:13px sans-serif;fill:#1e293b">Controller → TenantQueryService / AssetDashboardService；TenantService 拥有租户写事务</text>
-  <text x="50" y="1752" style="font:13px sans-serif;fill:#1e293b">GasService 批量组合定义 / 地址 / 原生币余额；租户链直接查定义与地址，依赖无环</text>
-  <text x="50" y="1788" style="font:13px sans-serif;fill:#1e293b">单表仓储返回类型记录；链 + 精确账户身份；历史持仓与当前配置展示分开</text>
-  <rect x="30" y="1880" width="1040" height="155" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="1908" style="font:13px sans-serif;fill:#1e293b">EIP-7702：工作流直接查询；现有协调器拥有批次状态与账务事务</text>
-  <text x="50" y="1942" style="font:13px sans-serif;fill:#1e293b">Coordinator → 单表批次 / 项目 / 尝试 / 订单 / Nonce / Gas；删除两层业务仓储</text>
-  <text x="50" y="1976" style="font:13px sans-serif;fill:#1e293b">配置 / 批次 / 订单 / 地址统一类型读取；Coordinator 保留跨表事务与身份校验</text>
-  <text x="50" y="2010" style="font:13px sans-serif;fill:#1e293b">批次与尝试 UNKNOWN 共同回滚；历史回执按原版本确认，不依赖新签名开关</text>
-  <rect x="30" y="2055" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2083" style="font:13px sans-serif;fill:#1e293b">租户链服务：类型化批量组合 / 一致快照 / 开关审计事务；移除三个业务仓储门面</text>
-  <text x="50" y="2117" style="font:13px sans-serif;fill:#1e293b">DevFaucetService：批量候选与去重 → 条件领取 → RPC / UNKNOWN 恢复 / 对账</text>
-  <text x="50" y="2151" style="font:13px sans-serif;fill:#1e293b">HyperCore 扫描器与交易服务直接读写元数据 / 操作；HyperCoreDepositService 只拥有快照入账事务</text>
-  <text x="50" y="2185" style="font:13px sans-serif;fill:#1e293b">快照行锁 / 增量 / 充值 / 账本 / 租户投影共同提交；只有正常注入构造器，无数据库变更</text>
-  <rect x="30" y="2240" width="1040" height="160" class="svc"/>
-  <text x="50" y="2268" class="label">账户链：扫描 Job 直达 DepositWorkflow；各入口共用 profile 顺序与开关</text>
-  <text x="50" y="2302" class="desc">提现 / 归集 / 确认保留各自业务规则；TRON 只共享发送，SENT 仍先于客户端关闭</text>
-  <text x="50" y="2336" class="desc">托管地址：一次 profile → 正式运行时 → 持久化记录；归集类型聚合；删除 Aptos / Sui 重复服务</text>
-  <text x="50" y="2370" class="desc">TRON SDK 私有；参考块分别限流后本地构建；密钥状态按实际材料判断；开关统一读取</text>
-  <rect x="30" y="2420" width="1040" height="165" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2448" style="font:13px sans-serif;fill:#1e293b">节点认证：ChainRpcNodeService → Console / HTTP / WebSocket / EVM 找回；JSON 使用 Jackson</text>
-  <text x="50" y="2482" style="font:13px sans-serif;fill:#1e293b">Token：事务外链上验证 → profile / Token 行锁复核 → 配置 / 资产 / 审计短事务</text>
-  <text x="50" y="2516" style="font:13px sans-serif;fill:#1e293b">找回：直接 EVM Gateway；保留原始地址与派生参数；删除接口列表与选择器</text>
-  <text x="50" y="2550" style="font:13px sans-serif;fill:#1e293b">提现：本次地址记录 → INSERT 返回 ID → 条件冻结；归集规划复用本次配置</text>
-  <rect x="30" y="2615" width="1040" height="195" rx="8" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="50" y="2645" style="font:13px sans-serif;fill:#1e293b">EvmAccountTransactionService → EvmSubmissionService → nonce / evm_tx / withdrawal, collection or recovery (atomic commit)</text>
-  <text x="50" y="2685" style="font:13px sans-serif;fill:#1e293b">RPC broadcast occurs only after signed bytes and business hash commit; retries reuse the same bytes</text>
-  <text x="50" y="2725" style="font:13px sans-serif;fill:#1e293b">CustodyWithdrawalService → permanent acceptance / refusal receipt → order / Gas / event / audit</text>
-  <text x="50" y="2765" style="font:13px sans-serif;fill:#1e293b">Settlement → failed receipt / principal release → funds_released; history → exact subject before paging</text>
-<desc>Web-only decimal string serialization leaves chain RPC numeric serialization unchanged. History combines principal and separate observed Gas facts.</desc>
-<rect x="30" y="2830" width="1040" height="180" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
-  <text x="50" y="2860" class="label">Core 用户授权 → TENANT_POOL + 独立 subject → CustodyPoolFundingService</text>
-  <text x="50" y="2895" style="font:13px sans-serif">锁租户同链同资产池 → 排除所有 Gas 账户 → 条件借记来源 / 池贷记 / 不可变流水</text>
-  <text x="50" y="2930" style="font:13px sans-serif">池本金冻结 + 订单 + Gas + 永久回执同事务；物理签名地址与账本扣款账户独立</text>
-  <text x="50" y="2965" style="font:13px sans-serif">确认扣冻结；明确失败释放回池；未知不退款；提现 subject 直接筛选后分页</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1450" viewBox="0 0 1200 1450">
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#475569"/></marker></defs>
+<style>text{font-family:Arial,"Noto Sans SC",sans-serif;fill:#0f172a}.title{font-size:24px;font-weight:bold}.label{font-size:17px;font-weight:bold}.body{font-size:14px}.arrow{stroke:#475569;stroke-width:2;marker-end:url(#arrow)}</style>
+<rect width="1200" height="100%" fill="#f8fafc"/>
+<text x="40" y="45" class="title">Surprising Wallet：唯一 Java API 与独立 MPC 持有者</text>
+<text x="40" y="77" class="body">唯一 Java API；121 项检查与两轮真实 JVM 无 Seed 启动通过，全链终验和备份恢复待完成。</text>
+<g id="clients"><rect x="35" y="105" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="134" class="label">租户 API / Console → wallet-api（唯一 Java Spring Boot MVC 应用）</text>
+<text x="55" y="162" class="body">Controller / Filter：请求与身份边界；Job：调度、节流、防并发和异常隔离</text>
+<text x="55" y="188" class="body">Maven：wallet-api → common / chain-sdks；common → chain-sdks</text>
+</g>
+<path d="M600,213 V238" class="arrow"/>
+<g id="application"><rect x="35" y="245" width="1130" height="134" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="274" class="label">应用与领域编排</text>
+<text x="55" y="302" class="body">Service：租户、余额、订单、nonce/UTXO、Gas、事件和事务边界</text>
+<text x="55" y="328" class="body">Chain / Coordinator / Gateway：原网络 RPC、固定载荷、公开编码与完整链回执核验</text>
+<text x="55" y="354" class="body">custody / evm7702 / account / deposit / withdraw 独立线程池；Webhook 独立执行器</text>
+</g>
+<path d="M600,379 V408" class="arrow"/>
+<g id="persistence"><rect x="35" y="415" width="1130" height="134" rx="12" fill="#f0fdf4" stroke="#94a3b8"/>
+<text x="55" y="444" class="label">PostgreSQL 18 + PGMQ 1.11.1</text>
+<text x="55" y="472" class="body">一个 Repository 对应一张业务表；Service 组合单表仓储，不跨表 SQL</text>
+<text x="55" y="498" class="body">UTXO 队列：wallet_mpc_sign → wallet_sign_done；提现 / 事件 / RBF 队列保留</text>
+<text x="55" y="524" class="body">原入队凭据、订单、输入锁同事务；消费使用 read_ct，下一阶段入队与归档同事务</text>
+</g>
+<path d="M600,549 V578" class="arrow"/>
+<g id="mpc-coordinator"><rect x="35" y="585" width="1130" height="134" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="614" class="label">MpcSigningService：公开意图与独立验签</text>
+<text x="55" y="642" class="body">key / key_epoch / sign_request / sign_attempt：租户、公钥、版本、原载荷与加密绑定结果</text>
+<text x="55" y="668" class="body">先提交资金 / nonce / UTXO / 原请求 → 事务外 mTLS MPC → 选定 raw/hash 提交 → 链 RPC</text>
+<text x="55" y="694" class="body">CustodyAddressService 统一发布客户 / Gas / 中继地址；Java 不保存钱包私钥或份额</text>
+</g>
+<path d="M600,719 V748" class="arrow"/>
+<g id="holders"><rect x="35" y="755" width="1130" height="160" rx="12" fill="#fff7ed" stroke="#94a3b8"/>
+<text x="55" y="784" class="label">三个独立 wallet-mpc-signer 原生持有者（每个只拥有自己的份额）</text>
+<text x="55" y="812" class="body">持有者 A：独立 mTLS 身份 / 加密份额 / 原请求与结果；本机 Monero 私有钱包 RPC</text>
+<text x="55" y="838" class="body">持有者 B：独立 mTLS 身份 / 加密份额 / 原请求与结果；本机 Monero 私有钱包 RPC</text>
+<text x="55" y="864" class="body">持有者 C：独立 mTLS 身份 / 加密份额 / 原请求与结果；本机 Monero 私有钱包 RPC</text>
+<text x="55" y="890" class="body">cb-mpc：ECDSA / Ed25519 / BIP340；XMR：Monero 原生 2-of-3；持有者不访问钱包数据库</text>
+</g>
+<path d="M600,915 V943" class="arrow"/>
+<g id="mpc-network-share-refresh"><rect x="35" y="950" width="1130" height="134" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="979" class="label">MPC 网络份额刷新：原公钥和地址不变</text>
+<text x="55" y="1007" class="body">原 sourceEpoch / 三名持有者 / actor+reason → REFRESHING；未完成 SIGN 阻止刷新</text>
+<text x="55" y="1033" class="body">旧版本 fence → 新版本份额 → 三方公开就绪检查 → ready / 完成结果</text>
+<text x="55" y="1059" class="body">三份绑定原公钥的结果 → Java 原子激活新版本并退役旧版本；材料缺失保持冻结</text>
+</g>
+<path d="M600,1084 V1113" class="arrow"/>
+<g id="chain-integration"><rect x="35" y="1120" width="1130" height="134" rx="12" fill="#f0fdf4" stroke="#94a3b8"/>
+<text x="55" y="1149" class="label">已接入链及资金边界</text>
+<text x="55" y="1177" class="body">UTXO / 普通 EVM / 账户链：实际交易、规范确认、失败、重组、费用与本金对账</text>
+<text x="55" y="1203" class="body">EIP-7702：原批次 / 内层授权与操作 / 平台中继 MPC；NEAR：固定租户 Gas 存储注册</text>
+<text x="55" y="1229" class="body">XMR：私有材料留在原持有者；HyperCore：保留已保存且有资金的原 MPC 身份</text>
+</g>
+<path d="M600,1254 V1283" class="arrow"/>
+<g id="delivery"><rect x="35" y="1290" width="1130" height="108" rx="12" fill="#fefce8" stroke="#94a3b8"/>
+<text x="55" y="1319" class="label">部署与验收状态</text>
+<text x="55" y="1347" class="body">Java API 使用 surprising-wallet.service；三名原生持有者分别部署</text>
+<text x="55" y="1373" class="body">各组件已有实际通过记录；完整备份恢复和所有 28 条链最终矩阵仍是整体交付条件</text>
+</g>
 </svg>

@@ -16,8 +16,6 @@ import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
-import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
-import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import java.math.BigDecimal;
@@ -31,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * UTXO 模型下，提现和归集天然同属一笔多输出交易——本类从 DB 拉取该链所有待签名
  * withdrawal_order（不分提现/归集），选取可用 UTXO，构建一笔批量交易推送到 PostgreSQL / PGMQ
- * 签名队列，由 sig1/sig2 依次签名后广播上链。
+ * 签名队列，由独立 MPC 节点完成联合公钥签名后广播上链。
  */
 @Slf4j
 @Service
@@ -56,6 +54,7 @@ public class UtxoBatchService {
     private final UtxoSigningSubmissionService signingSubmissions;
     private final ChainSigningTransactionRepository signingTransactions;
     private final ChainProfileRepository profiles;
+    private final UtxoMpcSigningService mpc;
 
     /** 构造 UTXO 批处理服务。 */
     public UtxoBatchService(
@@ -69,7 +68,8 @@ public class UtxoBatchService {
             ChainFeeRateRepository feeRates,
             UtxoSigningSubmissionService signingSubmissions,
             ChainSigningTransactionRepository signingTransactions,
-            ChainProfileRepository profiles) {
+            ChainProfileRepository profiles,
+            UtxoMpcSigningService mpc) {
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.withdrawalOrderRepository = withdrawalOrderRepository;
         this.collectionPlanningService = collectionPlanningService;
@@ -81,6 +81,7 @@ public class UtxoBatchService {
         this.signingTransactions = signingTransactions;
         this.profiles = profiles;
         this.signingSubmissions = signingSubmissions;
+        this.mpc = mpc;
     }
 
     /**
@@ -166,7 +167,12 @@ public class UtxoBatchService {
             }
             BigDecimal input = utxos.stream().map(UtxoTransaction::getBalance)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            long feeAtomic = estimateNetworkFeeAtomic(chain, utxos.size(), 1, feeRate);
+            var inputs = utxos.stream().map(utxo -> signingInput(tenantId, chain, utxo)).toList();
+            var sizing = new UtxoSigningRequest(tenantId, UUID.randomUUID(), signingAsset(currency),
+                    UtxoSigningRequest.Operation.COLLECTION, "sizing", inputs,
+                    List.of(new UtxoSigningRequest.Payment("sizing", candidate.getUserId(), target, BigDecimal.ONE, BigDecimal.ZERO)),
+                    target, feeRate, dust);
+            long feeAtomic = mpc.estimateFee(sizing, false, feeRate);
             BigDecimal fee = BigDecimal.valueOf(feeAtomic).divide(currency.getDecimal());
             BigDecimal amount = input.subtract(fee);
             if (amount.signum() <= 0 || amount.multiply(currency.getDecimal()).longValueExact() < dust) {
@@ -187,7 +193,6 @@ public class UtxoBatchService {
                 continue;
             }
             var output = new UtxoSigningRequest.Payment(collectionNo, candidate.getUserId(), target, amount, BigDecimal.ZERO);
-            var inputs = utxos.stream().map(utxo -> signingInput(tenantId, chain, utxo)).toList();
             var request = new UtxoSigningRequest(tenantId, UUID.randomUUID(), signingAsset(currency),
                     UtxoSigningRequest.Operation.COLLECTION, collectionNo, inputs, List.of(output), target, feeRate, dust);
             UtxoSigningTransaction transaction = signingTransactions.create(request, collectionNo);
@@ -284,11 +289,12 @@ public class UtxoBatchService {
             }
         }
 
-        // 更新提现订单状态：先锁定再进入签名态
+        // 领取订单必须与锁币、固定 MPC 意图和入队一起提交。
         String fromAddress = inputs.getFirst().address();
         records.forEach(record -> {
-            withdrawalOrderRepository.updateStatus(tenantId, chain, record.reference(), "UTXO_LOCKED", fromAddress, null, null);
-            withdrawalOrderRepository.updateStatus(tenantId, chain, record.reference(), "SIGNING", fromAddress, null, null);
+            if (withdrawalOrderRepository.claimSigning(tenantId, chain, record.reference(), fromAddress) != 1) {
+                throw new IllegalStateException("UTXO withdrawal was claimed by another batch");
+            }
         });
 
         log.info("交易创建完成");
@@ -326,11 +332,10 @@ public class UtxoBatchService {
     /** 根据链类型估算网络手续费。 */
     private long estimateNetworkFeeAtomic(String chain, int inputCount, int outputCount, int feeRate) {
         return switch (chain) {
-            case "BCH" -> P2shMultisigFeeCalculator.estimateBytes(
-                    inputCount, outputCount, 2, 3) * feeRate;
-            case "DOGE" -> DogecoinFeePolicy.feeForBytes(
-                    P2shMultisigFeeCalculator.estimateBytes(inputCount, outputCount, 2, 3), feeRate);
-            default -> P2wshFeeCalculator.calculateFeeSat(inputCount, outputCount, feeRate);
+            // Conservative 43-byte standard outputs and maximum compact-size overhead; the MPC planner fixes exact scripts and fee later.
+            case "BCH" -> Math.multiplyExact(26L + 149L * inputCount + 43L * outputCount, feeRate);
+            case "DOGE" -> DogecoinFeePolicy.feeForBytes(26L + 149L * inputCount + 43L * outputCount, feeRate);
+            default -> Math.multiplyExact(26L + 69L * inputCount + 43L * outputCount, feeRate);
         };
     }
 

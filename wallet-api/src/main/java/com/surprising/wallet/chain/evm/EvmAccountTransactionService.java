@@ -12,7 +12,7 @@ import com.surprising.wallet.service.EvmSubmissionService;
 import com.surprising.wallet.service.EvmSubmissionService.Operation;
 import com.surprising.wallet.repository.EvmTransactionRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
+import com.surprising.wallet.model.mpc.EvmSigningPayload;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.math.BigDecimal;
@@ -22,12 +22,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
-import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Hash;
 import org.web3j.crypto.RawTransaction;
-import org.web3j.crypto.TransactionEncoder;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.Request;
@@ -60,10 +57,6 @@ public class EvmAccountTransactionService {
     private final ChainAssetRepository chainAssetRepository;
 
     private final ChainRpcNodeService rpcNodeService;
-    /**
-     * 保存 {@code keyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
-     */
-    private final AccountSecp256k1KeyService keyService;
     private final EvmTransactionBuilder transactionBuilder;
     private final EvmHttpServiceFactory httpServices;
     private final WithdrawalSettlementService settlements;
@@ -76,7 +69,7 @@ public class EvmAccountTransactionService {
         int decimals = nativeDecimals(profile);
         BigInteger value = toAtomic(amount, decimals);
         return send(operation, profile, from, toAddress, value, "0x", nativeSymbol(profile),
-                null, amount, NATIVE_GAS_FLOOR, decimals);
+                null, amount, NATIVE_GAS_FLOOR, decimals, decimals);
     }
 
     public String sendToken(
@@ -86,50 +79,44 @@ public class EvmAccountTransactionService {
         String data = transactionBuilder.buildErc20TransferPayload(toAddress, amount, token);
         return send(operation, profile, from, token.getContractAddress(), BigInteger.ZERO, data,
                 token.getSymbol(), token.getContractAddress(), amount, TOKEN_GAS_FLOOR,
-                nativeDecimals(profile));
+                nativeDecimals(profile), token.getDecimals());
     }
 
     private String send(
             Operation operation, AccountChainProfile profile, ChainAddressRecord from, String transactionTo,
             BigInteger value, String data, String symbol, String contract,
-            BigDecimal amount, BigInteger gasFloor, int nativeDecimals) {
+            BigDecimal amount, BigInteger gasFloor, int nativeDecimals, int assetDecimals) {
+        requireOutsideTransaction();
         if (!operation.tenantId().equals(from.getTenantId())) throw new IllegalArgumentException("EVM sender tenant differs from operation");
-        return withWeb3(profile, (web3j, http) -> {
-            var existing = submissions.existing(operation, profile.getChain());
-            if (existing != null) return broadcastPrepared(web3j, existing);
-            EvmFeeSupport.FeeQuote quote = EvmFeeSupport.quote(web3j, profile);
-            BigInteger chainNonce = pendingNonce(web3j, from.getAddress());
-            BigInteger estimatedGas = estimateGas(
-                    web3j, profile, from.getAddress(), transactionTo, value, data, quote);
-            BigInteger gasLimit = bufferedGasLimit(web3j, estimatedGas.max(gasFloor));
-            Credentials credentials = credentials(profile, from);
-            RawTransaction provisionalRaw = rawTransaction(
-                    profile, chainNonce, quote, gasLimit, transactionTo, value, data);
-            String provisionalSigned = sign(profile, provisionalRaw, credentials);
-            BigInteger provisionalFee = reservedFee(
-                    web3j, profile, from.getAddress(), provisionalSigned, gasLimit, quote);
-            EvmFeeSupport.requireBalance(
-                    web3j, from.getAddress(), value.add(provisionalFee), "EVM sender");
-            var prepared = submissions.prepare(operation, profile.getChain(), normalize(from.getAddress()), chainNonce, nonce -> {
-                String signedRaw = nonce.equals(chainNonce) ? provisionalSigned
-                        : sign(profile, rawTransaction(profile, nonce, quote, gasLimit, transactionTo, value, data), credentials);
-                BigInteger reservedFeeAtomic = nonce.equals(chainNonce) ? provisionalFee
-                        : reservedFee(web3j, profile, from.getAddress(), signedRaw, gasLimit, quote);
-                if (!nonce.equals(chainNonce)) EvmFeeSupport.requireBalance(web3j, from.getAddress(), value.add(reservedFeeAtomic), "EVM sender");
-                return EvmTransactionRecord.builder().chain(profile.getChain()).txHash(Hash.sha3(signedRaw))
-                        .fromAddress(normalize(from.getAddress())).toAddress(normalize(transactionTo)).assetSymbol(symbol)
-                        .contractAddress(contract).amount(amount)
-                        .fee(EvmFeeSupport.atomicToNative(reservedFeeAtomic,nativeDecimals,RoundingMode.UP))
-                        .nonce(nonce.longValueExact()).confirmations(0).status("PREPARED").rawPayload(signedRaw).build();
+        var request = submissions.intent(operation, profile.getChain()).orElseGet(() -> {
+            var plan = withWeb3(profile, (web3j, http) -> {
+                var quote = EvmFeeSupport.quote(web3j, profile);
+                var nonce = pendingNonce(web3j, from.getAddress());
+                var estimated = estimateGas(web3j, profile, from.getAddress(), transactionTo, value, data, quote);
+                var gasLimit = bufferedGasLimit(web3j, estimated.max(gasFloor));
+                EvmFeeSupport.requireBalance(web3j, from.getAddress(), value.add(gasLimit.multiply(quote.maxFeePerGas())), "EVM sender");
+                return new UnsignedPlan(nonce, gasLimit, quote);
             });
-            return broadcastPrepared(web3j, prepared);
+            return submissions.reserve(operation, profile.getChain(), from, plan.chainNonce(), nonce -> EvmSigningPayload.of(
+                    rawTransaction(profile, nonce, plan.quote(), plan.gasLimit(), transactionTo, value, data),
+                    profile.getChainId(), symbol, contract, amount, assetDecimals, nativeDecimals));
         });
+        var prepared = submissions.existing(operation, profile.getChain());
+        if (prepared == null) {
+            submissions.sign(operation.tenantId(), request.id());
+            prepared = submissions.commit(operation, profile.getChain(), request.id());
+        }
+        var stable = prepared;
+        int precision = submissions.payload(request).nativeDecimals();
+        return withWeb3(profile, (web3j, http) -> broadcastPrepared(web3j, profile, stable, precision));
     }
+
+    private record UnsignedPlan(BigInteger chainNonce, BigInteger gasLimit, EvmFeeSupport.FeeQuote quote) { }
 
     private BigInteger reservedFee(
             Web3j web3j, AccountChainProfile profile, String from, String signedRaw,
-            BigInteger gasLimit, EvmFeeSupport.FeeQuote quote) {
-        return gasLimit.multiply(quote.maxFeePerGas())
+            BigInteger gasLimit, BigInteger maxFeePerGas) {
+        return gasLimit.multiply(maxFeePerGas)
                 .add(EvmFeeSupport.estimateSeparateL1Fee(
                         web3j, profile, from, signedRaw))
                 .add(EvmFeeSupport.estimateOperatorFee(
@@ -279,44 +266,67 @@ public class EvmAccountTransactionService {
                 quote.maxPriorityFeePerGas(), quote.maxFeePerGas());
     }
 
-    private String sign(
-            AccountChainProfile profile, RawTransaction transaction, Credentials credentials) {
-        byte[] signed = EvmFeeSupport.gasPolicy(profile).isEip1559()
-                ? TransactionEncoder.signMessage(transaction, credentials)
-                : TransactionEncoder.signMessage(transaction, profile.getChainId(), credentials);
-        return Numeric.toHexString(signed);
-    }
-
-    private String broadcastPrepared(Web3j web3j, EvmTransactionRecord prepared) throws Exception {
+    private String broadcastPrepared(Web3j web3j, AccountChainProfile profile, EvmTransactionRecord prepared, int nativeDecimals) throws Exception {
         String hash = prepared.getTxHash();
         if (!Hash.sha3(prepared.getRawPayload()).equalsIgnoreCase(hash)) throw new IllegalStateException("prepared EVM hash mismatch");
+        var decoded = (org.web3j.crypto.SignedRawTransaction) org.web3j.crypto.TransactionDecoder.decode(prepared.getRawPayload());
+        if (!decoded.getFrom().equalsIgnoreCase(prepared.getFromAddress())) throw new IllegalStateException("prepared EVM sender differs from signature");
+        var observed = web3j.ethGetTransactionByHash(hash).send();
+        if (!observed.hasError() && observed.getTransaction().isPresent()
+                && hash.equalsIgnoreCase(observed.getTransaction().get().getHash())) return submitted(profile, hash);
+        BigInteger maxFee = decoded.getTransaction() instanceof org.web3j.crypto.transaction.type.Transaction1559 dynamic
+                ? dynamic.getMaxFeePerGas() : decoded.getGasPrice();
+        BigInteger fee = reservedFee(web3j, profile, prepared.getFromAddress(), prepared.getRawPayload(), decoded.getGasLimit(), maxFee);
+        EvmFeeSupport.requireBalance(web3j, prepared.getFromAddress(), decoded.getValue().add(fee), "EVM sender");
+        evmTransactionRepository.updatePreparedFee(profile.getChain(), hash,
+                EvmFeeSupport.atomicToNative(fee, nativeDecimals, RoundingMode.UP));
         EthSendTransaction sent = web3j.ethSendRawTransaction(prepared.getRawPayload()).send();
         if (sent.hasError()) {
             var known = web3j.ethGetTransactionByHash(hash).send();
-            if (!known.hasError() && known.getTransaction().isPresent()) return hash;
+            if (!known.hasError() && known.getTransaction().isPresent()
+                    && hash.equalsIgnoreCase(known.getTransaction().get().getHash())) return submitted(profile, hash);
             throw new IllegalStateException("EVM broadcast outcome remains unknown");
         }
         if (sent.getTransactionHash() == null || !hash.equalsIgnoreCase(sent.getTransactionHash())) {
             throw new IllegalStateException("RPC transaction hash differs from committed signed hash");
         }
+        return submitted(profile, hash);
+    }
+
+    private String submitted(AccountChainProfile profile, String hash) {
+        evmTransactionRepository.markSubmitted(profile.getChain(), hash);
         return hash;
     }
 
     /** Re-broadcast only the committed bytes, with the original nonce, independently of new-work switches. */
     public boolean recover(Operation operation, String chain) {
-        var existing = submissions.existing(operation,chain);
-        if (existing == null) return false;
-        String hash = withWeb3(profile(chain),(web3j,http) -> broadcastPrepared(web3j,existing));
+        requireOutsideTransaction();
+        var request = submissions.intent(operation, chain);
+        if (request.isEmpty()) return false;
+        var existing = submissions.existing(operation, chain);
+        if (existing == null) {
+            submissions.sign(operation.tenantId(), request.get().id());
+            existing = submissions.commit(operation, chain, request.get().id());
+        }
+        var prepared = existing;
+        var profile = profile(chain);
+        int precision = submissions.payload(request.get()).nativeDecimals();
+        String hash = withWeb3(profile, (web3j, http) -> broadcastPrepared(web3j, profile, prepared, precision));
         return switch (operation.kind()) {
-            case WITHDRAWAL -> withdrawalOrderRepository.recoverPreparedSent(operation.tenantId(),chain,operation.reference(),hash) == 1;
-            case COLLECTION -> collectionRecordRepository.recoverPreparedSent(operation.tenantId(),chain,operation.reference(),hash) == 1;
-            case RECOVERY -> recoveries.recoverPreparedBroadcast(operation.tenantId(),UUID.fromString(operation.reference()),hash) == 1;
+            case WITHDRAWAL -> withdrawalOrderRepository.recoverPreparedSent(operation.tenantId(), chain, operation.reference(), hash) == 1;
+            case COLLECTION -> collectionRecordRepository.recoverPreparedSent(operation.tenantId(), chain, operation.reference(), hash) == 1;
+            case RECOVERY -> recoveries.recoverPreparedBroadcast(operation.tenantId(), UUID.fromString(operation.reference()), hash) == 1;
         };
     }
 
-    private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
-        ECKey ecKey = keyService.key(profile, from);
-        return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
+    public int releaseUnsigned(Operation operation, String chain) { return submissions.releaseUnsigned(operation, chain); }
+
+    public void recoveryError(Operation operation, String chain, String reason) { submissions.recoveryError(operation, chain, reason); }
+
+    private static void requireOutsideTransaction() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("EVM signing and RPC require a committed caller transaction");
+        }
     }
 
     private BigInteger pendingNonce(Web3j web3j, String address) throws Exception {

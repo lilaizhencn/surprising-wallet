@@ -47,9 +47,14 @@ public class TronTridentClient implements AutoCloseable {
         }
     }
 
-    public Chain.Transaction createContractCall(String owner, String contract, Function function, long feeLimitSun) {
-        return callUnchecked(fullNode, () -> apiWrapper.triggerCall(owner, contract, function)
-                .setFeeLimit(feeLimitSun).build());
+    public synchronized Chain.Transaction createContractCall(String owner,String contract,Function function,long feeLimitSun) {
+        prepareLocalTransaction(apiWrapper);
+        try {
+            return apiWrapper.triggerContract(owner,contract,org.tron.trident.abi.FunctionEncoder.encode(function),
+                    0,0,null,feeLimitSun).getTransaction();
+        } catch(RuntimeException error) { throw error; }
+        catch(Exception error) { throw new IllegalStateException("TRON unsigned contract preparation failed",error); }
+        finally {apiWrapper.disableLocalCreate();}
     }
 
     public Chain.Transaction signTransaction(Chain.Transaction transaction, KeyPair keyPair) {

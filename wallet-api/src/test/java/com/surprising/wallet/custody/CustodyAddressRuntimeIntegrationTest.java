@@ -1,6 +1,5 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
@@ -32,6 +31,7 @@ import static org.mockito.Mockito.*;
 class CustodyAddressRuntimeIntegrationTest {
     private JdbcTemplate jdbc;
     private AddressRuntimeTestSupport engines;
+    private com.surprising.wallet.testutil.MpcSigningTestSupport mpc;
     private CustodyAddressService service;
     private Evm7702AccountRepository projections;
     private AnnotationConfigApplicationContext context;
@@ -50,16 +50,18 @@ class CustodyAddressRuntimeIntegrationTest {
             return call.callRealMethod();
         }).when(jdbc).query(anyString(), any(RowMapper.class), any(Object[].class));
         tenant = createTenant();
-        engines = new AddressRuntimeTestSupport(DepositTestSupport.repository(jdbc), WalletKeyTestFixture.provider());
+        engines = new AddressRuntimeTestSupport(DepositTestSupport.repository(jdbc));
         projections = mock(Evm7702AccountRepository.class);
+        mpc = new com.surprising.wallet.testutil.MpcSigningTestSupport(jdbc);
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
-        context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
+        context.registerBean(PlatformTransactionManager.class, () -> mpc.manager);
         context.registerBean(CustodyAddressService.class, () -> new CustodyAddressService(
-                new CustodyTenantTableRepository(jdbc), new ChainAddressRepository(jdbc), engines.runtime,
+                new CustodyTenantTableRepository(jdbc), new ChainAddressRepository(jdbc), new ChainProfileRepository(jdbc),
                 mock(CustodyTenantChainService.class), new CustodyJacksonConfiguration().custodyObjectMapper(), projections,
                 new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc),
-                new CustodyDerivationSubjectRepository(jdbc), new CustodyAuditRepository(jdbc), new LedgerBalanceRepository(jdbc)));
+                new CustodyDerivationSubjectRepository(jdbc), new CustodyAuditRepository(jdbc), new LedgerBalanceRepository(jdbc), mpc.signing, mpc.nodes,
+                com.surprising.wallet.testutil.CustodyTestSupport.cardanoAnchors(jdbc),com.surprising.wallet.testutil.CustodyTestSupport.moneroAnchors(jdbc), mpc.manager));
         context.refresh();
         service = context.getBean(CustodyAddressService.class);
     }
@@ -68,19 +70,20 @@ class CustodyAddressRuntimeIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"ETH", "APTOS", "SUI", "BTC", "BCH", "LTC", "DOGE"})
-    void realCreationReadsOneProfileAndOnePersistedChainAddressAndReplaysWithoutDerivation(String chain) {
+    void creationPublishesTheJointPublicKeyAndReplaysWithoutNativeWork(String chain) {
         var profile = enableProfile(chain);
         selects.clear();
         var created = create(tenant, chain, "customer");
-        assertEquals(1, countSelects("chain_profile"));
-        assertEquals(1, countSelects("chain_address"));
+        assertEquals(2, countSelects("chain_profile"));
+        assertEquals(0, countSelects("chain_address"));
         var row = new CustodyAddressRepository(jdbc).require(tenant, created.id());
         var chainRow = new ChainAddressRepository(jdbc).findOwned(tenant, row.chainAddressId()).orElseThrow();
         assertEquals(profile.getNetwork(), row.network());
         assertEquals(created.address(), chainRow.getAddress());
         assertEquals(tenant, chainRow.getTenantId());
         assertEquals(1L, chainRow.getAddressIndex());
-        assertEquals(engines.derivation.deriveAddress(profile, chainRow.getUserId(), chainRow.getBiz(), 1L, "DEPOSIT").getAddress(), created.address());
+        var key = mpc.keys.find(tenant, chainRow.getMpcKeyId()).orElseThrow();
+        assertEquals(com.surprising.wallet.chain.MpcPublicAddressCodec.encode(profile, HexFormat.of().parseHex(key.publicKeyHex())), created.address());
         assertTrue(engines.runtime.checkAddress(chain, created.address()));
         selects.clear();
         assertEquals(created.id(), create(tenant, chain, "customer").id());

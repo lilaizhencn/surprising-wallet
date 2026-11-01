@@ -216,8 +216,7 @@ class UtxoDepositWorkflowIntegrationTest {
         raw.setVout(List.of(output));
         when(command.getRawTransaction("first", true)).thenReturn(raw);
         var realRuntime = new BitcoinLikeChainRuntime(new ChainProfileRepository(jdbc),
-                new com.surprising.wallet.repository.ChainAssetRepository(jdbc),
-                mock(com.surprising.wallet.config.PubKeyConfig.class), command,
+                new com.surprising.wallet.repository.ChainAssetRepository(jdbc), command,
                 mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
                 mock(com.surprising.wallet.chain.rpc.DogeCommand.class), mock(com.surprising.wallet.chain.rpc.BchCommand.class),
                 new ChainAddressRepository(jdbc));

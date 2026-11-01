@@ -21,6 +21,17 @@ public class EvmTransactionRepository {
         this.jdbc = jdbc;
     }
 
+    public int updatePreparedFee(String chain, String hash, BigDecimal fee) {
+        return jdbc.update("""
+                update evm_tx set fee=?,updated_at=now() where chain=? and tx_hash=?
+                    and status='PREPARED' and raw_payload is not null
+                """, fee, chain, hash);
+    }
+
+    public int markSubmitted(String chain, String hash) {
+        return jdbc.update("update evm_tx set status='SENT',updated_at=now() where chain=? and tx_hash=? and status='PREPARED' and raw_payload is not null",chain,hash);
+    }
+
     /** 幂等写入 EVM 交易。 */
     public int upsert(EvmTransactionRecord tx) {
         Timestamp now = Timestamp.from(Instant.now());

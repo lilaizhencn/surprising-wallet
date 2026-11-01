@@ -1,58 +1,76 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.chain.model.NearTransactionRecord;
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.List;
-
-/** near_transaction 单表仓储。 */
+/** near_transaction single-table storage; first selected wire, proof and terminal fees survive late observations. */
 @Repository
+@RequiredArgsConstructor
 public class NearTransactionRepository {
-    /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
-    /** 构造 NEAR 交易仓储。 */
-    public NearTransactionRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    public int insertPending(NearTransactionRecord tx) {
+        return jdbc.update("""
+                insert into near_transaction(chain,tx_hash,action_index,sender,receiver,asset_symbol,amount,status)
+                values (?,?,0,?,?,?,?,'SIGNING') on conflict(chain,tx_hash,action_index) do nothing
+                """,tx.getChain(),tx.getTxHash(),tx.getSender(),tx.getReceiver(),tx.getAssetSymbol(),tx.getAmount());
     }
-
-    /** 幂等写入 NEAR 交易。 */
     public int upsert(NearTransactionRecord tx) {
-        Timestamp now = Timestamp.from(Instant.now());
         return jdbc.update("""
-                insert into near_transaction(
-                    chain, tx_hash, action_index, sender, receiver, asset_symbol,
-                    amount, gas_burnt, block_height, status, raw_payload, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, tx_hash, action_index) do update set
-                    sender = excluded.sender, receiver = excluded.receiver, asset_symbol = excluded.asset_symbol,
-                    amount = excluded.amount, gas_burnt = greatest(near_transaction.gas_burnt, excluded.gas_burnt),
-                    block_height = greatest(coalesce(near_transaction.block_height, 0), coalesce(excluded.block_height, 0)),
-                    status = excluded.status, raw_payload = coalesce(excluded.raw_payload, near_transaction.raw_payload),
-                    updated_at = excluded.updated_at
-                """, tx.getChain(), tx.getTxHash(), tx.getActionIndex() == null ? 0L : tx.getActionIndex(),
-                tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(), tx.getAmount(), tx.getGasBurnt(),
-                tx.getBlockHeight(), tx.getStatus(), tx.getRawPayload(), now, now);
+                insert into near_transaction(chain,tx_hash,action_index,sender,receiver,asset_symbol,amount,
+                                             gas_burnt,fee_yocto,block_height,status,raw_payload,execution_receipt)
+                values (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb)
+                on conflict(chain,tx_hash,action_index) do update set
+                    gas_burnt=case when near_transaction.status in ('CONFIRMED','FAILED') then near_transaction.gas_burnt else excluded.gas_burnt end,
+                    fee_yocto=case when near_transaction.status in ('CONFIRMED','FAILED') then near_transaction.fee_yocto else excluded.fee_yocto end,
+                    block_height=coalesce(near_transaction.block_height,excluded.block_height),
+                    status=case when near_transaction.status in ('CONFIRMED','FAILED') then near_transaction.status else excluded.status end,
+                    raw_payload=coalesce(near_transaction.raw_payload,excluded.raw_payload),
+                    execution_receipt=coalesce(near_transaction.execution_receipt,excluded.execution_receipt),updated_at=now()
+                """,tx.getChain(),tx.getTxHash(),tx.getActionIndex()==null?0L:tx.getActionIndex(),tx.getSender(),tx.getReceiver(),tx.getAssetSymbol(),tx.getAmount(),
+                tx.getGasBurnt()==null?0L:tx.getGasBurnt(),tx.getFeeYocto()==null?null:new BigDecimal(tx.getFeeYocto()),tx.getBlockHeight(),tx.getStatus(),tx.getRawPayload(),tx.getExecutionReceipt());
     }
-
-    /** 标记 NEAR 交易已确认。 */
-    public int markConfirmed(String chain, String txHash, long blockHeight, long gasBurnt, String rawPayload) {
+    public Optional<NearTransactionRecord> find(String hash) {
+        return jdbc.query("select * from near_transaction where chain='NEAR' and tx_hash=? and action_index=0",NearTransactionRepository::map,hash).stream().findFirst();
+    }
+    public boolean hasPendingSender(String sender) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(select 1 from near_transaction where chain='NEAR' and sender=?
+                    and status in ('SIGNING','PREPARED','SENT','CONFIRMING'))
+                """,Boolean.class,sender));
+    }
+    public int bindSigned(String hash,String raw) {
         return jdbc.update("""
-                update near_transaction
-                   set status = 'CONFIRMED', block_height = greatest(coalesce(block_height, 0), ?),
-                       gas_burnt = greatest(gas_burnt, ?), raw_payload = coalesce(?, raw_payload), updated_at = ?
-                 where chain = ? and tx_hash = ?
-                """, blockHeight, gasBurnt, rawPayload, Timestamp.from(Instant.now()), chain, txHash);
+                update near_transaction set raw_payload=?,status='PREPARED',updated_at=now()
+                 where chain='NEAR' and tx_hash=? and action_index=0 and raw_payload is null and status='SIGNING'
+                """,raw,hash);
     }
-
-    /** 查询 NEAR 交易发送方。 */
-    public java.util.Optional<String> findSender(String chain, String txHash) {
-        List<String> rows = jdbc.queryForList("""
-                select sender from near_transaction where chain = ? and tx_hash = ?
-                """, String.class, chain, txHash);
-        return rows.stream().findFirst();
+    public int markSubmitted(String hash) {
+        return jdbc.update("""
+                update near_transaction set status='SENT',updated_at=now()
+                 where chain='NEAR' and tx_hash=? and action_index=0 and raw_payload is not null and status in ('PREPARED','SENT')
+                """,hash);
+    }
+    public Optional<BigDecimal> findConfirmedFeeAtomic(String chain,String hash) {
+        return jdbc.queryForList("""
+                select fee_yocto from near_transaction where chain=? and tx_hash=? and action_index=0
+                    and status in ('CONFIRMED','FAILED') and fee_yocto is not null and execution_receipt is not null
+                """,BigDecimal.class,chain,hash).stream().findFirst();
+    }
+    public int confirmDeposit(String hash) {
+        return jdbc.update("update near_transaction set status='CONFIRMED',updated_at=now() where chain='NEAR' and tx_hash=? and status='CONFIRMING' and raw_payload is null",hash);
+    }
+    private static NearTransactionRecord map(ResultSet row,int index)throws SQLException {
+        var fee=row.getBigDecimal("fee_yocto");
+        return NearTransactionRecord.builder().chain(row.getString("chain")).txHash(row.getString("tx_hash")).actionIndex(row.getLong("action_index"))
+                .sender(row.getString("sender")).receiver(row.getString("receiver")).assetSymbol(row.getString("asset_symbol")).amount(row.getBigDecimal("amount"))
+                .gasBurnt(row.getLong("gas_burnt")).feeYocto(fee==null?null:fee.toBigIntegerExact()).blockHeight(row.getObject("block_height",Long.class))
+                .status(row.getString("status")).rawPayload(row.getString("raw_payload")).executionReceipt(row.getString("execution_receipt")).build();
     }
 }

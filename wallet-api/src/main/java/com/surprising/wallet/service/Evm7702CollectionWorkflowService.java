@@ -1,7 +1,11 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.chain.evm.Evm7702AuthorizationService;
-import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
+import com.surprising.wallet.chain.evm.MpcEvm7702Codec;
+import com.surprising.wallet.model.mpc.Evm7702CollectionPayload;
+import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.sdk.signing.MpcEvmTransactionCodec;
+import com.surprising.wallet.chain.evm.Evm7702SignedBatchTransaction;
 import com.surprising.wallet.chain.evm.Evm7702CollectionRequest;
 import com.surprising.wallet.chain.evm.Evm7702ContractCodec;
 import com.surprising.wallet.chain.evm.Evm7702OperationSigner;
@@ -24,7 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.web3j.crypto.AuthorizationTuple;
-import org.web3j.crypto.Credentials;
+
 import org.web3j.crypto.Hash;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
@@ -57,13 +61,11 @@ public class Evm7702CollectionWorkflowService {
     private final ChainProfileRepository chainProfileRepository;
     private final ChainAssetRepository chainAssetRepository;
     private final Evm7702RpcClient rpc;
-    private final AccountSecp256k1KeyService keyService;
+    private final Evm7702SigningService mpc;
     private final CustodyCryptoService crypto;
     private final WalletRuntimeConfigService runtimeConfig;
-    private final Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
     private final Evm7702OperationSigner operationSigner = new Evm7702OperationSigner();
     private final Evm7702ContractCodec contractCodec = new Evm7702ContractCodec();
-    private final Evm7702BatchTransactionService transactionService = new Evm7702BatchTransactionService();
     private final Evm7702ReceiptParser receiptParser = new Evm7702ReceiptParser();
     private final AtomicBoolean running = new AtomicBoolean();
 
@@ -76,7 +78,7 @@ public class Evm7702CollectionWorkflowService {
             ChainProfileRepository chainProfileRepository,
             ChainAssetRepository chainAssetRepository,
             Evm7702RpcClient rpc,
-            AccountSecp256k1KeyService keyService,
+            Evm7702SigningService mpc,
             CustodyCryptoService crypto,
             WalletRuntimeConfigService runtimeConfig) {
         this.batches = batches;
@@ -87,7 +89,7 @@ public class Evm7702CollectionWorkflowService {
         this.chainProfileRepository = chainProfileRepository;
         this.chainAssetRepository = chainAssetRepository;
         this.rpc = rpc;
-        this.keyService = keyService;
+        this.mpc = mpc;
         this.crypto = crypto;
         this.runtimeConfig = runtimeConfig;
     }
@@ -104,6 +106,7 @@ public class Evm7702CollectionWorkflowService {
                         throw new IllegalStateException("EIP-7702 target must have EVM family");
                     }
                     recoverUnknown(profile);
+                    recoverSigning(profile);
                     confirm(profile);
                     if (target.active() && runtimeConfig.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
                         processOne(profile);
@@ -132,11 +135,15 @@ public class Evm7702CollectionWorkflowService {
         try {
             for (EvmBroadcastAttempt attempt : attempts) {
                 try {
+                    String rawTransaction = crypto.decrypt(attempt.signedTxCiphertext());
+                    var original=coordinator.claimed(attempt.tenantId(),attempt.batchId()).orElseThrow();
+                    var operation=Evm7702CollectionCoordinator.operation(original);
+                    mpc.verifySelectedRaw(operation,rawTransaction,attempt.txHash());
+                    requireChain(web3j,profile,BigInteger.valueOf(mpc.plan(operation).orElseThrow().chainId()));
                     if (rpc.isTransactionKnown(web3j, attempt.txHash())) {
                         coordinator.markSubmitted(attempt.tenantId(), attempt.batchId(), attempt.txHash());
                         continue;
                     }
-                    String rawTransaction = crypto.decrypt(attempt.signedTxCiphertext());
                     String localHash = Hash.sha3(rawTransaction);
                     if (!localHash.equalsIgnoreCase(attempt.txHash())) {
                         coordinator.markRecoveryError(
@@ -174,41 +181,44 @@ public class Evm7702CollectionWorkflowService {
     }
 
     public Optional<String> processOne(AccountChainProfile profile) {
-        Evm7702CollectionCoordinator.Batch batch = coordinator.claimNextBatch(profile.getChain(), profile.getNetwork()).orElse(null);
-        if (batch == null) {
-            return Optional.empty();
+        var batch=coordinator.claimNextBatch(profile.getChain(),profile.getNetwork()).orElse(null);
+        return batch==null?Optional.empty():Optional.of(execute(profile,batch));
+    }
+
+    public void recoverSigning(AccountChainProfile profile) {
+        for(var batch:coordinator.listSigning(profile.getChain(),profile.getNetwork(),20)) {
+            try { execute(profile,batch); }
+            catch(RuntimeException pending) { log.warn("Original EIP-7702 batch remains pending: tenant={} batch={} reason={}",batch.tenantId(),batch.id(),pending.getMessage()); }
         }
-        boolean outboxPersisted = false;
+    }
+
+    private String execute(AccountChainProfile profile,Evm7702CollectionCoordinator.Batch batch) {
+        var operation=Evm7702CollectionCoordinator.operation(batch);
+        boolean rawCommitted=false;
         try {
-            HttpService http = rpc.http(profile);
-            Web3j web3j = Web3j.build(http);
+            HttpService http=rpc.http(profile);Web3j web3j=Web3j.build(http);
             try {
-                Prepared prepared = prepare(web3j, http, profile, batch);
-                Evm7702BatchTransactionService.SignedBatchTransaction signed = coordinator.persistSignedAttempt(
-                        batch,
-                        prepared.relayer().getAddress(),
-                        prepared.rpcPendingNonce(),
-                        reservedNonce -> signPrepared(web3j, profile, batch, prepared, reservedNonce));
-                outboxPersisted = true;
-                EthSendTransaction sent = web3j.ethSendRawTransaction(signed.rawTransaction()).send();
-                if (sent.hasError()) {
-                    throw new IllegalStateException("eth_sendRawTransaction failed: " + sent.getError().getMessage());
+                if(mpc.plan(operation).isEmpty()) {
+                    var preparation=prepare(web3j,profile,batch);
+                    coordinator.reserveSigningPlan(batch,preparation,preparation.rpcPendingNonce());
                 }
-                if (!signed.transactionHash().equalsIgnoreCase(sent.getTransactionHash())) {
-                    throw new IllegalStateException("RPC transaction hash differs from local signed hash");
-                }
-                coordinator.markSubmitted(batch.tenantId(), batch.id(), signed.transactionHash());
-                return Optional.of(signed.transactionHash());
-            } finally {
-                web3j.shutdown();
+                var preparation=mpc.preparation(operation,Evm7702CollectionPayload.class);
+                if(mpc.outer(operation).isEmpty())prepareOuter(web3j,http,profile,batch,preparation);
+                mpc.signOuter(operation);
+                var signed=coordinator.persistSignedAttempt(batch);rawCommitted=true;
+                EthSendTransaction sent=web3j.ethSendRawTransaction(signed.rawTransaction()).send();
+                if(sent.hasError())throw new IllegalStateException("eth_sendRawTransaction rejected original batch");
+                if(!signed.transactionHash().equalsIgnoreCase(sent.getTransactionHash()))throw new IllegalStateException("RPC batch hash differs from selected MPC hash");
+                coordinator.markSubmitted(batch.tenantId(),batch.id(),signed.transactionHash());
+                return signed.transactionHash();
+            } finally { web3j.shutdown(); }
+        } catch(Exception error) {
+            if(rawCommitted)coordinator.markBroadcastUnknown(batch.tenantId(),batch.id(),"BROADCAST_UNCERTAIN",error.getMessage());
+            else if(mpc.plan(operation).isEmpty()) {
+
+                coordinator.releaseUnbroadcastBatch(batch,"PREPARATION_FAILED",error.getMessage());
             }
-        } catch (Exception e) {
-            if (outboxPersisted) {
-                coordinator.markBroadcastUnknown(batch.tenantId(), batch.id(), "BROADCAST_UNCERTAIN", e.getMessage());
-            } else {
-                coordinator.releaseUnbroadcastBatch(batch, "PREPARATION_FAILED", e.getMessage());
-            }
-            throw e instanceof RuntimeException runtime ? runtime : new IllegalStateException("failed to process EIP-7702 batch", e);
+            throw error instanceof RuntimeException runtime?runtime:new IllegalStateException("original MPC batch pending",error);
         }
     }
 
@@ -272,173 +282,73 @@ public class Evm7702CollectionWorkflowService {
         }
     }
 
-    private Prepared prepare(
-            Web3j web3j,
-            HttpService http,
-            AccountChainProfile profile,
-            Evm7702CollectionCoordinator.Batch batch) throws Exception {
-        var config = batch.config();
-        BigInteger rpcChainId = web3j.ethChainId().send().getChainId();
-        if (!rpcChainId.equals(config.chainId()) || !rpcChainId.equals(BigInteger.valueOf(profile.getChainId()))) {
-            throw new IllegalStateException("RPC/config/profile chainId mismatch");
+    private Evm7702CollectionPayload prepare(Web3j web3j,AccountChainProfile profile,Evm7702CollectionCoordinator.Batch batch) throws Exception {
+        var config=batch.config();
+        requireChain(web3j,profile,config.chainId());
+        var latest=web3j.ethGetBlockByNumber(DefaultBlockParameterName.LATEST,false).send().getBlock();
+        Instant timestamp=chainBlockTimestamp(latest);
+        rpc.requireCodeHash(web3j,config.delegateAddress(),config.delegateCodeHash(),"delegate");
+        rpc.requireCodeHash(web3j,config.collectorAddress(),config.collectorCodeHash(),"collector");
+        var prepared=new ArrayList<Evm7702CollectionPayload.Item>();
+        for(int index=0;index<batch.items().size();index++) {
+            var item=batch.items().get(index);var authority=item.authorityChainAddress();
+            if(!batch.tenantId().equals(authority.getTenantId()) || !authority.getAddress().equalsIgnoreCase(item.fromAddress()))
+                throw new IllegalStateException("collection authority differs from original owned claim");
+            BigInteger balance=NATIVE_TOKEN.equalsIgnoreCase(batch.tokenContract())?web3j.ethGetBalance(item.fromAddress(),DefaultBlockParameterName.LATEST).send().getBalance()
+                    :rpc.tokenBalance(web3j,batch.tokenContract(),item.fromAddress());
+            if(balance.compareTo(item.amountAtomic())<0)throw new IllegalStateException("authority asset balance is lower than collection amount");
+            String code=web3j.ethGetCode(item.fromAddress(),DefaultBlockParameterName.LATEST).send().getCode();
+            BigInteger nonce=web3j.ethGetTransactionCount(item.fromAddress(),DefaultBlockParameterName.PENDING).send().getTransactionCount();
+            MpcEvm7702Codec.Authorization authorization=null;BigInteger operationNonce;
+            if(code==null || "0x".equalsIgnoreCase(code) || "0x0".equalsIgnoreCase(code)) {
+                authorization=new MpcEvm7702Codec.Authorization(config.chainId(),item.fromAddress(),config.delegateAddress(),nonce);operationNonce=BigInteger.ZERO;
+            } else if(code.equalsIgnoreCase(delegationCode(config.delegateAddress())))operationNonce=rpc.operationNonce(web3j,item.fromAddress());
+            else throw new IllegalStateException("authority has unapproved delegation");
+            var request=new Evm7702CollectionRequest(Numeric.hexStringToByteArray(batch.batchHash()),BigInteger.valueOf(index),
+                    item.fromAddress(),config.collectorAddress(),batch.tokenContract(),batch.hotWallet(),item.amountAtomic(),operationNonce,
+                    BigInteger.valueOf(batch.signatureDeadline().getEpochSecond()),DEFAULT_ITEM_GAS);
+            request.requireNotExpired(timestamp);
+            prepared.add(new Evm7702CollectionPayload.Item(authority,authorization,request));
         }
-        EthBlock.Block latestBlock = web3j.ethGetBlockByNumber(DefaultBlockParameterName.LATEST, false).send().getBlock();
-        Instant chainTimestamp = chainBlockTimestamp(latestBlock);
-        Instant signatureDeadline = chainTimestamp.plusSeconds(config.signatureTtlSeconds());
-        rpc.requireCodeHash(web3j, config.delegateAddress(), config.delegateCodeHash(), "delegate");
-        rpc.requireCodeHash(web3j, config.collectorAddress(), config.collectorCodeHash(), "collector");
-        Credentials relayer = keyService.credentials(profile, batch.relayerChainAddress());
-        if (!relayer.getAddress().equalsIgnoreCase(config.relayerAddress())) {
-            throw new IllegalStateException("derived relayer key does not match configuration");
-        }
-        byte[] batchId = Numeric.hexStringToByteArray(batch.batchHash());
-        List<Evm7702CollectionRequest> requests = new ArrayList<>();
-        List<byte[]> signatures = new ArrayList<>();
-        List<AuthorizationTuple> authorizations = new ArrayList<>();
-        List<Evm7702CollectionCoordinator.PreparedItem> preparedItems = new ArrayList<>();
-        for (int index = 0; index < batch.items().size(); index++) {
-            var item = batch.items().get(index);
-            Credentials authority = keyService.credentials(profile, item.authorityChainAddress());
-            if (!authority.getAddress().equalsIgnoreCase(item.fromAddress())) {
-                throw new IllegalStateException("derived authority key does not match claimed address");
-            }
-            BigInteger assetBalance = NATIVE_TOKEN.equalsIgnoreCase(batch.tokenContract()) ? web3j.ethGetBalance(
-                    item.fromAddress(),
-                    DefaultBlockParameterName.LATEST).send().getBalance() : rpc.tokenBalance(
-                    web3j,
-                    batch.tokenContract(),
-                    item.fromAddress());
-            if (assetBalance.compareTo(item.amountAtomic()) < 0) {
-                throw new IllegalStateException("authority asset balance is lower than collection amount");
-            }
-            String code = web3j.ethGetCode(item.fromAddress(), DefaultBlockParameterName.LATEST).send().getCode();
-            BigInteger authorityNonce = web3j.ethGetTransactionCount(
-                    item.fromAddress(),
-                    DefaultBlockParameterName.PENDING).send().getTransactionCount();
-            boolean includeAuthorization;
-            BigInteger operationNonce;
-            if (code == null || "0x".equalsIgnoreCase(code) || "0x0".equalsIgnoreCase(code)) {
-                includeAuthorization = true;
-                operationNonce = BigInteger.ZERO;
-                authorizations.add(authorizationService.authorize(config.chainId(), config.delegateAddress(), authorityNonce, authority));
-            } else if (code.equalsIgnoreCase(delegationCode(config.delegateAddress()))) {
-                includeAuthorization = false;
-                operationNonce = rpc.operationNonce(web3j, item.fromAddress());
-            } else {
-                throw new IllegalStateException("authority has unapproved code/delegate: " + item.fromAddress());
-            }
-            Evm7702CollectionRequest request = new Evm7702CollectionRequest(
-                    batchId,
-                    BigInteger.valueOf(index),
-                    item.fromAddress(),
-                    config.collectorAddress(),
-                    batch.tokenContract(),
-                    batch.hotWallet(),
-                    item.amountAtomic(),
-                    operationNonce,
-                    BigInteger.valueOf(signatureDeadline.getEpochSecond()),
-                    DEFAULT_ITEM_GAS);
-            request.requireNotExpired(chainTimestamp);
-            requests.add(request);
-            signatures.add(operationSigner.sign(config.chainId(), request, authority));
-            preparedItems.add(new Evm7702CollectionCoordinator.PreparedItem(
-                    index,
-                    item.fromAddress(),
-                    includeAuthorization,
-                    includeAuthorization ? authorityNonce : null,
-                    operationNonce,
-                    signatureDeadline,
-                    DEFAULT_ITEM_GAS.longValueExact()));
-        }
-        String calldata = contractCodec.encodeCollectBatch(requests, signatures);
-        EvmFeeSupport.FeeQuote feeQuote = EvmFeeSupport.quote(web3j, profile);
-        BigInteger priority = feeQuote.maxPriorityFeePerGas();
-        BigInteger maxFee = feeQuote.maxFeePerGas();
-        BigInteger relayerPendingNonce = web3j.ethGetTransactionCount(
-                relayer.getAddress(),
-                DefaultBlockParameterName.PENDING).send().getTransactionCount();
-        BigInteger estimated = rpc.estimateGas(
-                http,
-                relayer.getAddress(),
-                config.collectorAddress(),
-                calldata,
-                priority,
-                maxFee,
-                authorizations);
-        BigInteger gasLimit = new BigDecimal(estimated).multiply(config.gasLimitMultiplier()).setScale(
-                0,
-                RoundingMode.UP).toBigIntegerExact();
-        BigInteger blockCap = new BigDecimal(latestBlock.getGasLimit()).multiply(config.blockGasRatio()).setScale(
-                0,
-                RoundingMode.DOWN).toBigIntegerExact();
-        BigInteger configuredCap = BigInteger.valueOf(config.maxBatchGas());
-        if (gasLimit.compareTo(configuredCap.min(blockCap)) > 0 || gasLimit.compareTo(MIN_ITEM_GAS) < 0) {
-            throw new IllegalStateException("estimated batch gas exceeds configured/block safety limit");
-        }
-        return new Prepared(
-                relayer,
-                config.chainId(),
-                relayerPendingNonce,
-                priority,
-                maxFee,
-                gasLimit,
-                estimated,
-                config.collectorAddress(),
-                calldata,
-                List.copyOf(authorizations),
-                List.copyOf(preparedItems));
+        var quote=EvmFeeSupport.quote(web3j,profile);
+        BigInteger pending=web3j.ethGetTransactionCount(batch.relayerChainAddress().getAddress(),DefaultBlockParameterName.PENDING).send().getTransactionCount();
+        return new Evm7702CollectionPayload(config.chainId(),pending,quote.maxPriorityFeePerGas(),quote.maxFeePerGas(),latest.getGasLimit(),prepared);
     }
 
-    private Evm7702CollectionCoordinator.SignedAttempt signPrepared(
-            Web3j web3j,
-            AccountChainProfile profile,
-            Evm7702CollectionCoordinator.Batch batch,
-            Prepared prepared,
-            BigInteger reservedNonce) {
-        var signed = transactionService.signBatch(
-                prepared.chainId().longValueExact(),
-                reservedNonce,
-                prepared.maxPriorityFeePerGas(),
-                prepared.maxFeePerGas(),
-                prepared.gasLimit(),
-                prepared.collectorAddress(),
-                prepared.calldata(),
-                prepared.authorizations(),
-                prepared.relayer());
-        String encrypted = crypto.encrypt(signed.rawTransaction());
-        var attempt = new Evm7702CollectionCoordinator.PreparedAttempt(
-                batch.tenantId(),
-                batch.id(),
-                prepared.estimatedGas().longValueExact(),
-                prepared.gasLimit().longValueExact(),
-                prepared.maxFeePerGas(),
-                prepared.maxPriorityFeePerGas(),
-                reservedNonce,
-                signed.transactionHash(),
-                Hash.sha3(prepared.calldata()),
-                encrypted,
-                "custody-v1",
-                prepared.items());
-        BigInteger reservedFeeAtomic = prepared.gasLimit().multiply(prepared.maxFeePerGas()).add(EvmFeeSupport.estimateSeparateL1Fee(
-                web3j,
-                profile,
-                prepared.relayer().getAddress(),
-                signed.rawTransaction())).add(EvmFeeSupport.estimateOperatorFee(
-                web3j,
-                profile,
-                prepared.relayer().getAddress(),
-                prepared.gasLimit()));
-        send(() -> {
-            EvmFeeSupport.requireBalance(web3j, prepared.relayer().getAddress(), reservedFeeAtomic, "EIP-7702 relayer");
-            return null;
-        });
-        int nativeDecimals = nativeDecimals(profile);
-        BigDecimal reservedFee = EvmFeeSupport.atomicToNative(reservedFeeAtomic, nativeDecimals, RoundingMode.UP);
-        return new Evm7702CollectionCoordinator.SignedAttempt(signed, attempt, reservedFee);
+    private void prepareOuter(Web3j web3j,HttpService http,AccountChainProfile profile,Evm7702CollectionCoordinator.Batch batch,Evm7702CollectionPayload payload) throws Exception {
+        var operation=Evm7702CollectionCoordinator.operation(batch);var plan=mpc.plan(operation).orElseThrow();
+        var authorizations=new ArrayList<AuthorizationTuple>();var requests=new ArrayList<Evm7702CollectionRequest>();var signatures=new ArrayList<byte[]>();
+        for(int index=0;index<payload.items().size();index++) {
+            var item=payload.items().get(index);byte[] publicKey=mpc.publicKey(item.authority(),batch.chain());
+            if(item.authorization()!=null)authorizations.add(MpcEvm7702Codec.authorization(item.authorization(),publicKey,mpc.signature(operation,
+                    mpc.input(item.authority(),"authorization-"+index,MpcSignCommand.Purpose.EIP7702_AUTHORIZATION,item.authorization(),MpcEvm7702Codec.digest(item.authorization())))));
+            requests.add(item.request());signatures.add(MpcEvm7702Codec.collectionSignature(payload.chainId(),item.request(),publicKey,mpc.signature(operation,
+                    mpc.input(item.authority(),"operation-"+index,MpcSignCommand.Purpose.EIP7702_OPERATION,item.request(),operationSigner.digest(payload.chainId(),item.request())))));
+        }
+        String data=contractCodec.encodeCollectBatch(requests,signatures);
+        BigInteger estimated=rpc.estimateGas(http,plan.relayer().getAddress(),batch.config().collectorAddress(),data,payload.maxPriorityFeePerGas(),payload.maxFeePerGas(),authorizations);
+        BigInteger gasLimit=gasLimit(estimated,payload.blockGasLimit(),batch.config(),MIN_ITEM_GAS);
+        var raw=MpcEvm7702Codec.batch(plan.chainId(),plan.relayerNonce(),payload.maxPriorityFeePerGas(),payload.maxFeePerGas(),gasLimit,batch.config().collectorAddress(),data,authorizations);
+        BigInteger fee=gasLimit.multiply(payload.maxFeePerGas()).add(EvmFeeSupport.estimateUnsignedSeparateL1Fee(web3j,profile,plan.relayer().getAddress(),MpcEvmTransactionCodec.unsignedPayload(raw,plan.chainId())))
+                .add(EvmFeeSupport.estimateOperatorFee(web3j,profile,plan.relayer().getAddress(),gasLimit));
+        EvmFeeSupport.requireBalance(web3j,plan.relayer().getAddress(),fee,"EIP-7702 relayer");
+        coordinator.reserveOuter(batch,raw,estimated.longValueExact(),EvmFeeSupport.atomicToNative(fee,nativeDecimals(profile),RoundingMode.UP));
+    }
+
+    private static void requireChain(Web3j web3j,AccountChainProfile profile,BigInteger chainId) throws Exception {
+        if(!chainId.equals(BigInteger.valueOf(profile.getChainId())) || !chainId.equals(web3j.ethChainId().send().getChainId()))
+            throw new IllegalStateException("RPC/config/profile chain identity mismatch");
+    }
+
+    private static BigInteger gasLimit(BigInteger estimated,BigInteger blockGasLimit,Evm7702ConfigRepository.Configuration config,BigInteger minimum) {
+        BigInteger limit=new BigDecimal(estimated).multiply(config.gasLimitMultiplier()).setScale(0,RoundingMode.UP).toBigIntegerExact();
+        BigInteger cap=BigInteger.valueOf(config.maxBatchGas()).min(new BigDecimal(blockGasLimit).multiply(config.blockGasRatio()).toBigInteger());
+        if(limit.compareTo(cap)>0 || limit.compareTo(minimum)<0)throw new IllegalStateException("estimated batch gas exceeds safety bounds");
+        return limit;
     }
 
     private int nativeDecimals(AccountChainProfile profile) {
-        var asset = chainAssetRepository.findActiveDefinition(
+        var asset = chainAssetRepository.findDefinition(
                 profile.getChain(),
                 profile.getNativeSymbol()).orElseThrow(() -> new IllegalStateException("missing active native chain_asset for " + profile.getChain()));
         if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {
@@ -451,20 +361,6 @@ public class Evm7702CollectionWorkflowService {
         return Numeric.toHexString(Hash.sha3((tenantId + ":" + batchId).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
-    private record Prepared(
-            Credentials relayer,
-            BigInteger chainId,
-            BigInteger rpcPendingNonce,
-            BigInteger maxPriorityFeePerGas,
-            BigInteger maxFeePerGas,
-            BigInteger gasLimit,
-            BigInteger estimatedGas,
-            String collectorAddress,
-            String calldata,
-            List<AuthorizationTuple> authorizations,
-            List<Evm7702CollectionCoordinator.PreparedItem> items) {
-    }
-
     private final EvmCollectionBatchRepository batches;
     private final EvmCollectionBatchItemRepository items;
     private final EvmCollectionBatchAttemptRepository attempts;
@@ -473,14 +369,14 @@ public class Evm7702CollectionWorkflowService {
     public List<RuntimeTarget> listRuntimeTargets() {
         List<RuntimeTarget> result = new ArrayList<>();
         var definitions = configurations.listAll();
-        for (var profile : chainProfileRepository.listProfiles(true)) {
+        for (var profile : chainProfileRepository.listProfiles(false)) {
             if (!"evm".equalsIgnoreCase(profile.getFamily())) {
                 continue;
             }
             String chain = profile.getChain();
             String network = profile.getNetwork();
             var matching = definitions.stream().filter(row -> chain.equals(row.chain()) && network.equals(row.network())).toList();
-            boolean active = matching.stream().anyMatch(row -> "ACTIVE".equals(row.status()));
+            boolean active = Boolean.TRUE.equals(profile.getEnabled()) && matching.stream().anyMatch(row -> "ACTIVE".equals(row.status()));
             boolean managed = matching.stream().anyMatch(row -> java.util.Set.of("ACTIVE", "PAUSED").contains(row.status()));
             if (managed || batches.existsPending(chain, network)) {
                 result.add(new RuntimeTarget(profile, active));
@@ -495,12 +391,8 @@ public class Evm7702CollectionWorkflowService {
     }
 
     public List<Evm7702CollectionCoordinator.PendingBatch> listPendingBatches(String chain, String network, int limit) {
-        Map<Integer, Evm7702ConfigRepository.Configuration> versions = new HashMap<>();
-        return batches.listPending(chain, network, limit).stream().map(row -> {
-            int version = row.delegateVersion();
-            var config = versions.computeIfAbsent(
-                    version,
-                    key -> configurations.find(chain, network, null, key).stream().findFirst().orElseThrow());
+        return batches.listPending(chain,network,limit).stream().map(row -> {
+            var config=coordinator.claimed(row.tenantId(),row.id()).orElseThrow().config();
             return new Evm7702CollectionCoordinator.PendingBatch(
                     row.tenantId(),
                     row.id(),

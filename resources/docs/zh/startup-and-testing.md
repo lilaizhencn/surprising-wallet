@@ -76,23 +76,16 @@ mvn -pl wallet-api -am test -DskipTests
 
 ## 5. 密钥与运行配置
 
-只有 wallet-api 产出可执行 JAR，默认 api。通过 `--sw.wallet.mode=all|api|sig1|sig2` 选择模式。all 共享数据源、各签名阶段独立调度池；sig1/sig2 强制关闭 HTTP。源码签名模块作为普通依赖打包。
+只有 wallet-api 产出可执行 Java JAR，负责 API 与分类业务调度。三个独立原生持有者运行 cb-mpc；XMR 使用 Monero 原生多方协议。Java 只处理公钥、固定摘要和返回结果，不配置钱包 Seed 或本地钱包私钥。
 
-| 模式 | 必需密钥环境变量（前缀 SW_WALLET_） |
-|---|---|
-| all | SIG1_SEED、SIG2_SEED、ED25519_SEED、RECOVERY_PUBLIC_ROOT |
-| api | SIG2_SEED、ED25519_SEED、SIG1_PUBLIC_ROOT、RECOVERY_PUBLIC_ROOT |
-| sig1 | SIG1_SEED、SIG2_PUBLIC_ROOT、RECOVERY_PUBLIC_ROOT |
-| sig2 | SIG2_SEED |
-
-Seed 为 Base64 编码的 32 字节。PUBLIC_ROOT 为对应 BIP32 根的扩展公钥（xpub/tpub），不是普通公钥十六进制，也不能是扩展私钥。恢复 Seed 始终离线，由离线工具导出公钥；三组多签公钥必须不同。沿用已有钱包时必须从原 Seed 导出相同公钥，不能重新生成。api 仍为账户链签名，保留 sig2 和 Ed25519 私钥。all 不提供两方私钥的进程隔离。配置变更需要重启。
+API 必须配置 `SW_MPC_CA_FILE`、`SW_MPC_CLIENT_CERTIFICATE_FILE`、`SW_MPC_CLIENT_PRIVATE_KEY_FILE`，以及三组 `SW_MPC_NODE_{1,2,3}_ID` / `_URL`。ID 为节点证书的 SHA256 SPKI，URL 为 HTTPS origin。传输私钥用于 mTLS 身份认证；每个持有者的签名份额与存储加密密钥分别保管。完整节点配置与恢复边界见[独立签名节点运行说明](../../infra/mpc-signer/OPERATIONS.md)。
 
 ```bash
 mvn -pl wallet-api -am clean package
-java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar --sw.wallet.mode=all
+java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar
 ```
 
-拆分部署时分别运行相同 JAR 的 api、sig1、sig2 模式，三个进程使用同一数据库；不要同时启用 all 和拆分服务。各进程使用独立环境文件，只配置本方密钥。可通过 `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` 调整 API/all 连接数，独立签名模式使用 `SW_WALLET_SIGNING_DB_POOL_SIZE`（默认 4）。
+持有者不连接钱包数据库或 PGMQ。API 数据库连接数可通过 `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` 调整；各持有者使用自己的配置、操作系统身份和存储目录。
 
 wallet-api 常用环境变量：
 
@@ -123,8 +116,8 @@ export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 | 单链扫描批量 | `chain_profile.scan_batch_size` |
 | 链网络、确认数、链 ID、gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
-| 当前模式密钥 | 环境变量注入 `sw.wallet.keys` |
-| 每链默认热提钱包 | `chain_address` 中原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
+| MPC 通信身份与节点 | 环境变量注入 `sw.wallet.mpc` |
+| 租户钱包地址与联合公钥 | `chain_address.mpc_key_id` 与同租户 `wallet_mpc_key` / `wallet_mpc_key_epoch` |
 
 部署前必须按环境提前确认 scanner checkpoint。全新系统通常把 `chain_scan_height.best_height/safe_height` 设置到当前最新安全块附近，让服务只扫描部署后的新区块；如果要补历史充值，再按业务窗口把高度往前调。不要从创世块或很早的历史高度开始扫，这会让服务长时间追块并消耗大量 RPC 配额。
 
@@ -146,7 +139,7 @@ TokDou 钱包页面读取 wallet-api：
 |---|---|
 | `wallet-api/src/main/resources/application.yaml` | wallet-api 唯一配置，包含数据库、PostgreSQL / PGMQ、密钥、调度及业务参数 |
 
-项目不再使用 `application-{profile}.yaml`。每个属性旁均有用途和配置说明；修改运行环境时更新环境变量并重启对应进程，签名公钥必须与 API 派生地址使用的公钥一致。
+项目不再使用 `application-{profile}.yaml`。每个属性旁均有用途和配置说明；修改运行环境时更新环境变量并重启对应进程，持有者身份与已发布密钥的参与方必须一致。
 
 本地必配项：
 
@@ -154,30 +147,21 @@ TokDou 钱包页面读取 wallet-api：
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
 - 启用的 `chain_rpc_node` 必须配置真实 RPC URL 和认证信息；启动时会拒绝 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符
-- `sw.wallet.keys` 已配置当前模式所需的 Seed 和扩展公钥
-- 每条启用链必须且只能有一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`
-- wallet-api、sig1、sig2 使用同一套 Keyset 配置后再启动
+- `sw.wallet.mpc` 已配置三名持有者身份、HTTPS 地址与 mTLS 文件
+- 租户地址通过 DKG 发布并绑定原 MPC 密钥；恢复时保留原密钥、版本与节点身份
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
-启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。wallet-api 会从配置的 Keyset 推导每条启用链的 `0/0/0` 默认热提地址并和 `chain_address` 比对；Seed 缺失/非法，或地址缺失、重复、path 不一致都会直接启动失败。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量，并检查三名 MPC 持有者与客户端配置。配置不完整，或启用的 RPC 节点仍包含占位符 URL 或认证信息，都会直接启动失败。节点暂时不可达时，原请求按持久化事实恢复，不能换钥或临时使用本地私钥签名。
 
 ## 7. 启动服务
 
-从仓库根目录开三个终端。
-
-终端 1：
+分别启动三个配置好的原生持有者：
 
 ```bash
-mvn -pl wallet-sig1 -am spring-boot:run
+/absolute/path/wallet-mpc-signer /absolute/path/node-config.json
 ```
 
-终端 2：
-
-```bash
-mvn -pl wallet-sig2 -am spring-boot:run
-```
-
-终端 3：
+随后从仓库根目录启动 API：
 
 ```bash
 mvn -pl wallet-api -am spring-boot:run
@@ -188,15 +172,14 @@ mvn -pl wallet-api -am spring-boot:run
 | 服务 | 端口 |
 |---|---:|
 | `wallet-api` | 8002 |
-| `wallet-sig1` | 8004 |
-| `wallet-sig2` | 8081 |
+| 原生 MPC 持有者 | 由各自 `node-config.json` 配置，限制网络访问 |
 
 ## 8. 测试矩阵
 
 查看支持的测试环境：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh matrix
+resources/scripts/regtest/all-chain-regtest.sh matrix
 ```
 
 覆盖范围：
@@ -212,16 +195,16 @@ scripts/regtest/all-chain-regtest.sh matrix
 
 当前自动化测试的边界：
 
-- `test-utxo` 会在本地 BTC/LTC/DOGE/BCH regtest 中模拟地址创建、充值扫描入账、归集、提现、UTXO 锁定/选择、两次签名、广播和确认。
+- `test-utxo` 是本地 BTC/LTC/DOGE/BCH regtest 的相邻业务回归入口；MPC 实际签名须另运行独立三方节点探针。
 - `test-xmr` 会启动 XMR regtest wallet-rpc，创建真实子地址，充值并扫描入账，广播项目内提现，验证扫描幂等，并确认归集流程。
 - `test-evm` 会在 Hardhat fork 中模拟 EVM 原生币/ERC20 充值、提现、归集和确认流程。
-- `test-live` 默认验证外部 testnet/devnet 连通性；真实花费广播需要 `RUN_LIVE_SPENDING=true`、测试币余额、签名私钥和 Ed25519 seed。
-- 生产级全链端到端演练还需要同时启动 `wallet-sig1`、`wallet-sig2`、`wallet-api`，并由前端或 API 触发真实业务请求。
+- `test-live` 默认验证外部 testnet/devnet 连通性，不能替代 MPC 实际花费验收。
+- MPC 的正式业务、EIP-7702、NEAR 自动注册、XMR、份额刷新和完整 JAR 无 Seed 启动入口见[原生服务验收清单](../../infra/mpc-signer/README.md)。必须分别核对实际节点签名、广播、入账与恢复证明；本机冷备份恢复已通过，Linux 发布产物验证也已通过，当前分支最终 28/28 链组矩阵已通过，验收范围为本地链/测试网。
 
 ## 9. 运行 DB-only 测试
 
 ```bash
-scripts/regtest/all-chain-regtest.sh test-db
+resources/scripts/regtest/all-chain-regtest.sh test-db
 ```
 
 这些测试不需要本地区块链节点，但需要本地 PostgreSQL。
@@ -242,20 +225,20 @@ resources/scripts/regtest/run-custody-db-tests.sh
 启动本地节点：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh init
-scripts/regtest/all-chain-regtest.sh status
+resources/scripts/regtest/all-chain-regtest.sh init
+resources/scripts/regtest/all-chain-regtest.sh status
 ```
 
 运行完整本地 UTXO 流程：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh test-utxo
+resources/scripts/regtest/all-chain-regtest.sh test-utxo
 ```
 
 运行 XMR wallet-rpc 流程：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh test-xmr
+resources/scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
 调整广播压力：
@@ -263,14 +246,14 @@ scripts/regtest/all-chain-regtest.sh test-xmr
 ```bash
 BITCOINLIKE_BROADCAST_DEPOSITS=80 \
 BITCOINLIKE_BROADCAST_WITHDRAWALS=40 \
-scripts/regtest/all-chain-regtest.sh test-utxo
+resources/scripts/regtest/all-chain-regtest.sh test-utxo
 ```
 
 停止或重置节点：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh stop
-scripts/regtest/all-chain-regtest.sh reset
+resources/scripts/regtest/all-chain-regtest.sh stop
+resources/scripts/regtest/all-chain-regtest.sh reset
 ```
 
 ## 11. 运行 EVM Fork 测试
@@ -286,13 +269,13 @@ cd ..
 运行：
 
 ```bash
-scripts/regtest/all-chain-regtest.sh test-evm
+resources/scripts/regtest/all-chain-regtest.sh test-evm
 ```
 
 只跑部分链：
 
 ```bash
-CHAIN_FILTER=ETH,BASE scripts/regtest/all-chain-regtest.sh test-evm
+CHAIN_FILTER=ETH,BASE resources/scripts/regtest/all-chain-regtest.sh test-evm
 ```
 
 ## 12. 运行外部 Live 测试
@@ -300,13 +283,13 @@ CHAIN_FILTER=ETH,BASE scripts/regtest/all-chain-regtest.sh test-evm
 只跑连通性：
 
 ```bash
-RUN_LIVE=true scripts/regtest/all-chain-regtest.sh test-all
+RUN_LIVE=true resources/scripts/regtest/all-chain-regtest.sh test-all
 ```
 
 连通性加花费测试：
 
 ```bash
-RUN_LIVE=true RUN_LIVE_SPENDING=true scripts/regtest/all-chain-regtest.sh test-all
+RUN_LIVE=true RUN_LIVE_SPENDING=true resources/scripts/regtest/all-chain-regtest.sh test-all
 ```
 
 live 花费测试需要测试钱包有余额，并且 RPC/faucet 可用：
@@ -345,11 +328,9 @@ lsof -ti tcp:8545 | xargs kill
 
 ## PGMQ 队列运行与验证
 
-`SW_DB_URL` 在三个应用中必须指向同一个 PostgreSQL 数据库。wallet-api 使用
-`SW_DB_USERNAME/SW_DB_PASSWORD`，签名服务分别使用
-`SW_SIG1_DB_USERNAME/SW_SIG1_DB_PASSWORD` 和 `SW_SIG2_DB_USERNAME/SW_SIG2_DB_PASSWORD`。
-由 DBA 创建独立 LOGIN 角色并安全配置密码；初始化基线由数据库所有者执行。
-下面的授权在角色创建后执行，签名服务无需业务表权限：
+wallet-api 使用 `SW_DB_URL` 与 `SW_DB_USERNAME/SW_DB_PASSWORD`。原生持有者没有数据库账号。
+由 DBA 创建应用 LOGIN 角色并安全配置密码；初始化基线由数据库所有者执行。
+下面是 API 的队列授权，业务表授权按独立部署策略配置：
 
 ```sql
 -- wallet-api role; business-table grants follow the existing application deployment policy.
@@ -358,22 +339,9 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgmq TO wallet;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgmq TO wallet;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA pgmq TO wallet;
 GRANT SELECT, INSERT, UPDATE ON public.chain_fee_rate TO wallet;
-GRANT USAGE ON SCHEMA pgmq TO wallet_sig1, wallet_sig2;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgmq TO wallet_sig1, wallet_sig2;
-GRANT SELECT, UPDATE, DELETE ON pgmq.q_wallet_sign_first TO wallet_sig1;
-GRANT INSERT, SELECT (msg_id) ON pgmq.a_wallet_sign_first TO wallet_sig1;
-GRANT INSERT, SELECT (msg_id) ON pgmq.q_wallet_sign_second, pgmq.q_wallet_sign_done,
-    pgmq.q_wallet_sign_first_dead TO wallet_sig1;
-GRANT USAGE, SELECT ON SEQUENCE pgmq.q_wallet_sign_second_msg_id_seq,
-    pgmq.q_wallet_sign_done_msg_id_seq, pgmq.q_wallet_sign_first_dead_msg_id_seq TO wallet_sig1;
-GRANT SELECT, UPDATE, DELETE ON pgmq.q_wallet_sign_second TO wallet_sig2;
-GRANT INSERT, SELECT (msg_id) ON pgmq.a_wallet_sign_second TO wallet_sig2;
-GRANT INSERT, SELECT (msg_id) ON pgmq.q_wallet_sign_done, pgmq.q_wallet_sign_second_dead TO wallet_sig2;
-GRANT USAGE, SELECT ON SEQUENCE pgmq.q_wallet_sign_done_msg_id_seq,
-    pgmq.q_wallet_sign_second_dead_msg_id_seq TO wallet_sig2;
 ```
 
-使用普通持久化队列。队列包含 `wallet_sign_first`、`wallet_sign_second`、`wallet_sign_done`、
+使用普通持久化队列。队列包含 `wallet_mpc_sign`、`wallet_sign_done`、
 `wallet_withdraw`、`wallet_rbf`、`wallet_deposit_event`、`wallet_withdraw_event`，每个队列都有对应 `_dead` 死信队列。
 队列 JSON headers 必须携带 `tenant_id`。外部业务消费充值/提现事件时，也必须按租户限定查询条件和数据库权限；
 不要向租户应用开放平台队列账号。签名请求和结果使用有类型的协议携带 tenantId 与 requestId；消费者校验租户 header，API 广播端同时校验数据库请求 UUID。签名服务不接收或修改数据库状态及 RBF 历史。
@@ -388,7 +356,7 @@ RPC 不属于数据库事务，交易广播仍用交易 ID 幂等和 BROADCAST_U
 数据库所有者或单独授权的运维账号可在确认业务状态后重放死信：
 
 ```sql
-SELECT public.wallet_replay_dead('wallet_sign_first', 123, 'Verified signing configuration after repair');
+SELECT public.wallet_replay_dead('wallet_mpc_sign', 123, 'Verified original MPC request after repair');
 ```
 
 同一死信 ID 重复执行不会重复入队；原消息归档，新消息记录原因、数据库操作者、时间和原死信 ID。
@@ -400,16 +368,16 @@ SELECT public.wallet_replay_dead('wallet_sign_first', 123, 'Verified signing con
 SW_TEST_PGMQ=true mvn -pl common -am test -Dtest=PgmqIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
-部署时先安装指定扩展并初始化新的数据库，再同步部署三个服务。现有开发数据库可重建；不要在有资金数据的库运行初始化基线。
-如需回滚，先停止生产者和消费者，保留新数据库快照、未完成队列和归档，再恢复已备份的代码与数据库；不能只回滚 JAR。
+部署时先安装指定扩展并初始化新的数据库，再配置 API 和三个独立持有者；不要在有资金数据的库运行初始化基线。
+程序回滚保留最新数据库、队列、份额与协议记录，只替换能识别当前 REFRESH fence/epoch 的兼容程序。数据库与份额的灾难恢复必须核对同一备份边界，不能恢复旧随机材料后继续签名。
 队列增加数据库写入、WAL 和归档存储负载，应监控连接池、vacuum 和磁盘占用。
 
 每轮新签名请求（含 RBF）带唯一 requestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
 
 ## 阿里云单 JAR 发布
 
-构建与运行均使用 Java 27，Lombok 1.18.48 已支持该版本。GitHub Actions 只执行不依赖数据库/链节点的单元测试；完整数据库集成测试在开发机既有 PostgreSQL 18 的隔离测试库执行。服务端仅接收已构建的校验发布包，固定使用 `surprising-wallet-all.service`。不再在服务器上拉取代码或编译，不使用旧 `backend-activate.sh` 自动迁移入口。
+构建与运行均使用 Java 27，Lombok 1.18.48 已支持该版本。GitHub Actions 只执行不依赖数据库/链节点的单元测试；完整数据库集成测试在开发机既有 PostgreSQL 18 的隔离测试库执行。Java unit 固定为 `surprising-wallet.service`；构建与程序激活入口见根目录 README 及 `scripts/deploy/backend-deploy.sh`。原生持有者另行部署，当前分支尚未执行生产发布。
 
 新实例必须通过环境变量提供 `SW_CUSTODY_SECRET_MASTER_KEY`，没有内置默认加密密钥。开发水龙头默认关闭；如需启用，必须同时补齐其资金地址与节点配置。
 
-部署回滚只覆盖 JAR 和 systemd unit，不回滚数据库或环境密钥。新部署使用新的钱包根密钥时，不能用它接管旧钱包地址。
+部署回滚只覆盖兼容的程序和 systemd unit，保留最新数据库、协议记录和环境密钥；已有地址继续绑定原联合公钥与原持有者。

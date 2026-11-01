@@ -21,27 +21,31 @@ class TransactionQueueSafetyTest {
     private final ChainSigningTransactionRepository signing = mock(ChainSigningTransactionRepository.class);
     private final PgmqClient queue = mock(PgmqClient.class);
     private final UtxoBroadcastService service = new UtxoBroadcastService(signing, mock(WithdrawalOrderRepository.class),
-            mock(CollectionRecordRepository.class), mock(UtxoRepository.class), mock(LedgerBalanceRepository.class),
+            mock(CollectionRecordRepository.class), mock(UtxoMpcSigningService.class),
             mock(BlockchainRuntimeService.class), queue, new ObjectMapper(), mock(WalletTaskLeaseService.class));
+
+    private final PgmqClient.Message claim=new PgmqClient.Message(1,1,"{}","{}");
+    @org.junit.jupiter.api.BeforeEach void claimOwned() { when(queue.lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim)).thenReturn(true); }
 
     @Test void duplicateFailedSignatureCannotUndoAnAlreadySentTransaction() {
         when(signing.lockById("BTC", 1)).thenReturn(Optional.of(row(1, request, Constants.SENT, signed("a".repeat(64), 1590))));
-        service.apply(new UtxoSigningResult(1, "BTC", tenant, request.requestId(), null, "late failure"));
+        service.prepare(new UtxoSigningResult(1, "BTC", tenant, request.requestId(), null, "late failure"),claim);
         verify(signing).lockById("BTC", 1);
         verifyNoMoreInteractions(signing);
-        verifyNoInteractions(queue);
+        verify(queue).lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim);
+        verifyNoMoreInteractions(queue);
     }
     @Test void replayFromAnOlderSigningRequestCannotModifyCurrentTransaction() {
         when(signing.lockById("BTC", 1)).thenReturn(Optional.of(row(1, request, Constants.SIGNING, null)));
-        assertThrows(IllegalArgumentException.class, () -> service.apply(
-                new UtxoSigningResult(1, "BTC", tenant, UUID.randomUUID(), null, "stale")));
+        assertThrows(IllegalArgumentException.class, () -> service.prepare(
+                new UtxoSigningResult(1, "BTC", tenant, UUID.randomUUID(), null, "stale"),claim));
         verify(signing).lockById("BTC", 1);
         verifyNoMoreInteractions(signing);
     }
     @Test void wrongTenantCannotModifyPersistedSigningTransaction() {
         when(signing.lockById("BTC", 1)).thenReturn(Optional.of(row(1, request, Constants.SIGNING, null)));
-        assertThrows(IllegalArgumentException.class, () -> service.apply(
-                new UtxoSigningResult(1, "BTC", UUID.randomUUID(), request.requestId(), null, "foreign")));
+        assertThrows(IllegalArgumentException.class, () -> service.prepare(
+                new UtxoSigningResult(1, "BTC", UUID.randomUUID(), request.requestId(), null, "foreign"),claim));
         verify(signing).lockById("BTC", 1);
         verifyNoMoreInteractions(signing);
     }

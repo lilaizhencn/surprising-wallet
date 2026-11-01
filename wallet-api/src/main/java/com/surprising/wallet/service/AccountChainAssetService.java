@@ -32,6 +32,8 @@ class AccountChainAssetService {
     private final ChainAssetRepository chainAssetRepository;
 
     private final XrpTransactionService xrpTransactionService;
+    private final com.surprising.wallet.chain.polkadot.PolkadotTransactionService polkadotTransactionService;
+    private final com.surprising.wallet.chain.cardano.CardanoTransactionService cardanoTransactionService;
 
     BigDecimal collectionAmount(AccountChainProfile profile,
                                 CollectionCandidateRecord candidate,
@@ -46,6 +48,8 @@ class AccountChainAssetService {
             return xrpTransactionService.collectableNativeAmount(
                     candidate.getAddress(), amount);
         }
+        if ("DOT".equals(profile.getChain())) return polkadotTransactionService.collectableNativeAmount(candidate.getAddress(),amount,feeReserve);
+        if ("ADA".equals(profile.getChain())) return cardanoTransactionService.collectableNativeAmount(candidate.getAddress(),amount,feeReserve);
         return amount.subtract(feeReserve).max(BigDecimal.ZERO);
     }
 

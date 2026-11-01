@@ -12,9 +12,13 @@
     <artifactId>chain-sdks</artifactId>
     <name>chain-sdks</name>
     <packaging>jar</packaging>
-    <description>Blockchain SDKs: Bitcoin-like, TRON and Ed25519 key derivation</description>
+    <description>Blockchain SDKs: Bitcoin-like, TRON, Ed25519 and EVM signature encoding</description>
 
     <dependencies>
+        <dependency>
+            <groupId>org.web3j</groupId>
+            <artifactId>crypto</artifactId>
+        </dependency>
         <!-- Bitcoin-like -->
         <dependency>
             <groupId>org.bitcoinj</groupId>

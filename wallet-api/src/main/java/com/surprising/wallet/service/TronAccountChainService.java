@@ -1,24 +1,24 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.chain.model.ChainCollectionRecord;
-import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.chain.tron.TronClientFactory;
 import com.surprising.wallet.chain.tron.TronTransactionService;
 import com.surprising.wallet.chain.tron.TronTrc20Service;
 import com.surprising.wallet.chain.tron.TronTridentClient;
-import com.surprising.wallet.chain.tron.TronTridentKeyFactory;
+import com.surprising.wallet.chain.tron.MpcTronTransactionCodec;
+import com.surprising.wallet.model.mpc.TronSigningPayload;
+import com.google.protobuf.ByteString;
+import java.util.HexFormat;
+import org.tron.trident.proto.Chain;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.repository.CollectionRecordRepository;
-import com.surprising.wallet.repository.TronTransactionRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
-import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
 import org.tron.trident.core.NodeType;
-import org.tron.trident.core.key.KeyPair;
 import org.tron.trident.proto.Response;
 
 /**
@@ -30,25 +30,20 @@ class TronAccountChainService {
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
 
     private final CollectionRecordRepository collectionRecordRepository;
-    private final TronTransactionRepository tronTransactionRepository;
 
-    /**
-     * 保存 {@code secp256k1KeyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
-     */
-    private final AccountSecp256k1KeyService secp256k1KeyService;
+    private final TronSubmissionService submissions;
     private final AccountChainAssetService assets;
     private final TronClientFactory tronClientFactory;
     private final TronTransactionService tronTransactionService;
     private final TronTrc20Service tronTrc20Service;
-    private final WithdrawalSettlementService settlements;
 
     String broadcast(
             AccountChainProfile profile,
             WithdrawalOrderRecord order,
             ChainAddressRecord from) throws Exception {
         try (TronTridentClient client = tronClientFactory.create()) {
-            return broadcastTransfer(client, profile, from, order.getChain(), order.getAssetSymbol(),
-                    order.getToAddress(), order.getAmount());
+            return broadcastTransfer(client,profile,from,new TronSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),TronSubmissionService.Kind.WITHDRAWAL),
+                    order.getAssetSymbol(),order.getToAddress(),order.getAmount(),order.getFee());
         }
     }
 
@@ -56,71 +51,86 @@ class TronAccountChainService {
             AccountChainProfile profile,
             ChainCollectionRecord record,
             ChainAddressRecord from) throws Exception {
-        if (collectionRecordRepository.claimSigning(record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
+        if (collectionRecordRepository.claimSigningDurable(record.getTenantId(), record.getChain(), record.getCollectionNo()) != 1) {
             return;
         }
         try (TronTridentClient client = tronClientFactory.create()) {
-            String txHash = broadcastTransfer(client, profile, from, record.getChain(), record.getAssetSymbol(),
-                    record.getToAddress(), record.getAmount());
-            collectionRecordRepository.updateStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
+            var operation=new TronSubmissionService.Operation(record.getTenantId(),record.getCollectionNo(),TronSubmissionService.Kind.COLLECTION);
+            String txHash=broadcastTransfer(client,profile,from,operation,record.getAssetSymbol(),record.getToAddress(),record.getAmount(),BigDecimal.ZERO);
+            submissions.restoreSent(operation,txHash);
         } catch (Exception error) {
-            collectionRecordRepository.updateStatus(
-                    record.getTenantId(), record.getChain(), record.getCollectionNo(), "FAILED", null, error.getMessage(), null);
+            submissions.unknown(new TronSubmissionService.Operation(record.getTenantId(),record.getCollectionNo(),TronSubmissionService.Kind.COLLECTION),error.getClass().getSimpleName());
             throw error;
         }
     }
 
-    /** 共享链上发送与交易事实记录；领取和调用方的状态变更仍由各自用例控制。 */
-    private String broadcastTransfer(TronTridentClient client, AccountChainProfile profile,
-                                     ChainAddressRecord from, String chain, String symbol,
-                                     String recipient, BigDecimal amount) throws Exception {
-        KeyPair keyPair = tronKey(profile, from);
-        if (assets.isNative(profile, symbol)) {
-            long amountSun = amount.multiply(TRX_SUN).longValueExact();
-            TronTransactionService.SignedTronTransaction signed =
-                    tronTransactionService.signTrxTransfer(client, keyPair, recipient, amountSun);
-            client.broadcast(signed.transaction());
-            recordSent(chain, signed.txId(), from.getAddress(), recipient, "TRX", null, amount);
-            return signed.txId();
+    /** No private-key construction: only a committed intent and selected MPC signature can reach RPC. */
+    private String broadcastTransfer(TronTridentClient client,AccountChainProfile profile,ChainAddressRecord source,
+                                     TronSubmissionService.Operation operation,String symbol,String recipient,BigDecimal amount,BigDecimal customerFee) throws Exception {
+        var existing=submissions.intent(operation);
+        TronSigningPayload draft=null;
+        if(existing.isEmpty()) {
+            boolean nativeAsset=assets.isNative(profile,symbol);
+            TokenDefinition token=nativeAsset ? null:assets.requireToken(profile,symbol);
+            int decimals=nativeAsset ? 6:token.getDecimals();
+            long fee=nativeAsset ? 0:feeLimitSun(profile);
+            Chain.Transaction unsigned=nativeAsset
+                    ? tronTransactionService.prepareTrxTransfer(client,source.getAddress(),recipient,amount.multiply(TRX_SUN).longValueExact())
+                    : tronTrc20Service.prepareTransfer(client,source.getAddress(),token.getContractAddress(),recipient,amount,decimals,fee);
+            unsigned=unsigned.toBuilder().setRawData(unsigned.getRawData().toBuilder()
+                    .setData(ByteString.copyFrom(TronSubmissionService.memo(operation)))).build();
+            draft=new TronSigningPayload(symbol,amount,customerFee,decimals,MpcTronTransactionCodec.prepare(unsigned,source.getAddress(),recipient,
+                    amount.movePointRight(decimals).toBigIntegerExact(),nativeAsset ? null:token.getContractAddress(),fee));
         }
-        TokenDefinition token = assets.requireToken(profile, symbol);
-        TronTransactionService.SignedTronTransaction signed = tronTrc20Service.signTransfer(
-                client, keyPair, token.getContractAddress(), recipient, amount, token.getDecimals(), feeLimitSun(profile));
-        client.broadcast(signed.transaction());
-        recordSent(chain, signed.txId(), from.getAddress(), recipient, token.getSymbol(), token.getContractAddress(), amount);
+        var request=submissions.reserve(operation,source,draft);
+        submissions.sign(operation,request.id());
+        var signed=submissions.commit(operation,request.id());
+        return broadcastCommitted(client,operation,signed,submissions.payload(request));
+    }
+
+    boolean recover(TronSubmissionService.Operation operation) throws Exception {
+        var intent=submissions.intent(operation);
+        if(intent.isEmpty()) return false;
+        submissions.sign(operation,intent.get().id());
+        var signed=submissions.commit(operation,intent.get().id());
+        try(var client=tronClientFactory.create()) {
+            String hash=broadcastCommitted(client,operation,signed,submissions.payload(intent.get()));
+            submissions.restoreSent(operation,hash);
+            return true;
+        }
+    }
+
+    int releaseUnsigned(TronSubmissionService.Operation operation) { return submissions.releaseUnsigned(operation); }
+
+    private String broadcastCommitted(TronTridentClient client,TronSubmissionService.Operation operation,
+                                       MpcTronTransactionCodec.Signed signed,TronSigningPayload payload) throws Exception {
+        boolean known=false;
+        try {
+            var observed=client.getTransactionById(signed.txId(),NodeType.FULL_NODE);
+            known=observed!=null && observed.hasRawData() && TronTransactionService.txId(observed).equals(signed.txId());
+        } catch(InterruptedException interrupted) { Thread.currentThread().interrupt();throw interrupted; }
+        catch(Exception notObserved) { /* Same-byte broadcast remains safe after an uncertain lookup. */ }
+        if(!known) {
+            if(MpcTronTransactionCodec.restore(payload.unsigned()).getRawData().getExpiration()<=System.currentTimeMillis())
+                throw new IllegalStateException("TRON accepted transaction expired; chain reconciliation is required");
+            var transaction=Chain.Transaction.parseFrom(HexFormat.of().parseHex(signed.transactionHex()));
+            String hash=client.broadcast(transaction);
+            if(!signed.txId().equals(hash)) throw new IllegalStateException("TRON broadcast response differs from committed hash");
+        }
+        submissions.observed(operation,signed.txId());
         return signed.txId();
     }
 
     void confirmWithdrawal(
             AccountChainProfile profile,
             WithdrawalOrderRecord order) throws Exception {
-        ChainAddressRecord from = assets.requireAddress(order.getTenantId(), order.getChain(),
-                order.getAssetSymbol(), order.getFromAddress());
-        Response.TransactionInfo txInfo =
-                confirmedTransaction(profile, order.getTxHash());
-        if (txInfo == null) {
-            return;
-        }
-        recordConfirmed(
-                order.getChain(), order.getTxHash(), from.getAddress(),
-                order.getToAddress(), order.getAssetSymbol(),
-                order.getAmount(), txInfo);
-        settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash());
+        var receipt=confirmedTransaction(profile,order.getTxHash());
+        if(receipt!=null) submissions.settle(new TronSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),TronSubmissionService.Kind.WITHDRAWAL),receipt);
     }
 
-    void confirmCollection(
-            AccountChainProfile profile,
-            ChainCollectionRecord record) throws Exception {
-        Response.TransactionInfo txInfo =
-                confirmedTransaction(profile, record.getTxHash());
-        if (txInfo == null) {
-            return;
-        }
-        recordConfirmed(
-                record.getChain(), record.getTxHash(), record.getFromAddress(),
-                record.getToAddress(), record.getAssetSymbol(),
-                record.getAmount(), txInfo);
-        collectionRecordRepository.markConfirmed(record.getTenantId(), record.getChain(), record.getCollectionNo(), record.getTxHash());
+    void confirmCollection(AccountChainProfile profile,ChainCollectionRecord record) throws Exception {
+        var receipt=confirmedTransaction(profile,record.getTxHash());
+        if(receipt!=null) submissions.settle(new TronSubmissionService.Operation(record.getTenantId(),record.getCollectionNo(),TronSubmissionService.Kind.COLLECTION),receipt);
     }
 
     private Response.TransactionInfo confirmedTransaction(
@@ -145,57 +155,6 @@ class TronAccountChainService {
                     ? txInfo
                     : null;
         }
-    }
-
-    private void recordConfirmed(
-            String chain,
-            String txHash,
-            String from,
-            String to,
-            String symbol,
-            BigDecimal amount,
-            Response.TransactionInfo txInfo) {
-        tronTransactionRepository.upsert(TronTransactionRecord.builder()
-                .chain(chain)
-                .txHash(txHash)
-                .fromAddress(from)
-                .toAddress(to)
-                .assetSymbol(symbol)
-                .amount(amount)
-                .fee(BigDecimal.valueOf(txInfo.getFee()).movePointLeft(6))
-                .blockHeight(txInfo.getBlockNumber())
-                .confirmations(1)
-                .status("CONFIRMED")
-                .rawPayload(txInfo.toString())
-                .build());
-    }
-
-    private void recordSent(
-            String chain,
-            String txHash,
-            String from,
-            String to,
-            String symbol,
-            String contract,
-            BigDecimal amount) {
-        tronTransactionRepository.upsert(TronTransactionRecord.builder()
-                .chain(chain)
-                .txHash(txHash)
-                .fromAddress(from)
-                .toAddress(to)
-                .assetSymbol(symbol)
-                .contractAddress(contract)
-                .amount(amount)
-                .fee(BigDecimal.ZERO)
-                .confirmations(0)
-                .status("SENT")
-                .build());
-    }
-
-    private KeyPair tronKey(
-            AccountChainProfile profile, ChainAddressRecord from) {
-        ECKey ecKey = secp256k1KeyService.key(profile, from);
-        return TronTridentKeyFactory.fromBitcoinEcKey(ecKey);
     }
 
     private long feeLimitSun(AccountChainProfile profile) {

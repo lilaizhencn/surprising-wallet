@@ -99,7 +99,7 @@ class CustodyWithdrawalCreationIntegrationTest {
 
     @Test void subStorageUnitCannotBeSilentlyRoundedToZeroOrFreezeDifferentPrincipal() {
         jdbc.update("update chain_asset set decimals=36 where chain='ETH' and symbol='ETH'");
-        var command=new CustodyWithdrawalService.CreateWithdrawalCommand(custodyId,"ETH","ETH",address,"0.0000000000000000001","too-small",true, "user:42", CustodyWithdrawalService.FundingSource.ADDRESS);
+        var command=new CustodyWithdrawalService.CreateWithdrawalCommand(custodyId,"ETH","ETH",address,"0.0000000000000000000000001","too-small",true, "user:42", CustodyWithdrawalService.FundingSource.ADDRESS);
         assertThrows(IllegalArgumentException.class,()->service.create(CustodyTestSupport.tenantAdmin(tenant),command,"API","too-small","127.0.0.1"));
         assertEquals(0,count("withdrawal_order"));assertEquals(0,count("custody_withdrawal"));
         assertEquals(0,new BigDecimal("5").compareTo(balance("available_balance")));

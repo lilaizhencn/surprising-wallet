@@ -1,0 +1,170 @@
+{
+  "unsigned": {
+    "network": "testnet",
+    "sender": "0:b28ee6dec99a88db5edab004373a49de3cfdaed2703bba436144e2c432efc581",
+    "recipient": "0:154d182804f53e5a6002d0359888a4dbb25d638190d8d6924039c8d93f55e030",
+    "amountAtomic": 25000000,
+    "jettonMaster": "0:01686965509c1cefed498f3886723803c307d1ec308c66510e61fddff1aaa7a2",
+    "sourceJettonWallet": "0:050b5e8e9fc20697e2cc0db7740cba85f97cc4b72b4b45df33f9cc07c7f850d2",
+    "recipientJettonWallet": "0:1602aea3f1e452901d87b372c0cbddc8e43693e386feb42e1991532200e8e218",
+    "sequence": 10,
+    "validUntil": 1793415895,
+    "queryId": 7,
+    "memo": "ton-source-rejected-297a8b25-7a0e-40e2-89ee-22993397c0dd",
+    "publicKeyHex": "f2ea249668605347a5745d585e084374e0c6b59f2cc1c91380e50560ecae72de"
+  },
+  "sourceTonBefore": 24249943622,
+  "sourceJetton": {
+    "@type": "raw.transaction",
+    "address": {
+      "@type": "accountAddress",
+      "account_address": "EQAFC16On8IGl-LMDbd0DLqF-XzEtytLRd8z-cwHx_hQ0lE3"
+    },
+    "utime": 1793415303,
+    "data": "te6cckECCgEAAocAA7VwULXo6fwgaX4swNt3QMuoX5fMS3K0tF3zP5zAfH+FDSAAAAAcbnFAPx+LKgSGybhWy1HRbVAloH76LuaJVpx7/PfhTTOZpGkwAAAAHGEXSDauVYhwADRl5+GIAQIDAgHgBAUAgnLaFcksH7Z2C9BQ7xe4SN6eE5LBzO2zvZeeQGYBr+CD//MACCVJfjd7ouPsTIyEL+PDWm2NboSoh/hLOqXeOltXAScEQQkBCwdgEGVFHw4BgosIGFFhggkBsWgBZR3NvZM1Eba9tWAIbnSTvHn7XaTgd3SGwonFiGXfiwMAAULXo6fwgaX4swNt3QMuoX5fMS3K0tF3zP5zAfH+FDSQELB2AAYwVxoAAAADjc4oBNXKsQ7ABgEB3wgBrg+KfqUAAAAAAAAAB0AX14QIACqaMFAJ6ny0wAWgazERSbdkuscDIbGtJIBzkbJ+q8BhACyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu/FgRzEtAQcAeAAAAAB0b24tc291cmNlLXJlamVjdGVkLTI5N2E4YjI1LTdhMGUtNDBlMi04OWVlLTIyOTkzMzk3YzBkZAD5WAAKFr0dP4QNL8WYG27oGXUL8vmJblaWi75n85gPj/ChpQAso7m3smaiNte2rAENzpJ3jz9rtJwO7pDYUTixDLvxYFAPyskgBhRYYAAAAAONzigI1cqxDn////+HxT9SgAAAAAAAAAOgC+vCBAAVTRgoBPU+WmAC0DWYiMAAnkFZbARFwAAAAAWEAAAARgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVXUrF",
+    "transaction_id": {
+      "@type": "internal.transactionId",
+      "lt": "7632000003",
+      "hash": "xaBOvVXcthA7OK0UXv38L3NgEtxcwyxtfdorXQhDt2I="
+    },
+    "fee": "3763004",
+    "storage_fee": "4",
+    "other_fee": "3763000",
+    "in_msg": {
+      "@type": "raw.message",
+      "hash": "RZWkUE4w4TBJxzu7tlX+UBHhUBa6kPXTIEFdLASvG4o=",
+      "source": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr",
+      "destination": "EQAFC16On8IGl-LMDbd0DLqF-XzEtytLRd8z-cwHx_hQ0lE3",
+      "value": "70000000",
+      "extra_currencies": [],
+      "fwd_fee": "1584013",
+      "ihr_fee": "0",
+      "created_lt": "7632000002",
+      "body_hash": "ZEF9Prqm9AOFolIf5e4yywoq+tpYs4h1ntlyGXN+5lg=",
+      "msg_data": {
+        "@type": "msg.dataRaw",
+        "body": "te6cckEBAgEAmAABrg+KfqUAAAAAAAAAB0AX14QIACqaMFAJ6ny0wAWgazERSbdkuscDIbGtJIBzkbJ+q8BhACyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu/FgRzEtAQEAeAAAAAB0b24tc291cmNlLXJlamVjdGVkLTI5N2E4YjI1LTdhMGUtNDBlMi04OWVlLTIyOTkzMzk3YzBkZJkegWs=",
+        "init_state": ""
+      },
+      "message": "D4p+pQAAAAAAAAAHQBfXhAgAKpowUAnqfLTABaBrMRFJt2S6xwMhsa0kgHORsn6rwGEALKO5t7Jm\nojbXtqwBDc6Sd48/a7ScDu6Q2FE4sQy78WBHMS0B\n"
+    },
+    "out_msgs": [
+      {
+        "@type": "raw.message",
+        "hash": "8+VFR0qotgyXTxbx8Wqvl/m9q/A9AEv9NQufBquCyNA=",
+        "source": "EQAFC16On8IGl-LMDbd0DLqF-XzEtytLRd8z-cwHx_hQ0lE3",
+        "destination": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr",
+        "value": "66237000",
+        "extra_currencies": [],
+        "fwd_fee": "666672",
+        "ihr_fee": "0",
+        "created_lt": "7632000004",
+        "body_hash": "FENUK8QaN0jAQFxYBs188H5Cw8atotZtuFPAog3TAZQ=",
+        "msg_data": {
+          "@type": "msg.dataRaw",
+          "body": "te6cckEBAQEAJgAASP////8Pin6lAAAAAAAAAAdAF9eECAAqmjBQCep8tMAFoGsxEelbWYE=",
+          "init_state": ""
+        },
+        "message": "/////w+KfqUAAAAAAAAAB0AX14QIACqaMFAJ6ny0wAWgazER\n"
+      }
+    ]
+  },
+  "selected": {
+    "bocBase64": "te6ccgECBAEAAUMAAeGIAWUdzb2TNRG2vbVgCG50k7x5+12k4Hd0hsKJxYhl34sCAjcdDY7qLInqvhMKElwLuZTegkJV0ZPOAD8KLqnsFkljJ8kCLKU/y5UpwogUTB3g6oI5u9YIGnTS+85qsxKDMDVNTRi7VyrWuAAAAFAAHAEBaGIAAoWvR0/hA0vxZgbbugZdQvy+YluVpaLvmfzmA+P8KGkgIWDsAAAAAAAAAAAAAAAAAAECAa4Pin6lAAAAAAAAAAdAF9eECAAqmjBQCep8tMAFoGsxEUm3ZLrHAyGxrSSAc5GyfqvAYQAso7m3smaiNte2rAENzpJ3jz9rtJwO7pDYUTixDLvxYEcxLQEDAHgAAAAAdG9uLXNvdXJjZS1yZWplY3RlZC0yOTdhOGIyNS03YTBlLTQwZTItODllZS0yMjk5MzM5N2MwZGQ=",
+    "messageHashHex": "a6f0c47a502be9752deda3f3c58f1778d441d64c41b16aaa55adc1a9349edb9f"
+  },
+  "returns": [
+    {
+      "@type": "raw.transaction",
+      "address": {
+        "@type": "accountAddress",
+        "account_address": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr"
+      },
+      "utime": 1793415303,
+      "data": "te6cckECBwEAAbYAA7V7KO5t7JmojbXtqwBDc6Sd48/a7ScDu6Q2FE4sQy78WBAAAAAcbnFAWRNvPPAs/Uaxj562W00ALWwx+vL39Dv/YQD/H7Kl4dDwAAAAHG5xQBauVYhwABRh6EgIAQIDAQGgBACCcuP/qBul0v7G1B4QAYQ8TqRsRPVqC00i7zS+lhKynLjF8ehMDIEDdVeXKj9EY5m2fBsSOVPxkDy/vifLf8uFAl8CFQwJAPyskhhh6EgRBQYA+VgACha9HT+EDS/FmBtu6Bl1C/L5iW5Wlou+Z/OYD4/woaUALKO5t7JmojbXtqwBDc6Sd48/a7ScDu6Q2FE4sQy78WBQD8rJIAYUWGAAAAADjc4oCNXKsQ5/////h8U/UoAAAAAAAAADoAvrwgQAFU0YKAT1PlpgAtA1mIjAAJ5AU6wECvQAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFvAAAAAAAAAAAAAAAABLUUtpEnlC4z33SeGHxRhIq/htUa7i3D8ghbwxhQTn44EXqANNg==",
+      "transaction_id": {
+        "@type": "internal.transactionId",
+        "lt": "7632000005",
+        "hash": "LHbDcilkkBC1sl74LggS/76yD9/IlKbL4/mua7eiTvM="
+      },
+      "fee": "1000000",
+      "storage_fee": "0",
+      "other_fee": "1000000",
+      "in_msg": {
+        "@type": "raw.message",
+        "hash": "8+VFR0qotgyXTxbx8Wqvl/m9q/A9AEv9NQufBquCyNA=",
+        "source": "EQAFC16On8IGl-LMDbd0DLqF-XzEtytLRd8z-cwHx_hQ0lE3",
+        "destination": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr",
+        "value": "66237000",
+        "extra_currencies": [],
+        "fwd_fee": "666672",
+        "ihr_fee": "0",
+        "created_lt": "7632000004",
+        "body_hash": "FENUK8QaN0jAQFxYBs188H5Cw8atotZtuFPAog3TAZQ=",
+        "msg_data": {
+          "@type": "msg.dataRaw",
+          "body": "te6cckEBAQEAJgAASP////8Pin6lAAAAAAAAAAdAF9eECAAqmjBQCep8tMAFoGsxEelbWYE=",
+          "init_state": ""
+        },
+        "message": "/////w+KfqUAAAAAAAAAB0AX14QIACqaMFAJ6ny0wAWgazER\n"
+      },
+      "out_msgs": []
+    }
+  ],
+  "owner": {
+    "@type": "raw.transaction",
+    "address": {
+      "@type": "accountAddress",
+      "account_address": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr"
+    },
+    "utime": 1793415303,
+    "data": "te6cckECDAEAAuIAA7V7KO5t7JmojbXtqwBDc6Sd48/a7ScDu6Q2FE4sQy78WBAAAAAcbnFAF3RWI24DFI12Gv8ASYjq1cgE5Wtv3OX3Lpc9qGl0pC0gAAAAHGEXSIauVYhwADRtVg7oAQIDAgHgBAUAgnL6k/4bOgNTfX+I+A1btMHy1CZoNtGW+8EvvWTw6rUXEeP/qBul0v7G1B4QAYQ8TqRsRPVqC00i7zS+lhKynLjFAg8MQQYZk88EQAoLAeGIAWUdzb2TNRG2vbVgCG50k7x5+12k4Hd0hsKJxYhl34sCAjcdDY7qLInqvhMKElwLuZTegkJV0ZPOAD8KLqnsFkljJ8kCLKU/y5UpwogUTB3g6oI5u9YIGnTS+85qsxKDMDVNTRi7VyrWuAAAAFAAHAYBAd8HAWhiAAKFr0dP4QNL8WYG27oGXUL8vmJblaWi75n85gPj/ChpICFg7AAAAAAAAAAAAAAAAAABCAGxaAFlHc29kzURtr21YAhudJO8eftdpOB3dIbCicWIZd+LAwABQtejp/CBpfizA23dAy6hfl8xLcrS0XfM/nMB8f4UNJAQsHYABjBXGgAAAAONzigE1cqxDsAIAa4Pin6lAAAAAAAAAAdAF9eECAAqmjBQCep8tMAFoGsxEUm3ZLrHAyGxrSSAc5GyfqvAYQAso7m3smaiNte2rAENzpJ3jz9rtJwO7pDYUTixDLvxYEcxLQEJAHgAAAAAdG9uLXNvdXJjZS1yZWplY3RlZC0yOTdhOGIyNS03YTBlLTQwZTItODllZS0yMjk5MzM5N2MwZGQAnUGdgxOIAAAAAAAAAAARAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAb8mSIKBMMFbMAAAAAAACAAAAAAADQ5w7kcP5E2gVvZ7XjPuUjii44xQcTG/nC+HIUijQ5BJA0DrMS4zZDg==",
+    "transaction_id": {
+      "@type": "internal.transactionId",
+      "lt": "7632000001",
+      "hash": "kTbzzwLP1GsY+etltNAC1sMfry9/Q7/2EA/x+ypeHQ8="
+    },
+    "fee": "8576004",
+    "storage_fee": "4",
+    "other_fee": "8576000",
+    "in_msg": {
+      "@type": "raw.message",
+      "hash": "pvDEelAr6XUt7aPzxY8XeNRB1kxBsWqqVa3BqTSe258=",
+      "source": "",
+      "destination": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr",
+      "value": "0",
+      "extra_currencies": [],
+      "fwd_fee": "0",
+      "ihr_fee": "0",
+      "created_lt": "0",
+      "body_hash": "e9L2byYeieHZtVvNABIkaoW0Ak/VN6peN0MGGdBHJXU=",
+      "msg_data": {
+        "@type": "msg.dataRaw",
+        "body": "te6cckECBAEAASAAAZxG46Gx3UWRPVfCYUJLgXcym9BISroyecAH4UXVPYLJLGT5IEWUp/lypThRAomDvB1QRzd6wQNOml95zVZiUGYGqamjF2rlWtcAAAAKAAMBAWhiAAKFr0dP4QNL8WYG27oGXUL8vmJblaWi75n85gPj/ChpICFg7AAAAAAAAAAAAAAAAAABAgGuD4p+pQAAAAAAAAAHQBfXhAgAKpowUAnqfLTABaBrMRFJt2S6xwMhsa0kgHORsn6rwGEALKO5t7JmojbXtqwBDc6Sd48/a7ScDu6Q2FE4sQy78WBHMS0BAwB4AAAAAHRvbi1zb3VyY2UtcmVqZWN0ZWQtMjk3YThiMjUtN2EwZS00MGUyLTg5ZWUtMjI5OTMzOTdjMGRkAFFmRA==",
+        "init_state": ""
+      },
+      "message": "RuOhsd1FkT1XwmFCS4F3MpvQSEq6MnnAB+FF1T2CySxk+SBFlKf5cqU4UQKJg7wdUEc3esEDTppf\nec1WYlBmBqmpoxdq5VrXAAAACgAD\n"
+    },
+    "out_msgs": [
+      {
+        "@type": "raw.message",
+        "hash": "RZWkUE4w4TBJxzu7tlX+UBHhUBa6kPXTIEFdLASvG4o=",
+        "source": "EQCyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu_Fgacr",
+        "destination": "EQAFC16On8IGl-LMDbd0DLqF-XzEtytLRd8z-cwHx_hQ0lE3",
+        "value": "70000000",
+        "extra_currencies": [],
+        "fwd_fee": "1584013",
+        "ihr_fee": "0",
+        "created_lt": "7632000002",
+        "body_hash": "ZEF9Prqm9AOFolIf5e4yywoq+tpYs4h1ntlyGXN+5lg=",
+        "msg_data": {
+          "@type": "msg.dataRaw",
+          "body": "te6cckEBAgEAmAABrg+KfqUAAAAAAAAAB0AX14QIACqaMFAJ6ny0wAWgazERSbdkuscDIbGtJIBzkbJ+q8BhACyjubeyZqI217asAQ3OknePP2u0nA7ukNhROLEMu/FgRzEtAQEAeAAAAAB0b24tc291cmNlLXJlamVjdGVkLTI5N2E4YjI1LTdhMGUtNDBlMi04OWVlLTIyOTkzMzk3YzBkZJkegWs=",
+          "init_state": ""
+        },
+        "message": "D4p+pQAAAAAAAAAHQBfXhAgAKpowUAnqfLTABaBrMRFJt2S6xwMhsa0kgHORsn6rwGEALKO5t7Jm\nojbXtqwBDc6Sd48/a7ScDu6Q2FE4sQy78WBHMS0B\n"
+      }
+    ]
+  },
+  "sourceTonAfter": 24236604618
+}

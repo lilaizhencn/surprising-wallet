@@ -54,9 +54,9 @@ class EvmBatchOwnershipIntegrationTest {
         String hash = "0x" + batch.toString().replace("-", "").repeat(2);
         jdbc.update("insert into " + batchTable + """
                 (id, tenant_id, chain, network, asset_symbol, token_contract, token_decimals, hot_wallet,
-                 relayer_address, delegate_version, batch_hash, status, item_count)
-                values (?, ?, 'ETH', 'sepolia', 'ETH', ?, 18, ?, ?, 1, ?, 'SUBMITTED', 1)
-                """, batch, tenant, ADDRESS, ADDRESS, ADDRESS, hash);
+                 relayer_address, delegate_version, batch_hash, status, item_count, claim_payload)
+                values (?, ?, 'ETH', 'sepolia', 'ETH', ?, 18, ?, ?, 1, ?, 'SUBMITTED', 1, ?::jsonb)
+                """, batch, tenant, ADDRESS, ADDRESS, ADDRESS, hash, com.surprising.wallet.testutil.CustodyTestSupport.evmClaimSnapshot(tenant,batch,"ETH","sepolia",hash));
         long recordId = collection ? collectionItem(batch) : withdrawalItem(batch, hash);
 
         for (String status : List.of("SUBMITTED", "CONFIRMING", "BROADCAST_UNKNOWN")) {

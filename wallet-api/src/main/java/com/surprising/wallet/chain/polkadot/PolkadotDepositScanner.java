@@ -1,274 +1,65 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.chain.model.ChainAsset;
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainAddressRepository;
-import com.surprising.wallet.repository.ChainAssetRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
-import com.surprising.wallet.repository.ChainScanHeightRepository;
-import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.common.chain.*;
+import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-/**
- * Polkadot 链充值扫描器，通过运行时服务扫描中继链和 Asset Hub 的转账事件。
- *
- * <p>分为两个独立的扫描管线：
- * <ul>
- *   <li>原生扫描器（polkadot-runtime-scanner）：扫描中继链 DOT 转账</li>
- *   <li>Asset Hub 扫描器（polkadot-assethub-scanner）：扫描 Asset Hub 上的资产转账</li>
- * </ul>
- * 每个扫描器使用独立的高度计数器，分别追踪各自的扫描进度。</p>
- *
- * @see PolkadotRuntimeClient
- */
+/** Finalized successful Transfer/Transferred events; fee refunds and owned internal payments never credit. */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class PolkadotDepositScanner {
+    private final PolkadotRuntimeClient rpc;
+    private final ChainScanHeightRepository heights;
+    private final DepositService deposits;
+    private final ChainAddressRepository addresses;
+    private final ChainProfileRepository profiles;
+    private final TokenConfigRepository tokens;
+    private final ChainAssetRepository assets;
+    private final DepositRecordRepository records;
+    @NonNull private final WalletRuntimeConfigService runtime;
 
-    /** 链标识 */
-    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
-
-    /** 原生币符号 */
-    private static final String SYMBOL = "DOT";
-
-    /** 原生扫描器名称 */
-    private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";
-
-    /** Asset Hub 扫描器名称 */
-    private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";
-
-    /** 充值钱包角色 */
-    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
-
-    /** 合约部署者钱包角色（也跟踪 DOT 充值） */
-    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
-
-    /** DOT 默认小数位数 */
-    private static final int DEFAULT_DOT_DECIMALS = 10;
-
-    /** 运行时客户端 */
-    private final PolkadotRuntimeClient runtimeClient;
-    private final ChainScanHeightRepository chainScanHeightRepository;
-    private final DepositService depositService;
-    private final ChainAddressRepository chainAddressRepository;
-    private final ChainProfileRepository chainProfileRepository;
-    private final TokenConfigRepository tokenConfigRepository;
-    private final ChainAssetRepository chainAssetRepository;
-
-
-    /** 运行时任务开关服务。 */
-    @NonNull
-    private final WalletRuntimeConfigService runtimeConfigService;
     public List<DepositEvent> scanAndCredit() {
-        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "polkadot scanAndCredit");
-        AccountChainProfile profile = profile();
-        List<DepositEvent> events = new ArrayList<>();
-        events.addAll(scanNative(profile));
-        Map<String, TokenDefinition> tokens = tokensByAssetId();
-        if (!tokens.isEmpty()) {
-            events.addAll(scanAssets(profile, tokens));
-        }
-        return events;
+        runtime.requireTaskEnabled("DOT",WalletRuntimeConfigService.TASK_SCAN,"DOT scanAndCredit");
+        var profile=profiles.findAccountByChain("DOT").orElseThrow();var tracked=new HashMap<String,ChainAddressRecord>();
+        // The published native MPC account receives all configured Asset Hub tokens.
+        for(var address:addresses.listEnabled("DOT","DOT"))if("DEPOSIT".equals(address.getWalletRole()) && address.getMpcKeyId()!=null)tracked.put(account(address.getAddress()),address);
+        var configured=new HashMap<String,TokenDefinition>();
+        for(var token:tokens.listDefinitions("DOT",profile.getNetwork()))if(Boolean.TRUE.equals(token.getActive()))configured.put(PolkadotRuntimeClient.normalizeAssetId(token.getContractAddress()),token);
+        return scan(profile,tracked,configured);
     }
-    private List<DepositEvent> scanNative(AccountChainProfile profile) {
-        long latest = runtimeClient.latestFinalizedHeight();
-        int requiredConfirmations = requiredConfirmations(profile);
-        long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
-        long start = scanStart(profile, safeHeight, NATIVE_SCANNER);
-        if (start > safeHeight) {
-            chainScanHeightRepository.upsert(CHAIN, NATIVE_SCANNER, latest, safeHeight);
-            return List.of();
-        }
-        long end = Math.min(safeHeight, start + scanBatch(profile) - 1L);
-        Map<String, ChainAddressRecord> addresses = trackedDepositAddresses(SYMBOL);
-        List<String> originalAddresses = addresses.values().stream()
-                .map(ChainAddressRecord::getAddress)
-                .distinct()
-                .toList();
-        List<DepositEvent> events = new ArrayList<>();
-        List<PolkadotRuntimeClient.TransferEvent> transfers = runtimeClient.scanNativeTransfers(
-                start, end, originalAddresses);
-        if (!transfers.isEmpty()) {
-            log.info("polkadot native scan found transfers count={} range={}-{}", transfers.size(), start, end);
-        }
-        for (PolkadotRuntimeClient.TransferEvent transfer : transfers) {
-            DepositEvent event = toNativeDepositEvent(transfer, addresses, latest);
-            if (event == null) {
-                log.warn("polkadot native scan ignored transfer txHash={} to={} amountPlanck={}",
-                        transfer.txHash(), transfer.toAddress(), transfer.amountPlanck());
-                continue;
-            }
-            ChainAddressRecord tracked = addresses.get(normalize(event.toAddress()));
-            depositService.recordAndCredit(event, transfer.eventIndex(), requiredConfirmations, tracked.getAccountId());
-            events.add(event);
-        }
-        chainScanHeightRepository.upsert(CHAIN, NATIVE_SCANNER, latest, end);
-        return events;
-    }
-    private List<DepositEvent> scanAssets(AccountChainProfile profile, Map<String, TokenDefinition> tokens) {
-        long latest = runtimeClient.latestAssetHubFinalizedHeight();
-        int requiredConfirmations = requiredConfirmations(profile);
-        long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
-        long start = scanStart(profile, safeHeight, ASSET_HUB_SCANNER);
-        if (start > safeHeight) {
-            chainScanHeightRepository.upsert(CHAIN, ASSET_HUB_SCANNER, latest, safeHeight);
-            return List.of();
-        }
-        long end = Math.min(safeHeight, start + scanBatch(profile) - 1L);
-        Map<String, Map<String, ChainAddressRecord>> addressesBySymbol = trackedTokenDepositAddresses(tokens);
-        List<String> addresses = addressesBySymbol.values().stream()
-                .flatMap(addressBook -> addressBook.values().stream())
-                .map(ChainAddressRecord::getAddress)
-                .distinct()
-                .toList();
-        List<DepositEvent> events = new ArrayList<>();
-        for (PolkadotRuntimeClient.TransferEvent transfer : runtimeClient.scanAssetTransfers(
-                start, end, addresses, tokens)) {
-            TokenDefinition token = tokens.get(PolkadotRuntimeClient.normalizeAssetId(transfer.assetId()));
-            if (token == null) {
-                continue;
-            }
-            Map<String, ChainAddressRecord> addressBook = addressesBySymbol.get(token.getSymbol());
-            DepositEvent event = toAssetDepositEvent(transfer, addressBook, token, latest);
-            if (event == null) {
-                continue;
-            }
-            ChainAddressRecord tracked = addressBook.get(normalize(event.toAddress()));
-            depositService.recordAndCredit(event, transfer.eventIndex(), requiredConfirmations, tracked.getAccountId());
-            events.add(event);
-        }
-        chainScanHeightRepository.upsert(CHAIN, ASSET_HUB_SCANNER, latest, end);
-        return events;
-    }
-
-    private DepositEvent toNativeDepositEvent(PolkadotRuntimeClient.TransferEvent transfer,
-                                              Map<String, ChainAddressRecord> addresses,
-                                              long latest) {
-        ChainAddressRecord tracked = addresses.get(normalize(transfer.toAddress()));
-        if (tracked == null || transfer.amountPlanck().signum() <= 0) {
-            return null;
-        }
-        int confirmations = confirmations(latest, transfer.blockHeight());
-        BigDecimal amount = fromAtomic(transfer.amountPlanck(), nativeDecimals());
-        return new DepositEvent(ChainType.DOT, SYMBOL, transfer.txHash(),
-                transfer.fromAddress(), tracked.getAddress(), amount, transfer.blockHeight(),
-                transfer.txHash(), confirmations, null, transfer.rawPayload());
-    }
-
-    private DepositEvent toAssetDepositEvent(PolkadotRuntimeClient.TransferEvent transfer,
-                                             Map<String, ChainAddressRecord> addresses,
-                                             TokenDefinition token,
-                                             long latest) {
-        if (addresses == null) {
-            return null;
-        }
-        ChainAddressRecord tracked = addresses.get(normalize(transfer.toAddress()));
-        if (tracked == null || transfer.amountPlanck().signum() <= 0) {
-            return null;
-        }
-        int confirmations = confirmations(latest, transfer.blockHeight());
-        String assetId = PolkadotRuntimeClient.normalizeAssetId(transfer.assetId());
-        BigDecimal amount = fromAtomic(transfer.amountPlanck(), token.getDecimals());
-        return new DepositEvent(ChainType.DOT, token.getSymbol(), transfer.txHash(),
-                transfer.fromAddress(), tracked.getAddress(), amount, transfer.blockHeight(),
-                transfer.txHash(), confirmations, assetId, transfer.rawPayload());
-    }
-    private Map<String, ChainAddressRecord> trackedDepositAddresses(String assetSymbol) {
-        Map<String, ChainAddressRecord> addresses = new HashMap<>();
-        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, assetSymbol)) {
-            if (isTrackedRole(address)) {
-                addresses.put(normalize(address.getAddress()), address);
+    private List<DepositEvent> scan(AccountChainProfile profile,Map<String,ChainAddressRecord> tracked,Map<String,TokenDefinition> configured) {
+        String scanner="polkadot-assethub-scanner";
+        long latest=rpc.finalized(Role.ASSET_HUB).path("height").asLong(-1);require(latest>=0,"DOT finalized height is unavailable");
+        int required=Math.max(1,profile.getDepositConfirmations()==null?12:profile.getDepositConfirmations());
+        long safe=Math.max(0,latest-required+1L),batch=Math.min(100,Math.max(1,profile.getScanMaxBlocksPerRun()==null?25:profile.getScanMaxBlocksPerRun()));
+        long start=heights.findSafeHeight("DOT",scanner).map(value->value+1).orElse(Math.max(1,profile.getScanStartHeight()==null?safe-batch+1:profile.getScanStartHeight()));
+        if(start>safe)return List.of();long end=Math.min(safe,start+batch-1);var result=new ArrayList<DepositEvent>();
+        if(!tracked.isEmpty()) {
+            var originals=tracked.values().stream().map(ChainAddressRecord::getAddress).toList();
+            var transfers=rpc.scanTransfers(start,end,originals,configured);
+            for(var transfer:transfers) {
+                require(transfer.blockHeight()>=start && transfer.blockHeight()<=end && transfer.txHash().matches("0x[0-9a-f]{64}")
+                        && transfer.blockHash().matches("0x[0-9a-f]{64}") && transfer.eventIndex()>=0,"DOT deposit canonical position differs");
+                var target=tracked.get(account(transfer.toAddress()));
+                String from=MpcPolkadotTransactionCodec.address(MpcPolkadotTransactionCodec.account(transfer.fromAddress()),PolkadotRuntimeClient.ss58Prefix(profile));
+                if(target==null || transfer.amountPlanck().signum()<=0 || addresses.existsAddress("DOT",from) || records.existsCanonical("DOT",transfer.txHash(),Math.toIntExact(transfer.eventIndex())))continue;
+                TokenDefinition token=transfer.assetId()==null?null:configured.get(transfer.assetId());
+                if(transfer.assetId()!=null && token==null)continue;
+                String symbol=token==null?"DOT":token.getSymbol();int decimals=token==null?assets.findActiveDefinition("DOT","DOT").orElseThrow().getDecimals():token.getDecimals();
+                int confirmations=(int)Math.min(Integer.MAX_VALUE,latest-transfer.blockHeight()+1);
+                var event=new DepositEvent(ChainType.DOT,symbol,transfer.txHash(),from,target.getAddress(),new BigDecimal(transfer.amountPlanck()).movePointLeft(decimals),transfer.blockHeight(),transfer.blockHash(),confirmations,transfer.assetId(),transfer.rawPayload());
+                deposits.recordAndCredit(event,transfer.eventIndex(),required,target.getAccountId());result.add(event);
             }
         }
-        return addresses;
+        heights.upsert("DOT",scanner,latest,end);return result;
     }
-    private boolean isTrackedRole(ChainAddressRecord address) {
-        if (address == null) {
-            return false;
-        }
-        String role = address.getWalletRole();
-        if (WALLET_ROLE_DEPOSIT.equals(role)) {
-            return true;
-        }
-        return SYMBOL.equalsIgnoreCase(address.getAssetSymbol())
-                && WALLET_ROLE_CONTRACT_DEPLOYER.equals(role);
-    }
-
-    private Map<String, Map<String, ChainAddressRecord>> trackedTokenDepositAddresses(
-            Map<String, TokenDefinition> tokens) {
-        Map<String, Map<String, ChainAddressRecord>> addressesBySymbol = new HashMap<>();
-        for (TokenDefinition token : tokens.values()) {
-            addressesBySymbol.put(token.getSymbol(), trackedDepositAddresses(token.getSymbol()));
-        }
-        return addressesBySymbol;
-    }
-    private Map<String, TokenDefinition> tokensByAssetId() {
-        Map<String, TokenDefinition> tokens = new HashMap<>();
-        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
-            String assetId = PolkadotRuntimeClient.normalizeAssetId(token.getContractAddress());
-            if (Boolean.TRUE.equals(token.getActive()) && !assetId.isBlank()) {
-                tokens.put(assetId, token);
-            }
-        }
-        return tokens;
-    }
-    private long scanStart(AccountChainProfile profile, long safeHeight, String scannerName) {
-        return chainScanHeightRepository.findSafeHeight(CHAIN, scannerName)
-                .map(height -> Math.min(height + 1L, safeHeight + 1L))
-                .orElseGet(() -> {
-                    Long configured = profile.getScanStartHeight();
-                    if (configured != null && configured > 0) {
-                        return Math.min(configured, safeHeight + 1L);
-                    }
-                    return Math.max(0L, safeHeight - scanBatch(profile) + 1L);
-                });
-    }
-    private static int scanBatch(AccountChainProfile profile) {
-        Long maxBlocks = profile.getScanMaxBlocksPerRun();
-        if (maxBlocks != null && maxBlocks > 0) {
-            return Math.toIntExact(Math.min(maxBlocks, 100L));
-        }
-        Integer batchSize = profile.getScanBatchSize();
-        return batchSize == null || batchSize <= 0 ? 25 : Math.min(batchSize, 100);
-    }
-    private static int requiredConfirmations(AccountChainProfile profile) {
-        Integer configured = profile.getDepositConfirmations();
-        return configured == null || configured <= 0 ? 12 : configured;
-    }
-    private AccountChainProfile profile() {
-        return chainProfileRepository.findAccountByChain(CHAIN)
-                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-    }
-    private int nativeDecimals() {
-        return chainAssetRepository.findActiveDefinition(CHAIN, SYMBOL)
-                .map(ChainAsset::getDecimals)
-                .filter(decimals -> decimals != null && decimals > 0)
-                .orElse(DEFAULT_DOT_DECIMALS);
-    }
-    private static int confirmations(long latest, long blockHeight) {
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latest - blockHeight + 1L));
-    }
-    private static BigDecimal fromAtomic(BigInteger amount, int decimals) {
-        return new BigDecimal(amount).movePointLeft(decimals).stripTrailingZeros();
-    }
-    private static String normalize(String address) {
-        return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
-    }
+    private static String account(String address){return HexFormat.of().formatHex(MpcPolkadotTransactionCodec.account(address));}
+    private static void require(boolean condition,String message){if(!condition)throw new IllegalStateException(message);}
 }

@@ -1,0 +1,115 @@
+{
+  "reference": "near-api-js 7.4.0; public data only; ephemeral fixture private key discarded",
+  "vectors": [
+    {
+      "unsigned": {
+        "network": "localnet",
+        "genesisHash": "2fKbWVL47wHpu9TSqD8huJUBLMkmKdNWNJesfp7wiigD",
+        "sender": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750",
+        "nonce": "7",
+        "recipient": "abababababababababababababababababababababababababababababababab",
+        "amountAtomic": "1000000000000000000000000",
+        "tokenContract": null,
+        "gas": 0,
+        "memo": null,
+        "blockHeight": 100,
+        "validUntilHeight": 200,
+        "blockHash": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+        "publicKeyHex": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750"
+      },
+      "txBytesBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AHAAAAAAAAAEAAAABhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcBAAAAAwAAAKHtzM4bwtMAAAAAAAA=",
+      "signingHashHex": "b93f4c3667a6bd7b10c5f4246340d531856d52e375c896f49fb784fb1a163975",
+      "txHash": "DU8QV5HxVgVbkYmc8Ec2u6TqPDcBkfRQH3KBpAv2Dfi4",
+      "signatureHex": "85a970f41bb2bed0db4a4a798d9800e4660948eeb164e01bdc12f3d05f3e5ecbd3e2048ab81ebb98c205e2fa8329313f8e0007cb2b50f926eabd0edcf8baa40e",
+      "signedTransactionBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AHAAAAAAAAAEAAAABhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcBAAAAAwAAAKHtzM4bwtMAAAAAAAAAhalw9BuyvtDbSkp5jZgA5GYJSO6xZOAb3BLz0F8+XsvT4gSKuB67mMIF4vqDKTE/jgAHyytQ+SbqvQ7c+LqkDg=="
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "genesisHash": "2fKbWVL47wHpu9TSqD8huJUBLMkmKdNWNJesfp7wiigD",
+        "sender": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750",
+        "nonce": "8",
+        "recipient": "alice.near",
+        "amountAtomic": "1000000000000000000000000",
+        "tokenContract": null,
+        "gas": 0,
+        "memo": null,
+        "blockHeight": 100,
+        "validUntilHeight": 200,
+        "blockHash": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+        "publicKeyHex": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750"
+      },
+      "txBytesBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AIAAAAAAAAAAoAAABhbGljZS5uZWFyBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcBAAAAAwAAAKHtzM4bwtMAAAAAAAA=",
+      "signingHashHex": "f37b475191f0d74efd022fd718bb0fa673d96e809076f32f42e3f54a4b558b87",
+      "txHash": "HPT6jF9HwwwrVx9rvJxRisVd11nWng9hNodGhvvqZhRQ",
+      "signatureHex": "d89047a43761713d613d4510c52a1d779bf2bc053ef812c21441dc0e32d03595bf7c83e1ceeaa7915406ab1b0a0c21cf858edca311d8a8e23888f83c7551820a",
+      "signedTransactionBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AIAAAAAAAAAAoAAABhbGljZS5uZWFyBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcBAAAAAwAAAKHtzM4bwtMAAAAAAAAA2JBHpDdhcT1hPUUQxSodd5vyvAU++BLCFEHcDjLQNZW/fIPhzuqnkVQGqxsKDCHPhY7coxHYqOI4iPg8dVGCCg=="
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "genesisHash": "2fKbWVL47wHpu9TSqD8huJUBLMkmKdNWNJesfp7wiigD",
+        "sender": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750",
+        "nonce": "9223372036854775807",
+        "recipient": "abababababababababababababababababababababababababababababababab",
+        "amountAtomic": "340282366920938463463374607431768211455",
+        "tokenContract": null,
+        "gas": 0,
+        "memo": null,
+        "blockHeight": 100,
+        "validUntilHeight": 200,
+        "blockHash": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+        "publicKeyHex": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750"
+      },
+      "txBytesBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1D/////////f0AAAABhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcBAAAAA/////////////////////8=",
+      "signingHashHex": "3d4067e501f411a5da1cdd8b1f32a9ddec4d0a0ecb41c002cf67b6dd9c542ae0",
+      "txHash": "586qAWaNnEhaLLhhPhEvFKFtqVYFWb7F5do7nLSxWsXu",
+      "signatureHex": "9935801c12c6c75dad31765f8a5b8f728c8f5f817185d8146b003d91f911f0ec2915afbe4ffc815fb263e27a05e9f0f15ed096b944a11d628f6d0df37eeea103",
+      "signedTransactionBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1D/////////f0AAAABhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcBAAAAA/////////////////////8AmTWAHBLGx12tMXZfiluPcoyPX4FxhdgUawA9kfkR8OwpFa++T/yBX7Jj4noF6fDxXtCWuUShHWKPbQ3zfu6hAw=="
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "genesisHash": "2fKbWVL47wHpu9TSqD8huJUBLMkmKdNWNJesfp7wiigD",
+        "sender": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750",
+        "nonce": "7",
+        "recipient": "alice.near",
+        "amountAtomic": "1234567",
+        "tokenContract": "usdc.local.near",
+        "gas": 30000000000000,
+        "memo": "mpc-owned-USDC",
+        "blockHeight": 100,
+        "validUntilHeight": 200,
+        "blockHash": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+        "publicKeyHex": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750"
+      },
+      "txBytesBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AHAAAAAAAAAA8AAAB1c2RjLmxvY2FsLm5lYXIHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwEAAAACCwAAAGZ0X3RyYW5zZmVyRwAAAHsicmVjZWl2ZXJfaWQiOiJhbGljZS5uZWFyIiwiYW1vdW50IjoiMTIzNDU2NyIsIm1lbW8iOiJtcGMtb3duZWQtVVNEQyJ9AOBX60gbAAABAAAAAAAAAAAAAAAAAAAA",
+      "signingHashHex": "ca3ce3a9e7531727f5f8744a86d8113fdbff3b4410102005f8e21964a5d5f2fd",
+      "txHash": "EcTCwBtwTZTA1iuW9RMZt3DhZQnFpD1wBsFktFs1Vxxk",
+      "signatureHex": "49d40ca69336b1736fc500321de2fafe8e5159e38f8867e2803b11b97b46558fdf9e018cd2328e24293043a8fdef3474b18a03bfaa161642b0a795577f7b110b",
+      "signedTransactionBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AHAAAAAAAAAA8AAAB1c2RjLmxvY2FsLm5lYXIHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwEAAAACCwAAAGZ0X3RyYW5zZmVyRwAAAHsicmVjZWl2ZXJfaWQiOiJhbGljZS5uZWFyIiwiYW1vdW50IjoiMTIzNDU2NyIsIm1lbW8iOiJtcGMtb3duZWQtVVNEQyJ9AOBX60gbAAABAAAAAAAAAAAAAAAAAAAAAEnUDKaTNrFzb8UAMh3i+v6OUVnjj4hn4oA7Ebl7RlWP354BjNIyjiQpMEOo/e80dLGKA7+qFhZCsKeVV397EQs="
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "genesisHash": "2fKbWVL47wHpu9TSqD8huJUBLMkmKdNWNJesfp7wiigD",
+        "sender": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750",
+        "nonce": "7",
+        "recipient": "abababababababababababababababababababababababababababababababab",
+        "amountAtomic": "2000000",
+        "tokenContract": "usdt.local.near",
+        "gas": 15000000000000,
+        "memo": "MPC 提款",
+        "blockHeight": 100,
+        "validUntilHeight": 200,
+        "blockHash": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+        "publicKeyHex": "24cecd2ed28ce0b2df1821c3a6bc8be59c667201af8725d788a490eacdef0750"
+      },
+      "txBytesBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AHAAAAAAAAAA8AAAB1c2R0LmxvY2FsLm5lYXIHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwEAAAACCwAAAGZ0X3RyYW5zZmVyeQAAAHsicmVjZWl2ZXJfaWQiOiJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiIiwiYW1vdW50IjoiMjAwMDAwMCIsIm1lbW8iOiJNUEMg5o+Q5qy+In0A8Kt1pA0AAAEAAAAAAAAAAAAAAAAAAAA=",
+      "signingHashHex": "911ed85d6927d55f2f84c938b5c84e7923fa0004cbd000e6ec1ca56380966d01",
+      "txHash": "AmVPxVGb2EAAT9iogqAJzvokoMm6fDsNYT36i3Td6LJt",
+      "signatureHex": "db2ddb53b41cc9749d15890cc090ed8db8217c9216461feb5335afbde66309a02fd7d4322a2d7f392a93b4f2c72acf9369f77551e63096f7f9ae7240fb61b40e",
+      "signedTransactionBase64": "QAAAADI0Y2VjZDJlZDI4Y2UwYjJkZjE4MjFjM2E2YmM4YmU1OWM2NjcyMDFhZjg3MjVkNzg4YTQ5MGVhY2RlZjA3NTAAJM7NLtKM4LLfGCHDpryL5ZxmcgGvhyXXiKSQ6s3vB1AHAAAAAAAAAA8AAAB1c2R0LmxvY2FsLm5lYXIHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwEAAAACCwAAAGZ0X3RyYW5zZmVyeQAAAHsicmVjZWl2ZXJfaWQiOiJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiIiwiYW1vdW50IjoiMjAwMDAwMCIsIm1lbW8iOiJNUEMg5o+Q5qy+In0A8Kt1pA0AAAEAAAAAAAAAAAAAAAAAAAAA2y3bU7QcyXSdFYkMwJDtjbghfJIWRh/rUzWvveZjCaAv19QyKi1/OSqTtPLHKs+Tafd1UeYwlvf5rnJA+2G0Dg=="
+    }
+  ]
+}

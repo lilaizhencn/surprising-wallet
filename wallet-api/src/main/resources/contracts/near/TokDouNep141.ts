@@ -17,6 +17,7 @@ import {
     initialize,
     NearBindgen,
     IntoStorageKey,
+    NearPromise,
     near,
 } from "near-sdk-js";
 
@@ -144,7 +145,16 @@ export class MyFt implements FungibleTokenCore, StorageManagement, FungibleToken
             registration_only?: boolean,
         }
     ): StorageBalance {
-        return this.token.storage_deposit({ account_id, registration_only });
+        const beneficiary = account_id ?? near.predecessorAccountId();
+        const registered = this.token.storage_balance_of({ account_id: beneficiary }) !== null;
+        const balance = this.token.storage_deposit({ account_id: beneficiary, registration_only });
+        // near-contract-standards 2.0.0 creates refund promises without executing them.
+        // Build the refund while returning the NEP-145 storage balance to the caller.
+        const refund = near.attachedDeposit() - (registered ? 0n : BigInt(balance.total));
+        if (refund > 0n) {
+            NearPromise.new(near.predecessorAccountId()).transfer(refund).build();
+        }
+        return balance;
     }
 
     @view({})

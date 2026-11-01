@@ -356,9 +356,9 @@ public class WalletTokenConfigService {
         if (amount == null) return;
         BigDecimal normalized = amount.stripTrailingZeros();
         if (amount.signum() < 0 || normalized.precision() > 78
-                || Math.max(normalized.scale(), 0) > Math.min(decimals, 18)) {
+                || Math.max(normalized.scale(), 0) > Math.min(decimals, 24)) {
             throw new IllegalArgumentException(field
-                    + " must be non-negative with at most " + Math.min(decimals, 18) + " fraction digits");
+                    + " must be non-negative with at most " + Math.min(decimals, 24) + " fraction digits");
         }
     }
 

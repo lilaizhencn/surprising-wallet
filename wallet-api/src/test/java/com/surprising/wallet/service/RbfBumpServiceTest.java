@@ -30,8 +30,10 @@ class RbfBumpServiceTest {
         when(signing.update(any())).thenReturn(1);
         when(orders.updateStatus(any(), eq("BTC"), eq("WD-1"), eq("SIGNING"), isNull(), isNull(), isNull())).thenReturn(1);
         when(rates.find("btc")).thenReturn("35");
+        var mpc=mock(UtxoMpcSigningService.class);
+        when(mpc.estimateFee(any(),eq(true),eq(35L))).thenReturn(5000L);
         var service = new RbfBumpService(signing, utxos, mock(CollectionRecordRepository.class), orders,
-                mock(WalletRuntimeConfigService.class), mock(QueueWorker.class), rates, new ObjectMapper());
+                mock(WalletRuntimeConfigService.class), mock(QueueWorker.class), rates, new ObjectMapper(), mpc);
         var task = service.bumpFee(42, request.tenantId(), hash);
         var captured = ArgumentCaptor.forClass(UtxoSigningTransaction.class);
         verify(signing).update(captured.capture());

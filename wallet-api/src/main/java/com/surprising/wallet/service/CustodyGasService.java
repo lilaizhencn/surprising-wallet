@@ -8,7 +8,6 @@ import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.CustodyGasUsageRepository;
 import com.surprising.wallet.repository.CustodyDepositRepository;
-import com.surprising.wallet.repository.CustodyDerivationSubjectRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
@@ -18,7 +17,9 @@ import org.springframework.transaction.annotation.Isolation;
 import com.surprising.wallet.service.CustodyAddressService.AddressView;
 import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
 import com.surprising.wallet.model.custody.GasAccountRecord;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,27 +59,25 @@ public class CustodyGasService {
     private final ChainProfileRepository profiles;
     private final ChainAssetRepository assets;
     private final CustodyDepositRepository deposits;
-    private final CustodyDerivationSubjectRepository subjects;
     private final CustodyAddressService addresses;
-    private final BlockchainRuntimeService runtime;
+    private final TransactionTemplate transaction;
 
     public CustodyGasService(CustodyAddressService addresses,
-                             BlockchainRuntimeService runtime, CustodyGasAccountRepository gasAccounts,
+                             CustodyGasAccountRepository gasAccounts,
                              CustodyGasUsageRepository usages, CustodyDepositRepository deposits,
-                             CustodyDerivationSubjectRepository subjects, CustodyGasAccountingService accounting,
+                             CustodyGasAccountingService accounting,
                              ChainProfileRepository profiles, ChainAssetRepository assets,
                              CustodyAddressRepository custodyAddresses, ChainAddressRepository chainAddresses,
-                             LedgerBalanceRepository balances, CustodyAuditRepository audits) {
+                             LedgerBalanceRepository balances, CustodyAuditRepository audits, PlatformTransactionManager manager) {
         this.custodyAddresses = custodyAddresses;
         this.chainAddresses = chainAddresses;
         this.balances = balances;
         this.audits = audits;
         this.addresses = addresses;
-        this.runtime = runtime;
+        this.transaction = new TransactionTemplate(manager);
         this.gasAccounts = gasAccounts;
         this.usages = usages;
         this.deposits = deposits;
-        this.subjects = subjects;
         this.accounting = accounting;
         this.profiles = profiles;
         this.assets = assets;
@@ -136,53 +135,34 @@ public class CustodyGasService {
 
     private record BalanceKey(String chain, String symbol, String accountId) { }
 
-    @Transactional(rollbackFor = Throwable.class)
     public GasAccountView create(CustodyPrincipal principal, CreateGasAccountCommand command,
                                  String sourceIp) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Gas account creation requires a committed caller transaction");
+        }
         requireTenantAdmin(principal);
         String chain = requireChain(command.chain());
-        BigDecimal threshold = DEFAULT_LOW_BALANCE_THRESHOLD;
-        BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
-        String collectionSubject = collectionSubject(chain, chainRuntime.chainType());
-        subjects.resolve(principal.tenantId(), collectionSubject);
-        GasAccountRecord existing = findGasAccount(principal.tenantId(), chain)
-                .orElse(null);
-        if (existing != null) {
-            return toView(existing);
-        }
-        AddressView fundingAddress = addresses.createSystemAtChildIndex(
-                principal,
-                new CreateAddressCommand(
-                        chain,
-                        collectionSubject,
-                        null,
-                        chain + " collection address",
-                        Map.of("systemPurpose", "COLLECTION_AND_GAS")),
-                COLLECTION_CHILD_INDEX,
-                sourceIp);
-        UUID id = UUID.randomUUID();
-        gasAccounts.insert(
-                id,
-                principal.tenantId(),
-                fundingAddress.id(),
-                chain,
-                chainRuntime.network(),
-                chainRuntime.nativeSymbol(),
-                threshold,
-                principal.actorId());
-        GasAccountRecord saved = requireGasAccount(principal.tenantId(), id);
-        audits.insert(
-                UUID.randomUUID(),
-                principal.tenantId(),
-                "TENANT_USER",
-                principal.actorId().toString(),
-                "GAS_ACCOUNT.CREATE",
-                "GAS_ACCOUNT",
-                saved.id().toString(),
-                sourceIp,
-                "{\"chain\":\"" + chain + "\",\"nativeSymbol\":\""
-                        + chainRuntime.nativeSymbol() + "\"}");
-        return toView(saved);
+        var existing = transaction.execute(status -> findGasAccount(principal.tenantId(), chain).orElse(null));
+        if (existing != null) return toView(existing);
+        var prepared = addresses.prepareSystemAtChildIndex(principal,
+                new CreateAddressCommand(chain, collectionSubject(chain, ChainType.valueOf(chain)), null,
+                        chain + " collection address", Map.of("systemPurpose", "COLLECTION_AND_GAS")),
+                COLLECTION_CHILD_INDEX, sourceIp);
+        return transaction.execute(status -> {
+            var duplicate = findGasAccount(principal.tenantId(), chain).orElse(null);
+            if (duplicate != null) return toView(duplicate);
+            AddressView fundingAddress = addresses.publishPrepared(prepared);
+            var profile = profiles.findAccountByChain(chain).orElseThrow();
+            if (!profile.getNetwork().equals(fundingAddress.network())) throw new IllegalStateException("Gas address network changed");
+            UUID id = UUID.randomUUID();
+            int inserted = gasAccounts.insert(id, principal.tenantId(), fundingAddress.id(), chain, profile.getNetwork(),
+                    profile.getNativeSymbol(), DEFAULT_LOW_BALANCE_THRESHOLD, principal.actorId());
+            var saved = findGasAccount(principal.tenantId(), chain).orElseThrow();
+            if (inserted == 1) audits.insert(UUID.randomUUID(), principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
+                    "GAS_ACCOUNT.CREATE", "GAS_ACCOUNT", saved.id().toString(), sourceIp,
+                    "{\"chain\":\"" + chain + "\",\"nativeSymbol\":\"" + profile.getNativeSymbol() + "\"}");
+            return toView(saved);
+        });
     }
     public static String collectionSubject(String chain, ChainType chainType) {
         String namespace = chainType.isEvm()

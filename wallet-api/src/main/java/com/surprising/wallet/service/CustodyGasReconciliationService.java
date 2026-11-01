@@ -28,6 +28,9 @@ public class CustodyGasReconciliationService {
     private final AptosTransactionRepository aptosTransactions;
     private final SuiTransactionRepository suiTransactions;
     private final TonTransactionRepository tonTransactions;
+    private final NearTransactionRepository nearTransactions;
+    private final PolkadotTransactionRepository polkadotTransactions;
+    private final CardanoTransactionRepository cardanoTransactions;
     private final XrpTransactionRepository xrpTransactions;
     private final MoneroTransactionRepository moneroTransactions;
     private final TronTransactionRepository tronTransactions;
@@ -70,16 +73,20 @@ public class CustodyGasReconciliationService {
                 throw new IllegalStateException("gas native asset precision is invalid");
             }
             var fee = confirmedNetworkFee(order, nativeAsset.getDecimals())
-                    .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
+                    .orElseGet(() -> {
+                        if (Set.of("SUI","NEAR","DOT","ADA","XMR").contains(usage.chain())) throw new IllegalStateException("actual network expense receipt is unavailable");
+                        return new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE");
+                    });
             accounting.settle(tenantId, "WITHDRAWAL", withdrawalId, fee.amount(), fee.pricingSource(), order.getTxHash());
         } else if (Set.of("FAILED", "REJECTED", "CANCELLED").contains(order.getStatus())) {
             if (order.getTxHash() == null || order.getTxHash().isBlank()) {
                 accounting.release(tenantId, "WITHDRAWAL", withdrawalId, "withdrawal ended before broadcast");
             } else {
                 // A failed on-chain execution still burns Gas. An absent fee receipt remains reserved for reconciliation.
-                var fee = evmTransactions.findConfirmedFee(order.getChain(),order.getTxHash())
+                var asset=assets.findDefinition(usage.chain(),usage.nativeSymbol()).orElseThrow();
+                var fee = confirmedNetworkFee(order,asset.getDecimals())
                         .orElseThrow(() -> new IllegalStateException("failed withdrawal actual network fee receipt is unavailable"));
-                accounting.settle(tenantId,"WITHDRAWAL",withdrawalId,fee,"CHAIN_FAILED_RECEIPT",order.getTxHash());
+                accounting.settle(tenantId,"WITHDRAWAL",withdrawalId,fee.amount(),"CHAIN_FAILED_RECEIPT",order.getTxHash());
             }
         }
     }
@@ -123,8 +130,16 @@ public class CustodyGasReconciliationService {
                 source = "CHAIN_CONFIRMED";
             }
             case "NEAR" -> {
-                amount = Optional.empty();
-                source = "CONFIGURED_RESERVE";
+                amount = nearTransactions.findConfirmedFeeAtomic(chain,txHash).map(value -> value.movePointLeft(24));
+                source = "CHAIN_CONFIRMED";
+            }
+            case "ADA" -> {
+                amount = cardanoTransactions.findConfirmedExpense(txHash);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "DOT" -> {
+                amount = polkadotTransactions.findConfirmedFee(txHash);
+                source = "CHAIN_CONFIRMED";
             }
             case "TRON" -> {
                 amount = tronTransactions.findConfirmedFee(chain, txHash);
@@ -133,13 +148,13 @@ public class CustodyGasReconciliationService {
             default -> {
                 amount = evmTransactions.findConfirmedFee(chain, txHash);
                 source = amount.isPresent() ? "CHAIN_RECORDED" : "CONFIGURED_RESERVE";
-                if (amount.isEmpty()) {
+                if (amount.isEmpty() && !"FAILED".equals(order.getStatus())) {
                     amount = Optional.ofNullable(order.getFee());
                 }
             }
         }
         String pricingSource = source;
-        return amount.filter(value -> value != null && value.signum() > 0)
+        return amount.filter(value -> value != null && (value.signum() >= 0 || "SUI".equals(normalizedChain)))
                 .map(value -> new NetworkFee(value.stripTrailingZeros(), pricingSource));
     }
 

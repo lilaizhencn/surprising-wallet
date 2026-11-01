@@ -210,9 +210,7 @@ public class ChainRpcNodeService {
             String headerName = trim(node.getAuthHeaderName());
             String authType = trim(node.getAuthType());
             if (headerName.isBlank()) {
-                if ("BLOCKFROST".equalsIgnoreCase(node.getConnectionType())) {
-                    headerName = "project_id";
-                } else if ("bearer".equalsIgnoreCase(authType)) {
+                if ("bearer".equalsIgnoreCase(authType)) {
                     headerName = "Authorization";
                 } else {
                     headerName = "X-API-Key";

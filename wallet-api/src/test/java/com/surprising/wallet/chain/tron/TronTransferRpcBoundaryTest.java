@@ -50,11 +50,11 @@ class TronTransferRpcBoundaryTest {
     }
 
     @Test
-    void tokenPreparationUsesLimitedFullNodeAndPreservesAbiAmountAndFee() throws Exception {
+    void tokenPreparationUsesLimitedReferenceReadsAndPreservesAbiAmountAndFee() throws Exception {
         try (var f = new Fixture()) {
             var signed = new TronTrc20Service().signTransfer(f.client, KEY, RECIPIENT, RECIPIENT,
                     new BigDecimal("1.234567"), 6, 12_500_000L);
-            assertEquals(List.of("full:contract"), f.requests);
+            assertEquals(List.of("solidity:block", "full:block"), f.requests);
             assertEquals(12_500_000L, signed.transaction().getRawData().getFeeLimit());
             var contract = signed.transaction().getRawData().getContract(0).getParameter()
                     .unpack(Contract.TriggerSmartContract.class);

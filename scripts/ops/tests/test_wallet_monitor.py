@@ -52,7 +52,7 @@ class AlertStateTest(unittest.TestCase):
         self.assertTrue(self.state["incidents"]["oom"]["active"])
 
     def test_transient_event_is_not_lost_when_telegram_is_down(self):
-        self.tick([monitor.Finding("restart:surprising-wallet-all.service", "钱包服务发生自动重启", 1)], 0, lambda _: False)
+        self.tick([monitor.Finding("restart:surprising-wallet.service", "钱包服务发生自动重启", 1)], 0, lambda _: False)
         self.tick([], 60)
         self.tick([], 120)
         self.assertIn("通知补发：钱包服务 曾出现异常，现已恢复", self.sent[-1])
@@ -87,7 +87,7 @@ class AlertStateTest(unittest.TestCase):
             "cpu_percent": 4.2, "memory_available_mib": 650,
             "disk_used_percent": 19.0, "disk_free_gib": 30.5,
             "public_health": True, "local_health": True,
-            "services": {"surprising-wallet-all.service": "active"},
+            "services": {"surprising-wallet.service": "active"},
             "database": {"connections": 7, "max_connections": 30,
                          "blocked_queries": 0, "long_transactions": 0,
                          "pending": 3, "oldest_seconds": 12.5, "dead_letters": 0},

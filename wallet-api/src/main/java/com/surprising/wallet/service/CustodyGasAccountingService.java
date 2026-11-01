@@ -11,6 +11,7 @@ import com.surprising.wallet.repository.CustodyWithdrawalRepository;
 import com.surprising.wallet.repository.EvmCollectionBatchRepository;
 import com.surprising.wallet.repository.EvmWithdrawalBatchRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.WalletMpcSignRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,13 +34,14 @@ public class CustodyGasAccountingService {
     private final CustodyWithdrawalRepository withdrawals;
     private final EvmCollectionBatchRepository collections;
     private final EvmWithdrawalBatchRepository payouts;
+    private final WalletMpcSignRequestRepository mpcRequests;
     private final TransactionTemplate transactions;
 
     public CustodyGasAccountingService(CustodyGasUsageRepository usages, CustodyGasAccountRepository accounts,
             CustodyAddressRepository addresses, ChainAddressRepository chainAddresses,
             LedgerBalanceRepository balances, CustodyLedgerEntryRepository entries,
             CustodyWithdrawalRepository withdrawals, EvmCollectionBatchRepository collections,
-            EvmWithdrawalBatchRepository payouts, PlatformTransactionManager manager) {
+            EvmWithdrawalBatchRepository payouts, WalletMpcSignRequestRepository mpcRequests, PlatformTransactionManager manager) {
         this.usages = usages;
         this.accounts = accounts;
         this.addresses = addresses;
@@ -49,7 +51,44 @@ public class CustodyGasAccountingService {
         this.withdrawals = withdrawals;
         this.collections = collections;
         this.payouts = payouts;
+        this.mpcRequests = mpcRequests;
         this.transactions = new TransactionTemplate(manager);
+    }
+
+    /** Joins the immutable system intent transaction; only the tenant Gas sender is charged here. */
+    public boolean reservePreparation(UUID tenantId,UUID requestId,String source,BigDecimal amount) {
+        requireAmount(amount);
+        return Boolean.TRUE.equals(transactions.execute(status->{
+            var request=mpcRequests.lock(tenantId,requestId).orElseThrow();
+            var command=request.command();
+            if(command.businessType()!=com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.FUNDING)
+                throw new IllegalArgumentException("preparation gas requires an owned system MPC intent");
+            var account=accounts.lockForChain(tenantId,command.chain().name()).orElse(null);
+            if(account==null)return false;
+            var address=addresses.require(tenantId,account.custodyAddressId());
+            var sender=chainAddresses.findOwned(tenantId,address.chainAddressId()).orElseThrow();
+            if(!source.equals(sender.getAddress()))return false;
+            if(!"ACTIVE".equals(account.status()) || !command.keyId().equals(sender.getMpcKeyId()))
+                throw new IllegalStateException("preparation gas sender differs from active owned joint key");
+            var existing=usages.find(tenantId,"ADDRESS_PREPARATION",requestId).orElse(null);
+            if(existing!=null) {
+                if(!existing.reservedAmount().equals(amount) && existing.reservedAmount().compareTo(amount)!=0)
+                    throw new IllegalStateException("preparation gas reservation changed");
+                return true;
+            }
+            if(usages.existsOverdue(tenantId,account.id()))throw new IllegalStateException("gas account has an overdue reservation");
+            if(!balances.freeze(command.chain().name(),account.nativeSymbol(),sender.getAccountId(),amount,tenantId))
+                throw new IllegalStateException("insufficient preparation gas balance");
+            usages.insert(UUID.randomUUID(),tenantId,account.id(),"ADDRESS_PREPARATION",requestId,command.businessReference(),
+                    command.chain().name(),account.nativeSymbol(),amount,"FIXED_MPC_INTENT");
+            return true;
+        }));
+    }
+
+    /** Deposit TrustSet spends the cushion already transferred by activation; it is not charged twice. */
+    public void settlePreparation(UUID tenantId,UUID requestId,BigDecimal amount,String hash) {
+        if(usages.find(tenantId,"ADDRESS_PREPARATION",requestId).isPresent())
+            settle(tenantId,"ADDRESS_PREPARATION",requestId,amount,"CHAIN_PREPARATION_RECEIPT",hash);
     }
 
     /** Lock the owned operation before checking its receipt; concurrent retries freeze once. */
@@ -106,13 +145,14 @@ public class CustodyGasAccountingService {
         return transactions.execute(status -> {
             GasUsageRecord usage = usages.findForUpdate(tenantId, operationType, operationId).orElseThrow();
             if (!Set.of("RESERVED", "OVERDUE").contains(usage.status())) return usage;
-            BigDecimal actual = actualAmount == null || actualAmount.signum() <= 0
-                    ? usage.reservedAmount() : actualAmount.stripTrailingZeros();
-            requireAmount(actual);
+            BigDecimal actual = actualAmount == null ? usage.reservedAmount() : actualAmount.stripTrailingZeros();
+            if (actual.signum() < 0 && !"SUI".equals(usage.chain())) throw new IllegalArgumentException("negative net gas is only supported for Sui storage rebates");
+            requirePrecision(actual.abs());
             var account = accounts.lockById(tenantId, usage.gasAccountId()).orElseThrow();
             String ledgerAccount = ledgerAccount(tenantId, account);
             if (!balances.settleReserved(usage.chain(), usage.nativeSymbol(), ledgerAccount,
                     usage.reservedAmount(), actual, tenantId)) {
+                if (actual.signum() <= 0) throw new IllegalStateException("gas reservation balance is inconsistent");
                 if (usages.markOverdue(tenantId, usage.id(), actual, pricingSource, txHash,
                         "actual network fee exceeded funded gas balance") != 1) throw new IllegalStateException("gas reservation changed during overdue transition");
                 return usages.find(tenantId, operationType, operationId).orElseThrow();
@@ -120,9 +160,9 @@ public class CustodyGasAccountingService {
             if (usages.settleReservedOrOverdue(tenantId, usage.id(), actual, pricingSource, txHash) != 1) {
                 throw new IllegalStateException("gas reservation changed during settlement");
             }
-            entries.insertIfAbsent(UUID.randomUUID(), tenantId, account.custodyAddressId(), usage.chain(),
-                    usage.nativeSymbol(), ledgerAccount, "NETWORK_FEE", "DEBIT", actual,
-                    usage.operationType(), usage.referenceNo());
+            if (actual.signum() != 0) entries.insertIfAbsent(UUID.randomUUID(), tenantId, account.custodyAddressId(), usage.chain(),
+                    usage.nativeSymbol(), ledgerAccount, "ADDRESS_PREPARATION".equals(usage.operationType())?"ADDRESS_PREPARATION":"NETWORK_FEE",
+                    actual.signum() < 0 ? "CREDIT" : "DEBIT", actual.abs(), usage.operationType(), usage.referenceNo());
             return usages.find(tenantId, operationType, operationId).orElseThrow();
         });
     }
@@ -139,9 +179,12 @@ public class CustodyGasAccountingService {
 
     private static void requireAmount(BigDecimal amount) {
         if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("gas amount must be positive");
+        requirePrecision(amount);
+    }
+    private static void requirePrecision(BigDecimal amount) {
         BigDecimal exact = amount.stripTrailingZeros();
-        // Balances have scale 18; usage and entry receipts allow at most 54 integer digits.
-        if (exact.scale() > 18 || exact.precision() - exact.scale() > 54) {
+        // Balances preserve 24 fraction digits; usage and entry receipts allow at most 54 integer digits.
+        if (exact.scale() > 24 || exact.precision() - exact.scale() > 54) {
             throw new IllegalArgumentException("gas amount exceeds ledger precision");
         }
     }

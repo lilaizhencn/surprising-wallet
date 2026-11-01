@@ -51,8 +51,8 @@ class EvmUnknownAttemptRecoveryIntegrationTest {
         context.refresh();
         collections = context.getBean(Evm7702CollectionCoordinator.class);
         withdrawals = context.getBean(Evm7702WithdrawalCoordinator.class);
-        collectionWorkflow = CustodyTestSupport.evmCollectionWorkflow(jdbc, collections, org.mockito.Mockito.mock(com.surprising.wallet.chain.evm.Evm7702RpcClient.class), org.mockito.Mockito.mock(com.surprising.wallet.service.AccountSecp256k1KeyService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyCryptoService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.WalletRuntimeConfigService.class));
-        withdrawalWorkflow = CustodyTestSupport.evmWithdrawalWorkflow(jdbc, withdrawals, org.mockito.Mockito.mock(com.surprising.wallet.chain.evm.Evm7702RpcClient.class), org.mockito.Mockito.mock(com.surprising.wallet.service.AccountSecp256k1KeyService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyCryptoService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.WalletRuntimeConfigService.class));
+        collectionWorkflow = CustodyTestSupport.evmCollectionWorkflow(jdbc, collections, org.mockito.Mockito.mock(com.surprising.wallet.chain.evm.Evm7702RpcClient.class), org.mockito.Mockito.mock(com.surprising.wallet.service.Evm7702SigningService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyCryptoService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.WalletRuntimeConfigService.class));
+        withdrawalWorkflow = CustodyTestSupport.evmWithdrawalWorkflow(jdbc, withdrawals, org.mockito.Mockito.mock(com.surprising.wallet.chain.evm.Evm7702RpcClient.class), org.mockito.Mockito.mock(com.surprising.wallet.service.Evm7702SigningService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyCryptoService.class), org.mockito.Mockito.mock(com.surprising.wallet.service.WalletRuntimeConfigService.class));
         firstTenant = tenant();
         secondTenant = tenant();
     }
@@ -128,6 +128,42 @@ class EvmUnknownAttemptRecoveryIntegrationTest {
                 .map(row -> new Observation(row.tenantId(), row.batchId(), row.signedTxCiphertext())).toList();
     }
 
+    @ParameterizedTest @ValueSource(booleans = {true, false})
+    void unauthenticatedRecoveryCannotUseAKnownTransactionToAdvanceTheBatch(boolean collection) throws Exception {
+        UUID id = batch(collection, firstTenant, "ETH", "sepolia", "BROADCAST_UNKNOWN", 0);
+        var attempt = collection ? collectionWorkflow.listUnknownAttempts("ETH", "sepolia", 1).getFirst()
+                : withdrawalWorkflow.listUnknownAttempts("ETH", "sepolia", 1).getFirst();
+        var rpc = org.mockito.Mockito.mock(com.surprising.wallet.chain.evm.Evm7702RpcClient.class);
+        var http = org.mockito.Mockito.mock(org.web3j.protocol.http.HttpService.class);
+        var mpc = org.mockito.Mockito.mock(com.surprising.wallet.service.Evm7702SigningService.class);
+        var crypto = org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyCryptoService.class);
+        var runtime = org.mockito.Mockito.mock(com.surprising.wallet.service.WalletRuntimeConfigService.class);
+        var profile = com.surprising.wallet.common.chain.AccountChainProfile.builder()
+                .chain("ETH").network("sepolia").chainId(11155111L).build();
+        var operation = new com.surprising.wallet.service.Evm7702SigningService.Operation(firstTenant, id, "ETH",
+                collection ? com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.COLLECTION
+                        : com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL);
+        String copiedRaw = "0x0102";
+        org.mockito.Mockito.when(rpc.http(profile)).thenReturn(http);
+        org.mockito.Mockito.when(rpc.isTransactionKnown(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(attempt.txHash()))).thenReturn(true);
+        org.mockito.Mockito.when(crypto.decrypt(attempt.signedTxCiphertext())).thenReturn(copiedRaw);
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("foreign MPC selection"))
+                .when(mpc).verifySelectedRaw(operation, copiedRaw, attempt.txHash());
+
+        if (collection) CustodyTestSupport.evmCollectionWorkflow(jdbc, collections, rpc, mpc, crypto, runtime).recoverUnknown(profile);
+        else CustodyTestSupport.evmWithdrawalWorkflow(jdbc, withdrawals, rpc, mpc, crypto, runtime).recoverUnknown(profile);
+
+        org.mockito.Mockito.verify(mpc).verifySelectedRaw(operation, copiedRaw, attempt.txHash());
+        org.mockito.Mockito.verify(rpc, org.mockito.Mockito.never()).isTransactionKnown(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(mpc, org.mockito.Mockito.never()).plan(org.mockito.ArgumentMatchers.any());
+        String table = collection ? "evm_collection_batch" : "evm_withdrawal_batch";
+        assertEquals("BROADCAST_UNKNOWN", jdbc.queryForObject("select status from " + table + " where id=?", String.class, id));
+        assertEquals("UNKNOWN", jdbc.queryForObject("select status from " + attemptTable(collection) + " where batch_id=?", String.class, id));
+        assertEquals(0, jdbc.queryForObject("select rebroadcast_count from " + attemptTable(collection) + " where batch_id=?", Integer.class, id));
+    }
+
     private UUID tenant() {
         UUID id = UUID.randomUUID();
         jdbc.update("insert into custody_tenant(id, slug, name) values (?, ?, 'Recovery query test')", id, "recovery-" + id);
@@ -139,11 +175,14 @@ class EvmUnknownAttemptRecoveryIntegrationTest {
         String table = collection ? "evm_collection_batch" : "evm_withdrawal_batch";
         String hash = "0x" + id.toString().replace("-", "").repeat(2);
         String address = "0x" + "1".repeat(40);
+        String claim = new tools.jackson.databind.ObjectMapper().writeValueAsString(java.util.Map.of(
+                "id", id, "tenantId", tenant, "chain", chain, "network", network,
+                "batchHash", hash, "tokenDecimals", 18));
         jdbc.update("insert into " + table + """
                 (id, tenant_id, chain, network, asset_symbol, token_contract, token_decimals, hot_wallet,
-                 relayer_address, delegate_version, batch_hash, status, item_count)
-                values (?, ?, ?, ?, 'ETH', ?, 18, ?, ?, 1, ?, ?, 1)
-                """, id, tenant, chain, network, address, address, address, hash, status);
+                 relayer_address, delegate_version, batch_hash, status, item_count, claim_payload)
+                values (?, ?, ?, ?, 'ETH', ?, 18, ?, ?, 1, ?, ?, 1, ?::jsonb)
+                """, id, tenant, chain, network, address, address, address, hash, status, claim);
         jdbc.update("insert into " + attemptTable(collection) + """
                 (id, tenant_id, batch_id, attempt_no, relayer_nonce, tx_hash, max_fee_per_gas,
                  max_priority_fee_per_gas, gas_limit, calldata_hash, signed_tx_ciphertext,

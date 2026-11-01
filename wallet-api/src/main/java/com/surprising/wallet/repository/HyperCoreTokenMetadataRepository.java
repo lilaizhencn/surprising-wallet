@@ -9,6 +9,18 @@ import java.util.Optional;
 /** hypercore_token_metadata 单表仓储。 */
 @Repository
 public class HyperCoreTokenMetadataRepository {
+    public record TransferToken(String name,String tokenId,int decimals,boolean canonical) {
+        public String wireToken() {return name+":"+tokenId.toLowerCase(java.util.Locale.ROOT);}
+    }
+    public Optional<TransferToken> findTransferToken(String network,String symbol) {
+        var matches=jdbc.query("""
+                select name,token_id,wei_decimals,is_canonical from hypercore_token_metadata
+                 where network=? and upper(name)=upper(?) and token_id is not null and wei_decimals is not null
+                 order by is_canonical desc,token_index
+                """,(rs,n)->new TransferToken(rs.getString("name"),rs.getString("token_id"),rs.getInt("wei_decimals"),rs.getBoolean("is_canonical")),network,symbol);
+        if(matches.size()>1)throw new IllegalStateException("HyperCore asset name is ambiguous in this network");
+        return matches.stream().findFirst();
+    }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

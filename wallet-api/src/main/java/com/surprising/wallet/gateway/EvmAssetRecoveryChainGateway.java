@@ -88,9 +88,19 @@ public class EvmAssetRecoveryChainGateway {
                 request.chain(), request.source(), token, request.recoveryAddress(), request.amount());
     }
 
-    public void rebroadcast(java.util.UUID tenantId, String chain, java.util.UUID recoveryId) {
-        transactions.recover(new com.surprising.wallet.service.EvmSubmissionService.Operation(tenantId,recoveryId.toString(),
+    public boolean rebroadcast(java.util.UUID tenantId, String chain, java.util.UUID recoveryId) {
+        return transactions.recover(new com.surprising.wallet.service.EvmSubmissionService.Operation(tenantId,recoveryId.toString(),
                 com.surprising.wallet.service.EvmSubmissionService.Kind.RECOVERY),chain);
+    }
+
+    public int releaseUnsigned(java.util.UUID tenantId, String chain, java.util.UUID recoveryId) {
+        return transactions.releaseUnsigned(new com.surprising.wallet.service.EvmSubmissionService.Operation(tenantId,recoveryId.toString(),
+                com.surprising.wallet.service.EvmSubmissionService.Kind.RECOVERY),chain);
+    }
+
+    public void executionError(java.util.UUID tenantId, String chain, java.util.UUID recoveryId, String reason) {
+        transactions.recoveryError(new com.surprising.wallet.service.EvmSubmissionService.Operation(tenantId,recoveryId.toString(),
+                com.surprising.wallet.service.EvmSubmissionService.Kind.RECOVERY),chain,reason);
     }
 
     public boolean confirmed(String chain, String txHash) {

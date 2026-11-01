@@ -10,4 +10,4 @@ test_fa = "_"
 test_fa = "0xcafe"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-framework.git", rev = "mainnet", subdir = "aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-framework.git", rev = "eea778c2276e302119d6e469ec3dd0b78fcce039", subdir = "aptos-framework" }

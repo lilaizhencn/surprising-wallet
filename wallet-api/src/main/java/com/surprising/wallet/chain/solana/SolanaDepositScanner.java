@@ -190,12 +190,15 @@ public class SolanaDepositScanner {
     }
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
+        var tokens = tokenConfigRepository.listDefinitions(CHAIN, profile().getNetwork());
         for (ChainAddressRecord tracked : chainAddressRepository.listEnabled(CHAIN)) {
-            if (StringUtils.hasText(tracked.getAddress())) {
-                addresses.add(tracked.getAddress());
-            }
-            if (StringUtils.hasText(tracked.getOwnerAddress())) {
-                addresses.add(tracked.getOwnerAddress());
+            if (StringUtils.hasText(tracked.getAddress())) addresses.add(tracked.getAddress());
+            String owner = StringUtils.hasText(tracked.getOwnerAddress()) ? tracked.getOwnerAddress() : tracked.getAddress();
+            if (StringUtils.hasText(owner)) {
+                addresses.add(owner);
+                // Parsed SPL transfers identify their source ATA rather than the owner public key.
+                for (var token : tokens) if (StringUtils.hasText(token.getContractAddress()))
+                    addresses.add(addressService.associatedTokenAddress(owner, token.getContractAddress()));
             }
         }
         return addresses;

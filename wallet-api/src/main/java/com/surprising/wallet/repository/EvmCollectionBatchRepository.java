@@ -43,21 +43,48 @@ public class EvmCollectionBatchRepository {
         return !jdbc.queryForList("""
                 select id from evm_collection_batch
                  where chain = ? and network = ?
-                   and status in ('BROADCAST_UNKNOWN', 'SUBMITTED', 'CONFIRMING') limit 1
+                   and status in ('LOCKED','SIGNING','BROADCAST_UNKNOWN', 'SUBMITTED', 'CONFIRMING') limit 1
                 """, chain, network).isEmpty();
+    }
+
+    /** Original public claim; disabled profiles/configuration must not replace accepted business facts. */
+    public Optional<String> claimPayload(UUID tenantId, UUID batchId) {
+        return jdbc.query("select claim_payload::text from evm_collection_batch where tenant_id=? and id=?",
+                (rs, row) -> rs.getString(1), tenantId, batchId).stream().findFirst();
+    }
+
+    public List<String> listSigning(String chain, String network, int limit) {
+        return jdbc.queryForList("""
+                select claim_payload::text from evm_collection_batch
+                 where chain=? and network=? and status in ('LOCKED','SIGNING')
+                 order by updated_at,id limit ?
+                """, String.class, chain, network, Math.min(Math.max(limit,1),100));
+    }
+
+    /** Admission fence commits with all original inner intents before any MPC RPC. */
+    public int beginSigning(UUID tenantId, UUID batchId) {
+        return jdbc.update("update evm_collection_batch set status='SIGNING',updated_at=now() where tenant_id=? and id=? and status='LOCKED'",tenantId,batchId);
+    }
+
+    /** Selected raw is already in its attempt; recovery must see it even if Java exits before broadcast. */
+    public int markPrepared(UUID tenantId, UUID batchId, String txHash) {
+        return jdbc.update("""
+                update evm_collection_batch set status='BROADCAST_UNKNOWN',canonical_tx_hash=?,updated_at=now()
+                 where tenant_id=? and id=? and status='SIGNING' and canonical_tx_hash is null
+                """,txHash,tenantId,batchId);
     }
 
     /** 创建归集批次。 */
     public int insert(UUID id, UUID tenantId, String chain, String network, String assetSymbol,
                       String tokenContract, int tokenDecimals, String hotWallet, String relayerAddress,
-                      int delegateVersion, String batchHash, int itemCount) {
+                      int delegateVersion, String batchHash, int itemCount, String claimPayload) {
         return jdbc.update("""
                 insert into evm_collection_batch(
                     id, tenant_id, chain, network, asset_symbol, token_contract, token_decimals, hot_wallet,
-                    relayer_address, delegate_version, batch_hash, status, item_count)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCKED', ?)
+                    relayer_address, delegate_version, batch_hash, status, item_count, claim_payload)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCKED', ?, ?::jsonb)
                 """, id, tenantId, chain, network, assetSymbol, tokenContract, tokenDecimals, hotWallet,
-                relayerAddress, delegateVersion, batchHash, itemCount);
+                relayerAddress, delegateVersion, batchHash, itemCount, claimPayload);
     }
 
     /** 将归集批次置为签名中。 */
@@ -66,7 +93,7 @@ public class EvmCollectionBatchRepository {
         return jdbc.update("""
                 update evm_collection_batch set status = 'SIGNING', estimated_gas = ?, gas_limit = ?,
                     max_fee_per_gas = ?, max_priority_fee_per_gas = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status = 'LOCKED'
+                 where tenant_id = ? and id = ? and status = 'SIGNING' and canonical_tx_hash is null
                 """, estimatedGas, gasLimit, maxFeePerGas, maxPriorityFeePerGas, tenantId, batchId);
     }
 
@@ -141,7 +168,7 @@ public class EvmCollectionBatchRepository {
     public int markFailedIfUnbroadcast(UUID tenantId, UUID batchId, String errorCode, String errorMessage) {
         return jdbc.update("""
                 update evm_collection_batch set status = 'FAILED', error_code = ?, error_message = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status in ('LOCKED', 'SIGNING')
+                 where tenant_id = ? and id = ? and status = 'LOCKED'
                 """, errorCode, errorMessage, tenantId, batchId);
     }
 public record BatchRow(UUID id,

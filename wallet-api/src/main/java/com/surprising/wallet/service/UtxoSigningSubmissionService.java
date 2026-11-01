@@ -20,6 +20,7 @@ public class UtxoSigningSubmissionService {
     private final ChainSigningTransactionRepository transactions;
     private final PgmqClient queue;
     private final ObjectMapper json;
+    private final UtxoMpcSigningService mpc;
 
     @Transactional(rollbackFor = Throwable.class)
     public void enqueue(UUID tenantId, String chain, int transactionId, UUID requestId) {
@@ -31,10 +32,12 @@ public class UtxoSigningSubmissionService {
         }
         if (requestId.equals(transaction.enqueuedRequestId())) return;
         if (transaction.status() != Constants.SIGNING) throw new IllegalStateException("transaction is not signing");
+        var task = new UtxoSigningTask(transactionId, request);
+        mpc.reserve(task);
         if (transactions.recordEnqueued(chain, transactionId, requestId) != 1) {
             throw new IllegalStateException("signing transaction changed");
         }
-        queue.send(WalletQueue.SIGN_FIRST, JacksonJson.writeValue(json, new UtxoSigningTask(transactionId, request)),
+        queue.send(WalletQueue.MPC_SIGN, JacksonJson.writeValue(json, task),
                 QueueTenant.headers(tenantId));
     }
 }

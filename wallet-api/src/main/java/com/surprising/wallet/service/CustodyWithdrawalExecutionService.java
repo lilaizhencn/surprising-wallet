@@ -122,7 +122,7 @@ public class CustodyWithdrawalExecutionService {
         try { amount.setScale(decimals,java.math.RoundingMode.UNNECESSARY); }
         catch (ArithmeticException invalid) { throw new IllegalArgumentException("withdrawal exceeds chain asset precision",invalid); }
         try {
-            if (amount.setScale(18,java.math.RoundingMode.UNNECESSARY).precision() > 78) {
+            if (amount.setScale(24,java.math.RoundingMode.UNNECESSARY).precision() > 84) {
                 throw new ArithmeticException("withdrawal exceeds stored amount range");
             }
         } catch (ArithmeticException invalid) {

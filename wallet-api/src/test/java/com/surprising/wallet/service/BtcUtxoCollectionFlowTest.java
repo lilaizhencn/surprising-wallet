@@ -76,6 +76,8 @@ class BtcUtxoCollectionFlowTest {
         when(repository.utxoSelectionService.lock(eq(TENANT), eq("BTC"), anyString(), anyInt(), eq("42"))).thenReturn(1);
         when(repository.collectionRecordRepository.claimSigning(eq(TENANT), eq("BTC"), anyString(), isNull())).thenReturn(1);
 
+        var mpc=mock(UtxoMpcSigningService.class);
+        when(mpc.estimateFee(any(),eq(false),eq(1L))).thenReturn(178L);
         new UtxoBatchService(
                 runtime,
                 repository.withdrawalOrderRepository,
@@ -87,7 +89,7 @@ class BtcUtxoCollectionFlowTest {
                 feeRates,
                 submissions,
                 signing,
-                profiles)
+                profiles, mpc)
                 .execute("BTC");
 
         ArgumentCaptor<BigDecimal> amount = ArgumentCaptor.forClass(BigDecimal.class);
@@ -133,15 +135,26 @@ class BtcUtxoCollectionFlowTest {
         var request = request(TENANT, UtxoSigningRequest.Operation.COLLECTION, "0.001001", "0.001");
         String hash = "a".repeat(64);
         var result = new UtxoSigningResult(42, "BTC", TENANT, request.requestId(), signed(hash, 100), null);
-        when(signing.lockById("BTC", 42)).thenReturn(Optional.of(row(42, request, Constants.SIGNING, null)));
-        when(signing.claimBroadcast(eq("BTC"), eq(42), anyString())).thenReturn(true);
-        when(signing.update(any())).thenReturn(1);
+        var current=new java.util.concurrent.atomic.AtomicReference<>(row(42,request,Constants.SIGNING,null));
+        when(signing.lockById("BTC",42)).thenAnswer(call->Optional.of(current.get()));
+        when(signing.claimBroadcast(eq("BTC"),eq(42),anyString())).thenReturn(true);
+        when(signing.recordPrepared(any(),anyString())).thenAnswer(call->{current.set(call.getArgument(0));return 1;});
+        when(signing.update(any())).thenAnswer(call->{current.set(call.getArgument(0));return 1;});
+        when(collections.lockForSubmission(TENANT,"BTC","COLL-RBF")).thenReturn(Optional.of(
+                com.surprising.wallet.chain.model.ChainCollectionRecord.builder().tenantId(TENANT).chain("BTC").assetSymbol("BTC")
+                        .toAddress(request.payments().getFirst().address()).amount(request.payments().getFirst().amount()).status("SIGNING").build()));
+        when(collections.bindUtxoPreparedHash(TENANT,"BTC","COLL-RBF",null,hash)).thenReturn(1);
+        var claim=new PgmqClient.Message(1,1,"{}","{}");
+        when(queue.lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim)).thenReturn(true);
         when(runtime.broadcastSignedTransaction(any(), any())).thenReturn(hash);
         when(collections.updateStatus(TENANT, "BTC", "COLL-RBF", "SENT", hash, null, null)).thenReturn(1);
-        new UtxoBroadcastService(signing, orders, collections, mock(UtxoRepository.class), mock(LedgerBalanceRepository.class),
-                runtime, queue, new ObjectMapper(), mock(WalletTaskLeaseService.class)).apply(result);
+        var service=new UtxoBroadcastService(signing,orders,collections,mock(UtxoMpcSigningService.class),
+                runtime,queue,new ObjectMapper(),mock(WalletTaskLeaseService.class));
+        assertTrue(service.complete(service.broadcast(service.prepare(result,claim))));
         verify(collections).updateStatus(TENANT, "BTC", "COLL-RBF", "SENT", hash, null, null);
-        verifyNoInteractions(queue, orders);
+        verify(queue).lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim);
+        verifyNoMoreInteractions(queue);
+        verifyNoInteractions(orders);
     }
 
 }

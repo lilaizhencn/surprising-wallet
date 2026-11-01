@@ -10,7 +10,7 @@ User=wallet
 Group=wallet
 WorkingDirectory=/opt/surprising-wallet
 EnvironmentFile=/etc/surprising-wallet/wallet.env
-ExecStart=/usr/bin/java -Xms512m -Xmx3g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar --sw.wallet.mode=api
+ExecStart=/usr/bin/java -Xms512m -Xmx3g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120

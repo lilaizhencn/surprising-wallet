@@ -45,16 +45,30 @@ public class NearRpcClient {
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
+    private final java.util.Optional<String> boundNetwork;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public NearRpcClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
                             ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
         this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
+        this.boundNetwork = java.util.Optional.empty();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
+    }
+    private NearRpcClient(NearRpcClient client,String network) {
+        this.objectMapper=client.objectMapper;this.profiles=client.profiles;
+        this.rpcNodeService=client.rpcNodeService;this.httpClient=client.httpClient;
+        this.boundNetwork=java.util.Optional.of(network);
+    }
+    /** An admitted transaction uses its exact original network even when new work is disabled. */
+    public NearRpcClient forNetwork(String network) {
+        if(boundNetwork.filter(network::equals).isPresent())return this;
+        profiles.findByChainAndNetwork(CHAIN,network).orElseThrow(()->new IllegalStateException("missing original NEAR network definition"));
+        return new NearRpcClient(this,network);
     }
     public JsonNode account(String accountId) {
         ObjectNode params = objectMapper.createObjectNode();
@@ -114,10 +128,34 @@ public class NearRpcClient {
         params.put("finality", "final");
         return call("block", params);
     }
+    public JsonNode status() { return call("status", objectMapper.createArrayNode()); }
+    public JsonNode genesisConfig() { return call("EXPERIMENTAL_genesis_config", objectMapper.createArrayNode()); }
+    public JsonNode finalTransaction(String hash,String sender) {
+        ObjectNode params=objectMapper.createObjectNode().put("tx_hash",hash).put("sender_account_id",sender).put("wait_until","FINAL");
+        return call("tx",params);
+    }
+    public JsonNode knownTransaction(String hash,String sender) {
+        return call("tx",objectMapper.createObjectNode().put("tx_hash",hash).put("sender_account_id",sender).put("wait_until","NONE"));
+    }
+    public JsonNode receipt(String id) {
+        return call("EXPERIMENTAL_receipt",objectMapper.createObjectNode().put("receipt_id",id));
+    }
+    public BigInteger gasPrice(String blockHash) {
+        return new BigInteger(call("gas_price",objectMapper.createArrayNode().add(blockHash)).path("gas_price").asText());
+    }
     public JsonNode block(long height) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("block_id", height);
         return call("block", params);
+    }
+    public JsonNode block(String hash) {
+        return call("block",objectMapper.createObjectNode().put("block_id",hash));
+    }
+    public JsonNode sendTransaction(String signedTransactionBase64) {
+        return call("send_tx",objectMapper.createObjectNode().put("signed_tx_base64",signedTransactionBase64).put("wait_until","EXECUTED_OPTIMISTIC"));
+    }
+    public static boolean isUnknownTransactionError(String message) {
+        return message!=null && (message.contains("UNKNOWN_TRANSACTION") || message.contains("TransactionNotFound"));
     }
     public long latestFinalBlockHeight() {
         return finalBlock().path("header").path("height").asLong(0L);
@@ -149,9 +187,9 @@ public class NearRpcClient {
         body.set("params", params);
         try {
             String requestBody = objectMapper.writeValueAsString(body);
-            String network = profiles.findAccountByChain(CHAIN)
+            String network = boundNetwork.orElseGet(()->profiles.findAccountByChain(CHAIN)
                     .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
-                    .getNetwork();
+                    .getNetwork());
             return rpcNodeService.withFailover(CHAIN, network, node -> execute(method, requestBody,
                     node.getRpcUrl(), node));
         } catch (JacksonException e) {

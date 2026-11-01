@@ -160,8 +160,9 @@ class RuntimeConfigurationIntegrationTest {
             assets.upsertNonNative("ETH", "POLICY_TEST", "ERC20", "0x" + "12".repeat(20), 6, true,
                     BigDecimal.ZERO, BigDecimal.ZERO);
             var management = WalletConfigTestSupport.tokens(jdbc, runtime);
-            var keys = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
-            org.mockito.Mockito.when(keys.hasApiKeyMaterial()).thenReturn(true);
+            var keys = org.mockito.Mockito.mock(com.surprising.wallet.chain.signing.MpcNodes.class);
+            org.mockito.Mockito.when(keys.parties()).thenReturn(List.of("one", "two", "three"));
+            org.mockito.Mockito.when(keys.clients()).thenReturn(List.of(org.mockito.Mockito.mock(com.surprising.wallet.common.signing.MpcClient.class), org.mockito.Mockito.mock(com.surprising.wallet.common.signing.MpcClient.class), org.mockito.Mockito.mock(com.surprising.wallet.common.signing.MpcClient.class)));
             var overview = new WalletConfigOverviewService(settings, profiles, tokens, assets, rpc, audits,
                     keys, "test", runtime);
             for (String task : List.of("scan", "withdraw", "collection", "transfer")) {

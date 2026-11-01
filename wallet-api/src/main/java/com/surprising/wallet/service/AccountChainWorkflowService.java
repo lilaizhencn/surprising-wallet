@@ -99,8 +99,9 @@ public class AccountChainWorkflowService {
      * Monero 专用工作流：扫描 -> 提现 -> 确认提现 -> 归集 -> 确认归集。
      */
     public void moneroWorkflow() {
+        depositWorkflow.confirmMoneroObserved();
+        moneroTransactionService.recoverObserved();
         AccountChainProfile profile = chainProfileRepository.findAccountByChain("XMR")
-                .filter(candidate -> Boolean.TRUE.equals(candidate.getEnabled()))
                 .orElse(null);
         if (profile == null) {
             return;
@@ -146,10 +147,112 @@ public class AccountChainWorkflowService {
     private void processWithdrawals(AccountChainProfile profile) {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             withdrawalOrderRepository.markStaleSigningUnknown(profile.getChain(), Instant.now().minus(SIGNING_STALE_TIMEOUT));
-            withdrawalOrderRepository.recoverUnsignedEvm(profile.getChain());
             for (var pending : withdrawalOrderRepository.listByStatus(profile.getChain(),"BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
-                try { evmTransactionService.recover(new EvmSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),EvmSubmissionService.Kind.WITHDRAWAL),profile.getChain()); }
+                try {
+                    var operation = new EvmSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),EvmSubmissionService.Kind.WITHDRAWAL);
+                    if (!evmTransactionService.recover(operation,profile.getChain())) evmTransactionService.releaseUnsigned(operation,profile.getChain());
+                }
                 catch (RuntimeException error) { log.warn("EVM withdrawal recovery pending: {}",pending.getOrderNo()); }
+            }
+        }
+        if ("TRON".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("TRON",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:withdrawalOrderRepository.listByStatus("TRON","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new TronSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),TronSubmissionService.Kind.WITHDRAWAL);
+                    if(!tronWorkflow.recover(operation)) tronWorkflow.releaseUnsigned(operation);
+                } catch(Exception error) {log.warn("TRON withdrawal recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("XRP".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("XRP",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:withdrawalOrderRepository.listByStatus("XRP","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new XrpSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),XrpSubmissionService.Kind.WITHDRAWAL);
+                    if(!xrpTransactionService.recover(operation)) xrpTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("XRPL withdrawal recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("HYPERCORE".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("HYPERCORE",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:withdrawalOrderRepository.listByStatus("HYPERCORE","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new HyperCoreSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),HyperCoreSubmissionService.Kind.WITHDRAWAL);
+                    if(!hyperCoreTransactionService.recover(operation)) hyperCoreTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("HyperCore withdrawal recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("SOLANA".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("SOLANA",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:withdrawalOrderRepository.listByStatus("SOLANA","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new SolanaSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),SolanaSubmissionService.Kind.WITHDRAWAL);
+                    if(!solanaTransactionService.recover(operation)) solanaTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("Solana withdrawal recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("APTOS".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("APTOS",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:withdrawalOrderRepository.listByStatus("APTOS","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new AptosSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),AptosSubmissionService.Kind.WITHDRAWAL);
+                    if(!aptosTransactionService.recover(operation)) aptosTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("Aptos withdrawal recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+
+        if ("SUI".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("SUI",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : withdrawalOrderRepository.listByStatus("SUI","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new SuiSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),SuiSubmissionService.Kind.WITHDRAWAL);
+                    if (!suiTransactionService.recover(operation)) suiTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("Sui recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("NEAR".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("NEAR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : withdrawalOrderRepository.listByStatus("NEAR","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new NearSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),NearSubmissionService.Kind.WITHDRAWAL);
+                    if (!nearTransactionService.recover(operation)) nearTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("NEAR recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("DOT".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("DOT",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : withdrawalOrderRepository.listByStatus("DOT","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new PolkadotSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),PolkadotSubmissionService.Kind.WITHDRAWAL);
+                    if (!polkadotTransactionService.recover(operation)) polkadotTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("NEAR recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("ADA".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("ADA",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : withdrawalOrderRepository.listByStatus("ADA","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new CardanoSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),CardanoSubmissionService.Kind.WITHDRAWAL);
+                    if (!cardanoTransactionService.recover(operation)) cardanoTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("Cardano recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("TON".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("TON",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : withdrawalOrderRepository.listByStatus("TON","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new TonSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),TonSubmissionService.Kind.WITHDRAWAL);
+                    if (!tonTransactionService.recover(operation)) tonTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("TON recovery pending: {}",pending.getOrderNo());}
+            }
+        }
+        if ("XMR".equals(profile.getChain())) {
+            withdrawalOrderRepository.markStaleSigningUnknown("XMR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:withdrawalOrderRepository.listByStatus("XMR","BROADCAST_UNKgetOrderNo()WN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new MoneroSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),MoneroSubmissionService.Kind.WITHDRAWAL);
+                    if(!moneroTransactionService.recover(operation))moneroTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error){log.warn("Monero original payment recovery pending: {}",pending.getOrderNo());}
             }
         }
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
@@ -186,10 +289,111 @@ public class AccountChainWorkflowService {
     private void processCollections(AccountChainProfile profile) {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             collectionRecordRepository.markStaleSigningUnknown(profile.getChain(),Instant.now().minus(SIGNING_STALE_TIMEOUT));
-            collectionRecordRepository.recoverUnsignedEvm(profile.getChain());
             for (var pending : collectionRecordRepository.listByStatus(profile.getChain(),"BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
-                try { evmTransactionService.recover(new EvmSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),EvmSubmissionService.Kind.COLLECTION),profile.getChain()); }
+                try {
+                    var operation = new EvmSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),EvmSubmissionService.Kind.COLLECTION);
+                    if (!evmTransactionService.recover(operation,profile.getChain())) evmTransactionService.releaseUnsigned(operation,profile.getChain());
+                }
                 catch (RuntimeException error) { log.warn("EVM collection recovery pending: {}",pending.getCollectionNo()); }
+            }
+        }
+        if ("TRON".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("TRON",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:collectionRecordRepository.listByStatus("TRON","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new TronSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),TronSubmissionService.Kind.COLLECTION);
+                    if(!tronWorkflow.recover(operation)) tronWorkflow.releaseUnsigned(operation);
+                } catch(Exception error) {log.warn("TRON collection recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("XRP".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("XRP",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:collectionRecordRepository.listByStatus("XRP","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new XrpSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),XrpSubmissionService.Kind.COLLECTION);
+                    if(!xrpTransactionService.recover(operation)) xrpTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("XRPL collection recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("HYPERCORE".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("HYPERCORE",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:collectionRecordRepository.listByStatus("HYPERCORE","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new HyperCoreSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),HyperCoreSubmissionService.Kind.COLLECTION);
+                    if(!hyperCoreTransactionService.recover(operation)) hyperCoreTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("HyperCore collection recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("SOLANA".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("SOLANA",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:collectionRecordRepository.listByStatus("SOLANA","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new SolanaSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),SolanaSubmissionService.Kind.COLLECTION);
+                    if(!solanaTransactionService.recover(operation)) solanaTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("Solana collection recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("APTOS".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("APTOS",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:collectionRecordRepository.listByStatus("APTOS","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new AptosSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),AptosSubmissionService.Kind.COLLECTION);
+                    if(!aptosTransactionService.recover(operation)) aptosTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error) {log.warn("Aptos collection recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("SUI".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("SUI",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : collectionRecordRepository.listByStatus("SUI","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new SuiSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),SuiSubmissionService.Kind.COLLECTION);
+                    if (!suiTransactionService.recover(operation)) suiTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("Sui recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("NEAR".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("NEAR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : collectionRecordRepository.listByStatus("NEAR","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new NearSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),NearSubmissionService.Kind.COLLECTION);
+                    if (!nearTransactionService.recover(operation)) nearTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("NEAR recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("DOT".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("DOT",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : collectionRecordRepository.listByStatus("DOT","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new PolkadotSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),PolkadotSubmissionService.Kind.COLLECTION);
+                    if (!polkadotTransactionService.recover(operation)) polkadotTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("NEAR recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("ADA".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("ADA",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : collectionRecordRepository.listByStatus("ADA","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new CardanoSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),CardanoSubmissionService.Kind.COLLECTION);
+                    if (!cardanoTransactionService.recover(operation)) cardanoTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("Cardano collection recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("TON".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("TON",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for (var pending : collectionRecordRepository.listByStatus("TON","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
+                try {
+                    var operation = new TonSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),TonSubmissionService.Kind.COLLECTION);
+                    if (!tonTransactionService.recover(operation)) tonTransactionService.releaseUnsigned(operation);
+                } catch (RuntimeException error) {log.warn("TON recovery pending: {}",pending.getCollectionNo());}
+            }
+        }
+        if ("XMR".equals(profile.getChain())) {
+            collectionRecordRepository.markStaleSigningUnknown("XMR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
+            for(var pending:collectionRecordRepository.listByStatus("XMR","BROADCAST_UNKgetCollectionNo()WN",CONFIRM_LIMIT)) {
+                try {
+                    var operation=new MoneroSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),MoneroSubmissionService.Kind.COLLECTION);
+                    if(!moneroTransactionService.recover(operation))moneroTransactionService.releaseUnsigned(operation);
+                } catch(RuntimeException error){log.warn("Monero original payment recovery pending: {}",pending.getCollectionNo());}
             }
         }
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
@@ -205,14 +409,7 @@ public class AccountChainWorkflowService {
             try {
                 processCollection(profile, record);
             } catch (Exception e) {
-                collectionRecordRepository.updateStatus(
-                        record.getTenantId(),
-                        record.getChain(),
-                        record.getCollectionNo(),
-                        "BROADCAST_UNKNOWN",
-                        null,
-                        e.getMessage(),
-                        null);
+                collectionRecordRepository.markSigningUnknown(record.getTenantId(),record.getChain(),record.getCollectionNo(),e.getClass().getSimpleName());
                 log.warn("account-chain collection failed: chain={} collectionNo={} error={}",
                         record.getChain(), record.getCollectionNo(), e.getMessage(), e);
             }
@@ -231,8 +428,8 @@ public class AccountChainWorkflowService {
     private void processWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         ChainAddressRecord from = assets.requireAddress(tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
-        int claimed = "evm".equalsIgnoreCase(profile.getFamily())
-                ? withdrawalClaimService.claimEvm(tenantId,order.getChain(),order.getOrderNo(),from.getAddress())
+        int claimed = ("evm".equalsIgnoreCase(profile.getFamily()) || "TRON".equals(profile.getChain()) || "XRP".equals(profile.getChain()) || "HYPERCORE".equals(profile.getChain()) || "SOLANA".equals(profile.getChain()) || "APTOS".equals(profile.getChain()) || "TON".equals(profile.getChain()) || "SUI".equals(profile.getChain()) || "NEAR".equals(profile.getChain()) || "DOT".equals(profile.getChain()) || "ADA".equals(profile.getChain()) || "XMR".equals(profile.getChain()))
+                ? withdrawalClaimService.claimDurable(tenantId,order.getChain(),order.getOrderNo(),from.getAddress())
                 : withdrawalClaimService.claim(tenantId,order.getChain(),order.getOrderNo(),from.getAddress());
         if (claimed != 1) {
             return;
@@ -242,6 +439,7 @@ public class AccountChainWorkflowService {
             if (txHash == null || txHash.isBlank()) {
                 throw new IllegalStateException("withdrawal broadcast returned empty tx hash");
             }
+            if ("XMR".equals(profile.getChain())) return; // Native submission owns the durable original SENT transition.
             if (withdrawalOrderRepository.markSent(tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), txHash) != 1) {
                 throw new IllegalStateException("withdrawal state changed before SENT: " + order.getOrderNo());
             }
@@ -262,69 +460,24 @@ public class AccountChainWorkflowService {
             return evmTransactionService.sendToken(new EvmSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),EvmSubmissionService.Kind.WITHDRAWAL), chain, from, token, order.getToAddress(), order.getAmount());
         }
         return switch (chain) {
-            case "SOLANA" -> {
-                if (assets.isNative(profile, order.getAssetSymbol())) {
-                    yield solanaTransactionService.sendNative(
-                            from, order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
-                }
-                TokenDefinition token = assets.requireToken(profile, order.getAssetSymbol());
-                yield solanaTransactionService.sendTokenAmount(
-                        from, token.getContractAddress(), order.getToAddress(), order.getAmount(), token.getDecimals());
-            }
-            case "APTOS" -> assets.isNative(profile, order.getAssetSymbol())
-                    ? aptosTransactionService.sendNative(from, order.getToAddress(),
-                    assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())))
-                    : aptosTransactionService.sendToken(from, assets.requireToken(profile, order.getAssetSymbol()),
-                    order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
-            case "SUI" -> assets.isNative(profile, order.getAssetSymbol())
-                    ? suiTransactionService.sendNative(from, order.getToAddress(),
-                    assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())))
-                    : suiTransactionService.sendCoin(from, assets.requireToken(profile, order.getAssetSymbol()).getContractAddress(),
-                    order.getToAddress(), assets.toAtomicLong(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
-            case "TON" -> assets.isNative(profile, order.getAssetSymbol())
-                    ? broadcastTonNative(profile, order, from)
-                    : broadcastTonJetton(order, from, assets.requireToken(profile, order.getAssetSymbol()));
+            case "SOLANA" -> solanaTransactionService.send(new SolanaSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),SolanaSubmissionService.Kind.WITHDRAWAL),from);
+            case "APTOS" -> aptosTransactionService.send(new AptosSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),AptosSubmissionService.Kind.WITHDRAWAL),from);
+            case "SUI" -> suiTransactionService.send(new SuiSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),SuiSubmissionService.Kind.WITHDRAWAL),from);
+            case "TON" -> tonTransactionService.send(new TonSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),TonSubmissionService.Kind.WITHDRAWAL),from);
             case "XRP" -> assets.isNative(profile, order.getAssetSymbol())
-                    ? xrpTransactionService.sendNative(from, order.getToAddress(), order.getAmount())
+                    ? xrpTransactionService.sendNative(new XrpSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),XrpSubmissionService.Kind.WITHDRAWAL),from, order.getToAddress(), order.getAmount())
                     : xrpTransactionService.sendIssuedCurrency(
-                    from, assets.requireToken(profile, order.getAssetSymbol()), order.getToAddress(), order.getAmount());
-            case "ADA" -> {
-                if (assets.isNative(profile, order.getAssetSymbol())) {
-                    yield cardanoTransactionService.sendNative(from, order.getToAddress(),
-                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
-                }
-                yield cardanoTransactionService.sendToken(from, assets.requireToken(profile, order.getAssetSymbol()),
-                        order.getToAddress(), order.getAmount());
-            }
-            case "DOT" -> {
-                if (assets.isNative(profile, order.getAssetSymbol())) {
-                    yield polkadotTransactionService.sendNative(from, order.getToAddress(),
-                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
-                }
-                yield polkadotTransactionService.sendAsset(from, assets.requireToken(profile, order.getAssetSymbol()),
-                        order.getToAddress(), order.getAmount());
-            }
+                    new XrpSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),XrpSubmissionService.Kind.WITHDRAWAL),from, assets.requireToken(profile, order.getAssetSymbol()), order.getToAddress(), order.getAmount());
+            case "ADA" -> cardanoTransactionService.send(new CardanoSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),CardanoSubmissionService.Kind.WITHDRAWAL),from);
+            case "DOT" -> polkadotTransactionService.send(new PolkadotSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),PolkadotSubmissionService.Kind.WITHDRAWAL),from);
             case "XMR" -> {
                 if (!assets.isNative(profile, order.getAssetSymbol())) {
                     throw new IllegalStateException("Monero tokens are not supported");
                 }
-                yield moneroTransactionService.sendNative(profile, from, order.getToAddress(), order.getAmount());
+                yield moneroTransactionService.send(new MoneroSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),MoneroSubmissionService.Kind.WITHDRAWAL),from);
             }
-            case "NEAR" -> {
-                if (assets.isNative(profile, order.getAssetSymbol())) {
-                    yield nearTransactionService.sendNative(from, order.getToAddress(),
-                            assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())));
-                }
-                yield nearTransactionService.sendToken(from, assets.requireToken(profile, order.getAssetSymbol()),
-                        order.getToAddress(), order.getAmount());
-            }
-            case "HYPERCORE" -> {
-                if (assets.isNative(profile, order.getAssetSymbol())) {
-                    yield hyperCoreTransactionService.sendUsd(profile, from, order.getToAddress(), order.getAmount());
-                }
-                yield hyperCoreTransactionService.sendSpot(profile, from, assets.requireToken(profile, order.getAssetSymbol()),
-                        order.getToAddress(), order.getAmount());
-            }
+            case "NEAR" -> nearTransactionService.send(new NearSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),NearSubmissionService.Kind.WITHDRAWAL),from);
+            case "HYPERCORE" -> hyperCoreTransactionService.send(new HyperCoreSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),HyperCoreSubmissionService.Kind.WITHDRAWAL),from);
             case "TRON" -> tronWorkflow.broadcast(profile, order, from);
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
@@ -343,16 +496,12 @@ public class AccountChainWorkflowService {
             case "SOLANA" -> solanaTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
             case "APTOS" -> aptosTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
             case "SUI" -> suiTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
-            case "TON" -> confirmTonWithdrawal(order);
+            case "TON" -> tonTransactionService.confirmWithdrawal(tenantId, order.getOrderNo());
             case "XRP" -> xrpTransactionService.confirmWithdrawal(tenantId, profile, order.getOrderNo());
-            case "ADA" -> cardanoTransactionService.confirmWithdrawal(tenantId, profile,
-                    order.getOrderNo(), order.getTxHash());
-            case "DOT" -> polkadotTransactionService.confirmWithdrawal(tenantId, profile,
-                    order.getOrderNo(), order.getTxHash(), order.getAssetSymbol());
-            case "XMR" -> moneroTransactionService.confirmWithdrawal(tenantId, profile,
-                    order.getOrderNo(), order.getTxHash(), order.getToAddress(), order.getAmount());
-            case "NEAR" -> nearTransactionService.confirmWithdrawal(tenantId,
-                    order.getOrderNo(), order.getTxHash(), order.getFromAddress());
+            case "ADA" -> cardanoTransactionService.confirmWithdrawal(tenantId,order.getOrderNo());
+            case "DOT" -> polkadotTransactionService.confirmWithdrawal(tenantId,order.getOrderNo());
+            case "XMR" -> moneroTransactionService.confirmWithdrawal(tenantId,order.getOrderNo());
+            case "NEAR" -> nearTransactionService.confirmWithdrawal(tenantId,order.getOrderNo());
             case "HYPERCORE" -> hyperCoreTransactionService.confirmWithdrawal(tenantId,
                     order.getOrderNo(), order.getTxHash());
             case "TRON" -> tronWorkflow.confirmWithdrawal(profile, order);
@@ -404,7 +553,7 @@ public class AccountChainWorkflowService {
         }
         ChainAddressRecord from = assets.requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            if (collectionRecordRepository.claimSigningEvm(record.getTenantId(), record.getChain(), record.getCollectionNo()) != 1) {
+            if (collectionRecordRepository.claimSigningDurable(record.getTenantId(), record.getChain(), record.getCollectionNo()) != 1) {
                 return;
             }
             String txHash = assets.isNative(profile, record.getAssetSymbol())
@@ -419,48 +568,10 @@ public class AccountChainWorkflowService {
             return;
         }
         switch (profile.getChain()) {
-            case "SOLANA" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    solanaTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                } else {
-                    TokenDefinition token = assets.requireToken(profile, record.getAssetSymbol());
-                    solanaTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            token.getContractAddress(), record.getToAddress(), record.getAmount());
-                }
-            }
-            case "APTOS" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    aptosTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                } else {
-                    aptosTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(profile, record.getAssetSymbol()).getContractAddress(),
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                }
-            }
-            case "SUI" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    suiTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                } else {
-                    suiTransactionService.collectCoin(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(profile, record.getAssetSymbol()).getContractAddress(),
-                            record.getToAddress(), assets.toAtomicDecimal(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                }
-            }
-            case "TON" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    tonTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), record.getAmount(),
-                            "collection:" + record.getCollectionNo());
-                } else {
-                    TokenDefinition token = assets.requireToken(profile, record.getAssetSymbol());
-                    tonTransactionService.collectJetton(record.getTenantId(), record.getCollectionNo(), from,
-                            token.getContractAddress(), record.getToAddress(), record.getAmount(),
-                            "collection:" + record.getCollectionNo());
-                }
-            }
+            case "SOLANA" -> solanaTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "APTOS" -> aptosTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "SUI" -> suiTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "TON" -> tonTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
             case "XRP" -> {
                 if (assets.isNative(profile, record.getAssetSymbol())) {
                     xrpTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
@@ -472,57 +583,11 @@ public class AccountChainWorkflowService {
                             record.getToAddress(), record.getAmount());
                 }
             }
-            case "ADA" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    cardanoTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                } else {
-                    cardanoTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(profile, record.getAssetSymbol()),
-                            record.getToAddress(), record.getAmount());
-                }
-            }
-            case "DOT" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    polkadotTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                } else {
-                    polkadotTransactionService.collectAsset(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(profile, record.getAssetSymbol()),
-                            record.getToAddress(), record.getAmount());
-                }
-            }
-            case "XMR" -> moneroTransactionService.collectNative(
-                    record.getTenantId(), profile, record.getCollectionNo(), from,
-                    record.getToAddress(), record.getAmount());
-            case "NEAR" -> {
-                if (assets.isNative(profile, record.getAssetSymbol())) {
-                    nearTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
-                            record.getToAddress(), assets.toAtomicBigInteger(record.getAmount(), assets.assetDecimals(profile, record.getAssetSymbol())));
-                } else {
-                    nearTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
-                            assets.requireToken(profile, record.getAssetSymbol()),
-                            record.getToAddress(), record.getAmount());
-                }
-            }
-            case "HYPERCORE" -> {
-                if (collectionRecordRepository.claimSigning(record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
-                    return;
-                }
-                String actionId = assets.isNative(profile, record.getAssetSymbol())
-                        ? hyperCoreTransactionService.sendUsd(profile, from, record.getToAddress(), record.getAmount())
-                        : hyperCoreTransactionService.sendSpot(profile, from,
-                        assets.requireToken(profile, record.getAssetSymbol()),
-                        record.getToAddress(), record.getAmount());
-                collectionRecordRepository.updateStatus(
-                        record.getTenantId(),
-                        record.getChain(),
-                        record.getCollectionNo(),
-                        "SENT",
-                        actionId,
-                        null,
-                        null);
-            }
+            case "ADA" -> cardanoTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "DOT" -> polkadotTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "XMR" -> moneroTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "NEAR" -> nearTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
+            case "HYPERCORE" -> hyperCoreTransactionService.collect(record.getTenantId(),record.getCollectionNo(),from);
             case "TRON" -> tronWorkflow.processCollection(profile, record, from);
             default -> {
             }
@@ -544,21 +609,13 @@ public class AccountChainWorkflowService {
                     record.getTenantId(), record.getCollectionNo());
             case "SUI" -> suiTransactionService.confirmCollection(
                     record.getTenantId(), record.getCollectionNo());
-            case "TON" -> {
-                ChainAddressRecord from = assets.requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
-                tonTransactionService.confirmCollection(
-                        record.getTenantId(), record.getCollectionNo(), tonOwnerAddress(from));
-            }
+            case "TON" -> tonTransactionService.confirmCollection(record.getTenantId(),record.getCollectionNo());
             case "XRP" -> xrpTransactionService.confirmCollection(
                     record.getTenantId(), profile, record.getCollectionNo());
-            case "ADA" -> cardanoTransactionService.confirmCollection(
-                    record.getTenantId(), profile, record.getCollectionNo());
-            case "DOT" -> polkadotTransactionService.confirmCollection(
-                    record.getTenantId(), profile, record.getCollectionNo(), record.getAssetSymbol());
-            case "XMR" -> moneroTransactionService.confirmCollection(
-                    record.getTenantId(), profile, record.getCollectionNo());
-            case "NEAR" -> nearTransactionService.confirmCollection(
-                    record.getTenantId(), profile, record.getCollectionNo());
+            case "ADA" -> cardanoTransactionService.confirmCollection(record.getTenantId(),record.getCollectionNo());
+            case "DOT" -> polkadotTransactionService.confirmCollection(record.getTenantId(),record.getCollectionNo());
+            case "XMR" -> moneroTransactionService.confirmCollection(record.getTenantId(),record.getCollectionNo());
+            case "NEAR" -> nearTransactionService.confirmCollection(record.getTenantId(),record.getCollectionNo());
             case "HYPERCORE" -> hyperCoreTransactionService.confirmCollection(
                     record.getTenantId(), record.getCollectionNo(), record.getTxHash());
             case "TRON" -> tronWorkflow.confirmCollection(profile, record);
@@ -566,46 +623,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-    private String broadcastTonNative(AccountChainProfile profile, WithdrawalOrderRecord order, ChainAddressRecord from) {
-        TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareNative(
-                from, order.getToAddress(), assets.toAtomicBigInteger(order.getAmount(), assets.assetDecimals(profile, order.getAssetSymbol())),
-                "withdraw:" + order.getOrderNo());
-        return tonTransactionService.broadcastAndRecord(prepared, from.getAddress(), order.getToAddress(),
-                order.getAssetSymbol(), null, order.getAmount());
-    }
-    private String broadcastTonJetton(WithdrawalOrderRecord order, ChainAddressRecord from, TokenDefinition token) {
-        ChainAddressRecord jettonWallet = chainAddressRepository.find(
-                order.getChain(),
-                token.getSymbol(),
-                from.getUserId(),
-                from.getBiz(),
-                from.getAddressIndex(),
-                from.getWalletRole())
-                .orElseThrow(() -> new IllegalStateException("missing materialized TON Jetton wallet for "
-                        + token.getSymbol() + " owner=" + from.getAddress()));
-        TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareJetton(
-                jettonWallet, jettonWallet.getAddress(), order.getToAddress(),
-                assets.toAtomicBigInteger(order.getAmount(), token.getDecimals()),
-                jettonWallet.getOwnerAddress(), "withdraw:" + order.getOrderNo());
-        return tonTransactionService.broadcastAndRecord(prepared, jettonWallet.getOwnerAddress(),
-                order.getToAddress(), token.getSymbol(), token.getContractAddress(), order.getAmount());
-    }
-
-    private void confirmTonWithdrawal(WithdrawalOrderRecord order) {
-        if (order.getTxHash() == null || order.getTxHash().isBlank()) {
-            return;
-        }
-        ChainAddressRecord from = assets.requireAddress(order.getTenantId(), order.getChain(),
-                order.getAssetSymbol(), order.getFromAddress());
-        if (tonTransactionService.confirmSentMessage(order.getTxHash(), tonOwnerAddress(from))) {
-            settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash());
-        }
-    }
-    private static String tonOwnerAddress(ChainAddressRecord address) {
-        return address.getOwnerAddress() == null || address.getOwnerAddress().isBlank()
-                ? address.getAddress() : address.getOwnerAddress();
-    }
-
     private String collectionNo(CollectionCandidateRecord candidate, BigDecimal amount) {
         String basis = candidate.getChain() + "|" + candidate.getAssetSymbol() + "|"
                 + candidate.getAccountId() + "|" + candidate.getAddress() + "|"

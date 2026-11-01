@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
-const solc = require(path.join(root, 'evm-fork/node_modules/solc'));
-const sourcePath = path.join(root, 'evm-fork/contracts/MockERC20.sol');
+const solc = require(path.join(root, 'infra/evm-fork/node_modules/solc'));
+const sourcePath = path.join(root, 'infra/evm-fork/contracts/MockERC20.sol');
 const outputPath = process.argv[2];
 
 if (!outputPath) {

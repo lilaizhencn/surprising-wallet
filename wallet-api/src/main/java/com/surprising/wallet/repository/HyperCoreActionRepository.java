@@ -15,17 +15,34 @@ public class HyperCoreActionRepository {
     }
 
     /** 创建操作记录。 */
-    public void create(String actionId, String actionType, String chain, String assetSymbol,
+    public void create(java.util.UUID tenantId, java.util.UUID requestId, String actionId, String actionType, String chain, String assetSymbol,
                        String fromAddress, String toAddress, java.math.BigDecimal amount,
                        long nonce, String requestPayload, java.sql.Timestamp now) {
         jdbc.update("""
-                insert into hypercore_action_record(action_id, action_type, chain, asset_symbol,
+                insert into hypercore_action_record(tenant_id, request_id, action_id, action_type, chain, asset_symbol,
                                                     from_address, to_address, amount, nonce,
                                                     request_payload, status, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PREPARED', ?, ?)
                 on conflict (action_id) do nothing
-                """, actionId, actionType, chain, assetSymbol, fromAddress, toAddress,
+                """, tenantId, requestId, actionId, actionType, chain, assetSymbol, fromAddress, toAddress,
                 amount, nonce, requestPayload, now, now);
+    }
+
+    public record Action(java.util.UUID tenantId,java.util.UUID requestId,String id,String type,String sender,String recipient,String symbol,java.math.BigDecimal amount,
+                         long nonce,String raw,String status,String response,String receipt) { }
+    public java.util.Optional<Action> find(String id) {
+        return jdbc.query("select * from hypercore_action_record where action_id=?",(rs,n)->new Action(rs.getObject("tenant_id",java.util.UUID.class),rs.getObject("request_id",java.util.UUID.class),rs.getString("action_id"),
+                rs.getString("action_type"),rs.getString("from_address"),rs.getString("to_address"),rs.getString("asset_symbol"),
+                rs.getBigDecimal("amount"),rs.getLong("nonce"),rs.getString("request_payload"),rs.getString("status"),rs.getString("response_payload"),rs.getString("execution_receipt")),id).stream().findFirst();
+    }
+
+    /** Only the service may pass a verified original ledger event, under the owning business lock. */
+    public int recordReceipt(java.util.UUID tenantId,java.util.UUID requestId,String actionId,String receipt) {
+        return jdbc.update("""
+                update hypercore_action_record set status='ACCEPTED',execution_receipt=cast(? as jsonb),
+                       error_message=null,updated_at=now()
+                 where tenant_id=? and request_id=? and action_id=? and execution_receipt is null
+                """,receipt,tenantId,requestId,actionId);
     }
 
     /** 标记操作已接受。 */
@@ -34,16 +51,16 @@ public class HyperCoreActionRepository {
                 update hypercore_action_record
                    set status = 'ACCEPTED', response_payload = ?,
                        error_message = null, updated_at = ?
-                 where action_id = ?
+                 where action_id = ? and status <> 'ACCEPTED'
                 """, responsePayload, now, actionId);
     }
 
     /** 标记操作失败。 */
-    public void markFailed(String actionId, String errorMessage, java.sql.Timestamp now) {
+    public void markUnknown(String actionId, String errorMessage, java.sql.Timestamp now) {
         jdbc.update("""
                 update hypercore_action_record
-                   set status = 'FAILED', error_message = ?, updated_at = ?
-                 where action_id = ?
+                   set status = 'UNKNOWN', error_message = ?, updated_at = ?
+                 where action_id = ? and status <> 'ACCEPTED'
                 """, errorMessage, now, actionId);
     }
 

@@ -28,6 +28,7 @@ import java.util.UUID;
 public class ChainAddressRecord {
     private Long id;
     private UUID tenantId;
+    private UUID mpcKeyId;
     private String chain;
     private String assetSymbol;
     private String accountId;

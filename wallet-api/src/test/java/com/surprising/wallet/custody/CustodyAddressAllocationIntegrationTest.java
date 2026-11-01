@@ -37,7 +37,7 @@ class CustodyAddressAllocationIntegrationTest {
     private CustodyPrincipal principal;
     private CustodyAddressService service;
     private Evm7702AccountRepository projections;
-    private BlockchainRuntimeService runtime;
+    private com.surprising.wallet.testutil.MpcSigningTestSupport mpc;
     private com.surprising.wallet.common.chain.AccountChainProfile profile;
 
     @Configuration(proxyBeanMethods = false) @EnableTransactionManagement
@@ -52,30 +52,23 @@ class CustodyAddressAllocationIntegrationTest {
         principal = new CustodyPrincipal(CustodyPrincipal.ActorType.API_KEY, UUID.randomUUID(), tenant,
                 "allocation-test", "API_KEY", Set.of("addresses:read", "addresses:write"));
         var chainAddresses = new ChainAddressRepository(jdbc);
-        runtime = mock(BlockchainRuntimeService.class);
+        mpc = new com.surprising.wallet.testutil.MpcSigningTestSupport(jdbc);
         profile = com.surprising.wallet.common.chain.AccountChainProfile.builder()
                 .chain("ETH").network("devtest").family("evm").nativeSymbol("ETH").enabled(true).build();
-        when(runtime.requireProfile("ETH")).thenReturn(profile);
-        when(runtime.generateDepositAddressAtIndex(same(profile), anyLong(), anyInt(), anyLong())).thenAnswer(call -> {
-            long user = call.getArgument(1), child = call.getArgument(3);
-            int biz = call.getArgument(2);
-            String address = String.format("0x%040x", user * 100_000L + child);
-            chainAddresses.upsert(ChainAddressRecord.builder().chain("ETH").assetSymbol("ETH")
-                    .accountId(address).userId(user).biz(biz).addressIndex(child).address(address)
-                    .ownerAddress(address).derivationPath("test-path").walletRole("DEPOSIT").enabled(true).build());
-            return chainAddresses.find("ETH", "ETH", user, biz, child, "DEPOSIT").orElseThrow();
-        });
+        var profiles = mock(ChainProfileRepository.class);
+        when(profiles.findAccountByChain("ETH")).thenReturn(Optional.of(profile));
         projections = mock(Evm7702AccountRepository.class);
         var chains = mock(CustodyTenantChainService.class);
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
-        context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
+        context.registerBean(PlatformTransactionManager.class, () -> mpc.manager);
         context.registerBean(CustodyAddressService.class, () -> new CustodyAddressService(
-                new CustodyTenantTableRepository(jdbc), chainAddresses, runtime, chains,
+                new CustodyTenantTableRepository(jdbc), chainAddresses, profiles, chains,
                 new CustodyJacksonConfiguration().custodyObjectMapper(), projections,
                 new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc),
                 new CustodyDerivationSubjectRepository(jdbc), new CustodyAuditRepository(jdbc),
-                new LedgerBalanceRepository(jdbc)));
+                new LedgerBalanceRepository(jdbc), mpc.signing, mpc.nodes,
+                com.surprising.wallet.testutil.CustodyTestSupport.cardanoAnchors(jdbc),com.surprising.wallet.testutil.CustodyTestSupport.moneroAnchors(jdbc), mpc.manager));
         context.refresh();
         service = context.getBean(CustodyAddressService.class);
         assertTrue(AopUtils.isAopProxy(service));
@@ -103,15 +96,19 @@ class CustodyAddressAllocationIntegrationTest {
         assertEquals(1, rows("chain_address"));
         assertEquals(1, rows("custody_derivation_subject"));
         assertEquals(1, rows("custody_audit_log"));
-        verify(runtime, times(1)).generateDepositAddressAtIndex(same(profile), anyLong(), anyInt(), eq(2L));
+        assertEquals(1, rows("wallet_mpc_key"));
+        assertEquals(1, rows("wallet_mpc_key_epoch"));
+        clearInvocations(mpc.signing, mpc.nodes);
+        service.create(principal, command(), "API", "127.0.0.1");
+        verifyNoInteractions(mpc.signing, mpc.nodes);
         verify(projections, times(1)).createProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
     }
 
-    @Test void projectionFailureRollsBackAllocationAndAllowsACleanRetry() {
+    @Test void projectionFailureRollsBackPublicationAndReusesCommittedKeyOnRetry() {
         doThrow(new IllegalStateException("projection unavailable")).when(projections)
                 .createProjection(eq(tenant), any(), eq("ETH"), eq("devtest"), anyString());
         assertThrows(IllegalStateException.class, () -> service.create(principal, command(), "API", "127.0.0.1"));
-        assertNoAllocation();
+        assertNoPublication();
         reset(projections);
         var created = service.create(principal, command(), "API", "127.0.0.1");
         assertNotNull(created.id());
@@ -124,7 +121,7 @@ class CustodyAddressAllocationIntegrationTest {
 
     @Test void auditFailureRollsBackCreationAndMetadataUpdate() {
         assertThrows(DataAccessException.class, () -> service.create(principal, command(), "API", "invalid-ip"));
-        assertNoAllocation();
+        assertNoPublication();
         var created = service.create(principal, command(), "API", "127.0.0.1");
         assertThrows(DataAccessException.class, () -> service.update(principal, created.id(),
                 new CustodyAddressService.UpdateAddressCommand("changed", Map.of("changed", true), "DISABLED"), "invalid-ip"));
@@ -135,10 +132,42 @@ class CustodyAddressAllocationIntegrationTest {
         assertEquals(1, rows("custody_audit_log"));
     }
 
-    private void assertNoAllocation() {
+    @Test void unavailableDkgRetainsCoordinatesWithoutPublishingAnAddress() {
+        doAnswer(call -> { throw new com.surprising.wallet.model.mpc.MpcPendingException(call.getArgument(1), "CREATING"); })
+                .when(mpc.signing).advanceKey(any(), any(), anyList());
+        var pending = assertThrows(com.surprising.wallet.model.mpc.MpcPendingException.class,
+                () -> service.create(principal, command(), "API", "127.0.0.1"));
+        assertNoPublication();
+        assertEquals(com.surprising.wallet.model.mpc.MpcKey.State.CREATING,
+                mpc.keys.find(tenant, pending.reference()).orElseThrow().state());
+    }
+
+    @Test void creationRejectsAnOuterTransactionBeforeAllocatingOrCallingNodes() {
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(mpc.manager);
+        assertThrows(IllegalStateException.class, () -> transaction.execute(status -> service.create(principal, command(), "API", "127.0.0.1")));
+        assertEquals(0, rows("custody_derivation_subject"));
+        assertEquals(0, rows("wallet_mpc_key"));
+        assertEquals(0, rows("chain_address"));
+        verifyNoInteractions(mpc.signing, mpc.nodes);
+    }
+
+    @Test void publishedAddressCannotBeReboundToAnotherKeyTenantOrAddress() {
+        var view = service.create(principal, command(), "API", "127.0.0.1");
+        long id = new CustodyAddressRepository(jdbc).require(tenant, view.id()).chainAddressId();
+        assertNotNull(new ChainAddressRepository(jdbc).findOwned(tenant, id).orElseThrow().getMpcKeyId());
+        assertThrows(DataAccessException.class, () -> jdbc.update("update chain_address set mpc_key_id=null where id=?", id));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update chain_address set tenant_id=? where id=?", UUID.randomUUID(), id));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update chain_address set address='other-address' where id=?", id));
+        assertEquals(1, jdbc.update("update chain_address set enabled=false where id=?", id));
+        assertFalse(new ChainAddressRepository(jdbc).findOwned(tenant, id).orElseThrow().getEnabled());
+    }
+
+    private void assertNoPublication() {
         assertEquals(0, rows("custody_address"));
         assertEquals(0, rows("chain_address"));
-        assertEquals(0, rows("custody_derivation_subject"));
+        assertEquals(1, rows("custody_derivation_subject"));
+        assertEquals(1, rows("wallet_mpc_key"));
+        assertEquals(1, rows("wallet_mpc_key_epoch"));
         assertEquals(0, rows("custody_audit_log"));
     }
     private long rows(String table) {

@@ -1,6 +1,5 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
@@ -15,25 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 验证 {@code TonTestnetConnectivityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class TonTestnetConnectivityIntegrationTest {
-    /**
-     * 保存 {@code FALLBACK_TEST_SEED}，用于测试签名、认证或密钥相关逻辑。
-     */
-    private static final String FALLBACK_TEST_SEED =
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
     /**
-     * 验证 {@code tonCenterTestnetIsReachableAndFundingAddressCanBeDerived} 对应的测试场景，明确输入、预期结果和异常边界。
+     * 验证 {@code tonCenterTestnetIsReachable} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void tonCenterTestnetIsReachableAndFundingAddressCanBeDerived() {
+    void tonCenterTestnetIsReachable() {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.testnet.enabled"),
                 "set -Dton.testnet.enabled=true for TON testnet connectivity validation");
 
-        String seed = env("SW_ED25519_SEED", FALLBACK_TEST_SEED);
-        TonKeyService keys = new TonKeyService(WalletKeyTestFixture.provider(seed));
-        String address = keys.wallet(1_100_001L).getAddress().toString(true, true, false, true);
-        assertFalse(address.isBlank());
-        System.out.println("TON_TESTNET_FUNDING_ADDRESS=" + address);
 
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
                 profiles("TON"),

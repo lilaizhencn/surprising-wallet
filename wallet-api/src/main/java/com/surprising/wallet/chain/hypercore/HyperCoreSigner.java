@@ -3,12 +3,7 @@ package com.surprising.wallet.chain.hypercore;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
-import org.bitcoinj.crypto.ECKey;
-import org.web3j.crypto.ECKeyPair;
-import org.web3j.crypto.Sign;
 import org.web3j.crypto.StructuredDataEncoder;
-import org.web3j.utils.Numeric;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -16,7 +11,6 @@ import java.math.BigInteger;
 /**
  * 负责交易或消息签名，并保持签名材料和编码规则一致。
  */
-@Component
 public class HyperCoreSigner {
     static final String SIGNATURE_CHAIN_ID = "0x66eee";
     private static final String DOMAIN_NAME = "HyperliquidSignTransaction";
@@ -30,27 +24,13 @@ public class HyperCoreSigner {
     HyperCoreSigner(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
-    public ObjectNode signUsdSend(ObjectNode action, ECKey key, boolean mainnet) {
-        addCommonFields(action, mainnet);
-        return sign(action, key, "HyperliquidTransaction:UsdSend", usdSendTypes());
-    }
-    public ObjectNode signSpotSend(ObjectNode action, ECKey key, boolean mainnet) {
-        addCommonFields(action, mainnet);
-        return sign(action, key, "HyperliquidTransaction:SpotSend", spotSendTypes());
-    }
     byte[] hashUsdSend(ObjectNode action, boolean mainnet) {
         addCommonFields(action, mainnet);
         return hash(action, "HyperliquidTransaction:UsdSend", usdSendTypes());
     }
-    private ObjectNode sign(ObjectNode action, ECKey key, String primaryType, ArrayNode payloadTypes) {
-        byte[] hash = hash(action, primaryType, payloadTypes);
-        ECKeyPair keyPair = ECKeyPair.create(key.getPrivKey());
-        Sign.SignatureData signature = Sign.signMessage(hash, keyPair, false);
-        ObjectNode node = objectMapper.createObjectNode();
-        node.put("r", Numeric.toHexString(signature.getR()));
-        node.put("s", Numeric.toHexString(signature.getS()));
-        node.put("v", signature.getV()[0] & 0xFF);
-        return node;
+    byte[] hashSpotSend(ObjectNode action, boolean mainnet) {
+        addCommonFields(action, mainnet);
+        return hash(action, "HyperliquidTransaction:SpotSend", spotSendTypes());
     }
     private byte[] hash(ObjectNode action, String primaryType, ArrayNode payloadTypes) {
         try {

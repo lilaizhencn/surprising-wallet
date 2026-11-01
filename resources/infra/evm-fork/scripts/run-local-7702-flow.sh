@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 WALLET_7702_ROOT=$(git rev-parse --show-toplevel)
+if [[ "${1:-}" != --mpc-quorum ]]; then
+  : "${MPC_SIGNER_BIN:?set MPC_SIGNER_BIN to the built native wallet-mpc-signer}"
+  exec python3 "$WALLET_7702_ROOT/resources/infra/mpc-signer/tests/evm7702_business_test.py" \
+    "$MPC_SIGNER_BIN" bash "$WALLET_7702_ROOT/resources/infra/evm-fork/scripts/run-local-7702-flow.sh" --mpc-quorum
+fi
+: "${SW_TEST_MPC_DIRECTORY:?run the quorum fixture through evm7702_business_test.py}"
 source "$WALLET_7702_ROOT/resources/scripts/regtest/local-postgres.sh"
 WALLET_7702_BUILD=$(mktemp -d /tmp/surprising-wallet-7702-flow.XXXXXX)
 WALLET_7702_DB="surprising_wallet_test_7702_flow_$$"
@@ -71,4 +77,4 @@ mvn -B -ntp -f "$WALLET_7702_BUILD/pom.xml" -pl wallet-api -am test \
   -Devm.7702.production.enabled=true -Devm.7702.test.chain=ETH -Devm.7702.test.chain-id=31337 \
   -Devm.7702.collector="$WALLET_7702_COLLECTOR" -Devm.7702.delegate="$WALLET_7702_DELEGATE"
 
-printf 'EIP-7702 local production workflow passed; temporary PostgreSQL 18 database will be removed\n'
+printf 'EIP-7702 native MPC business quorum passed; temporary PostgreSQL 18 database will be removed\n'

@@ -1,40 +1,20 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.chain.WalletKeyTestFixture;
 import org.junit.jupiter.api.Test;
+import org.p2p.solanaj.core.Account;
+import org.p2p.solanaj.core.PublicKey;
+import static org.junit.jupiter.api.Assertions.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/**
- * 验证 {@code SolanaAddressGenerationTest} 覆盖的业务流程、边界条件和异常行为。
- */
+/** ATA derivation consumes a public owner; joint-key address publication is covered by custody tests. */
 class SolanaAddressGenerationTest {
-    /**
-     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
-     */
-    private static final String MASTER_SEED =
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-
-    /**
-     * 验证 {@code derivesStableBase58AddressesAndAssociatedTokenAccounts} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void derivesStableBase58AddressesAndAssociatedTokenAccounts() {
-        SolanaKeyService first = new SolanaKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
-        SolanaKeyService restarted = new SolanaKeyService(WalletKeyTestFixture.provider(MASTER_SEED));
-        String user0 = first.account(0).getPublicKeyBase58();
-        String user1 = first.account(1).getPublicKeyBase58();
-
-        assertEquals(user0, restarted.account(0).getPublicKeyBase58());
-        assertNotEquals(user0, user1);
-        assertTrue(user0.length() >= 32 && user0.length() <= 44);
-
-        SolanaAddressService addresses = new SolanaAddressService(first, null);
-        String usdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-        String ata = addresses.associatedTokenAddress(user0, usdcMint);
-        assertEquals(ata, addresses.associatedTokenAddress(user0, usdcMint));
-        assertNotEquals(user0, ata);
+    @Test void publicOwnerDerivesTheSameAtaAsTheIndependentSdk() throws Exception {
+        var owner=new Account().getPublicKey();
+        var mint=new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        var service=new SolanaAddressService();
+        var expected=PublicKey.findProgramAddress(java.util.List.of(owner.toByteArray(),
+                org.p2p.solanaj.programs.TokenProgram.PROGRAM_ID.toByteArray(),mint.toByteArray()),
+                org.p2p.solanaj.programs.AssociatedTokenProgram.PROGRAM_ID).getAddress().toBase58();
+        assertEquals(expected,service.associatedTokenAddress(owner.toBase58(),mint.toBase58()));
+        assertNotEquals(expected,service.associatedTokenAddress(new Account().getPublicKeyBase58(),mint.toBase58()));
     }
 }

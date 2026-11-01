@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 
 @Data
 @Builder
@@ -36,7 +37,9 @@ public class NearTransactionRecord {
     private String assetSymbol;
     private BigDecimal amount;
     private Long gasBurnt;
+    private BigInteger feeYocto;
     private Long blockHeight;
     private String status;
     private String rawPayload;
+    private String executionReceipt;
 }

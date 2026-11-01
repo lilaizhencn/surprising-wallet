@@ -5,16 +5,14 @@ import org.web3j.abi.datatypes.Address;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.generated.Bytes32;
 import org.web3j.abi.datatypes.generated.Uint256;
-import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Hash;
-import org.web3j.crypto.Sign;
 import org.web3j.utils.Numeric;
 
 import java.math.BigInteger;
 import java.util.List;
 
 /**
- * 负责交易或消息签名，并保持签名材料和编码规则一致。
+ * 仅计算固定 EIP-712 消息摘要；签名由独立 MPC 持有者完成。
  */
 public class Evm7702PayoutSigner {
     static final byte[] DOMAIN_TYPEHASH = hashUtf8(
@@ -55,17 +53,7 @@ public class Evm7702PayoutSigner {
         }
         return Hash.sha3(encoded);
     }
-    public byte[] sign(BigInteger chainId, Evm7702PayoutRequest request, Credentials authority) {
-        if (authority == null || !authority.getAddress().equalsIgnoreCase(request.authority())) {
-            throw new IllegalArgumentException("authority credentials do not match payout request");
-        }
-        Sign.SignatureData signature = Sign.signMessage(digest(chainId, request), authority.getEcKeyPair(), false);
-        byte[] encoded = new byte[65];
-        System.arraycopy(signature.getR(), 0, encoded, 0, 32);
-        System.arraycopy(signature.getS(), 0, encoded, 32, 32);
-        encoded[64] = signature.getV()[0];
-        return encoded;
-    }
+
     private static byte[] abiHash(List<Type> values) {
         return Hash.sha3(Numeric.hexStringToByteArray(FunctionEncoder.encodeConstructor(values)));
     }

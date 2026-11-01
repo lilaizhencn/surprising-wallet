@@ -25,7 +25,7 @@ class Finding:
 
 
 SERVICE_NAMES = {
-    "surprising-wallet-all.service": "钱包服务", "postgresql.service": "数据库服务",
+    "surprising-wallet.service": "钱包服务", "postgresql.service": "数据库服务",
     "nginx.service": "Nginx 网关", "wallet-certificate.timer": "证书续期定时器",
     "wallet-monitor.timer": "监控定时器", "wallet-monitor-summary.timer": "日报定时器",
     "logrotate.timer": "日志轮转定时器",
@@ -73,7 +73,7 @@ def format_summary(label, metrics, findings, now):
              "系统负载（1 分钟）：" + value("load_1m"),
              "连续运行：" + value("uptime_hours", " 小时"), "",
              "公网接口：" + interface("public_health") + "；本机接口：" + interface("local_health")]
-    for unit in ("surprising-wallet-all.service", "postgresql.service", "nginx.service"):
+    for unit in ("surprising-wallet.service", "postgresql.service", "nginx.service"):
         lines.append(SERVICE_NAMES[unit] + "：" + states.get(metrics.get("services", {}).get(unit), "未获取"))
     database = metrics.get("database")
     if database:
@@ -172,7 +172,7 @@ def transitions(state, findings, now, sender, label):
 
 
 def database_metrics():
-    queues = ["wallet_sign_first", "wallet_sign_second", "wallet_sign_done",
+    queues = ["wallet_mpc_sign", "wallet_sign_done",
               "wallet_withdraw", "wallet_deposit_event", "wallet_withdraw_event", "wallet_rbf"]
     live = " UNION ALL ".join(
         f"SELECT count(*) AS n, min(enqueued_at) AS oldest FROM pgmq.q_{q}" for q in queues)
@@ -294,7 +294,7 @@ def collect(state):
     check("resources", resources)
 
     def services():
-        units = ["surprising-wallet-all.service", "postgresql.service", "nginx.service",
+        units = ["surprising-wallet.service", "postgresql.service", "nginx.service",
                  "wallet-certificate.timer", "wallet-monitor.timer", "wallet-monitor-summary.timer", "logrotate.timer"]
         output = command(["systemctl", "show", *units, "-p", "Id", "-p", "ActiveState", "-p", "NRestarts", "-p", "MemoryCurrent"])
         metrics["services"] = {}
@@ -309,7 +309,7 @@ def collect(state):
             if count > restarts.get(unit, count):
                 findings.append(Finding("restart:" + unit, SERVICE_NAMES[unit] + "发生自动重启，请检查异常原因", 1))
             restarts[unit] = count
-            if unit == "surprising-wallet-all.service":
+            if unit == "surprising-wallet.service":
                 value = values.get("MemoryCurrent", "0")
                 if value.isdigit():
                     metrics["wallet_memory_mib"] = round(int(value) / 2**20)

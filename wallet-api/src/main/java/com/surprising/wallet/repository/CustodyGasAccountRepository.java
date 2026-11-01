@@ -117,6 +117,7 @@ public class CustodyGasAccountRepository {
                 insert into custody_gas_account(id, tenant_id, custody_address_id, chain, network,
                     native_symbol, low_balance_threshold, status, created_by)
                 values (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
+                on conflict (tenant_id,chain) do nothing
                 """, id, tenantId, custodyAddressId, chain, network, nativeSymbol,
                 lowBalanceThreshold, createdBy);
     }

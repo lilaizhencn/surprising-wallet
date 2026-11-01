@@ -74,40 +74,32 @@ Icons are loaded from each project's official website favicon. Every icon and ne
 
 ```mermaid
 flowchart LR
-    subgraph Runtime["One executable JAR · all or split api/sig1/sig2"]
+    subgraph Runtime["One executable Java API JAR"]
     API
     Services
     Adapters
-    Sig1
-    Sig2
     end
     Tenant[Tenants / Console / API clients] --> API[wallet-api<br/>Spring MVC control plane]
     API --> Services[Application services<br/>workflows · jobs · state transitions]
     Services --> Adapters[Chain adapters<br/>RPC · scanners · signing · broadcast]
     Adapters --> Networks[(Supported networks)]
-    API --> PostgreSQL[(PostgreSQL<br/>ledger · custody state · leases · outbox · audit)]
+    Services --> PostgreSQL[(PostgreSQL<br/>ledger · custody state · leases · audit)]
     Services --> PGMQ[(PGMQ<br/>durable signing queues)]
     PGMQ --- PostgreSQL
-    PGMQ <--> Sig1[wallet-sig1<br/>first signature]
-    PGMQ <--> Sig2[wallet-sig2<br/>final signature]
     PGMQ --> Services
+    Services <-->|mTLS| MPC[Independent MPC holders<br/>2-of-3 · cb-mpc / native Monero]
     API --> Common[common]
-    Sig1 --> Common
-    Sig2 --> Common
     API --> SDKs[chain-sdks]
-    Sig1 --> SDKs
-    Sig2 --> SDKs
 ```
 
 | Module | Responsibility |
 |---|---|
 | `wallet-api` | Spring MVC API and console, scheduled jobs, custody workflows, chain adapters, repositories, gas accounting, webhooks, and startup validation. |
-| `wallet-sig1` | First signature library for Bitcoin-like withdrawal transactions. |
-| `wallet-sig2` | Final signing library; completed transactions return to the API through PGMQ for broadcasting. |
-| `common` | Shared chain and asset contracts, signing DTOs, wallet key configuration, and cross-module infrastructure. |
+| `common` | Shared chain and asset contracts, MPC transport and signing DTOs, and cross-module infrastructure. |
 | `chain-sdks` | Bitcoin-like, TRON, RPC, UTXO, BIP32, Ed25519, and Protobuf based SDK components. |
+| `resources/infra/mpc-signer` | Independent native signing service; each holder keeps its own encrypted share. Monero uses its native multisig protocol. |
 
-The dependency direction is `wallet-api → wallet-sig1, wallet-sig2, common, chain-sdks` and `wallet-sig1/wallet-sig2 → common, chain-sdks`. Inside `wallet-api`, controllers and jobs handle boundaries and scheduling; services own workflows; chain, gateway, coordinator, observer, repository, and configuration packages implement the domain and infrastructure layers. Each SQL repository is responsible for one table.
+The Java dependency direction is `wallet-api → common, chain-sdks`. The API calls the independent native holders over mTLS. Inside `wallet-api`, controllers and jobs handle boundaries and scheduling; services own workflows; chain, gateway, coordinator, repository, and configuration packages implement the domain and infrastructure layers. Each SQL repository is responsible for one table.
 
 ## Deployment
 
@@ -130,38 +122,22 @@ psql -h 127.0.0.1 -p 5432 -d surprising_wallet_test_local -v ON_ERROR_STOP=1 -f 
 export SW_DB_URL=jdbc:postgresql://127.0.0.1:5432/surprising_wallet_test_local
 
 mvn -pl wallet-api -am clean package
-java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar --sw.wallet.mode=all
+java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar
 ```
 
-Configure queue access for the API and separate signing roles as described in [startup and testing](resources/docs/zh/startup-and-testing.md#pgmq-队列运行与验证). Split processes use the same `SW_DB_URL`; signers use `SW_SIG1_DB_USERNAME/PASSWORD` and `SW_SIG2_DB_USERNAME/PASSWORD`.
+Configure API queue access as described in [startup and testing](resources/docs/zh/startup-and-testing.md#pgmq-队列运行与验证). Native holders do not access PostgreSQL or PGMQ.
 
 Disable the development faucet with `SW_WALLET_DEV_FAUCET_ENABLED=false` unless its funding configuration is complete.
 
-Set the database, custody master key, platform administrator, wallet key, CORS, and chain RPC environment variables before starting the services. Do not put private keys, seed phrases, production credentials, or RPC secrets in Git.
+Set the database, custody master key, platform administrator, MPC transport, CORS, and chain RPC configuration before starting the services. Do not put private keys, seed phrases, production credentials, or RPC secrets in Git.
 
-Only `wallet-api` produces an executable JAR; both signer libraries are bundled inside it. Choose a mode with `--sw.wallet.mode` or `SW_WALLET_MODE`:
+Only `wallet-api` produces an executable JAR. It runs the API and chain jobs without wallet Seeds or local wallet private keys. Run three native holders separately with their own storage, encryption key, and mTLS identity.
 
-| Mode | Components | HTTP |
-|---|---|---|
-| `all` | API, chain jobs, both signers; one database pool, separate schedulers | Yes |
-| `api` (default) | API, chain jobs, broadcasting | Yes |
-| `sig1` | First signer | No |
-| `sig2` | Second signer | No |
-
-For split deployment, run the same JAR three times with `api`, `sig1`, and `sig2`, using separate environment files. Do not run `all` alongside the split services.
-
-| Mode | Required key variables, prefixed with `SW_WALLET_` |
-|---|---|
-| `all` | `SIG1_SEED`, `SIG2_SEED`, `ED25519_SEED`, `RECOVERY_PUBLIC_ROOT` |
-| `api` | `SIG2_SEED`, `ED25519_SEED`, `SIG1_PUBLIC_ROOT`, `RECOVERY_PUBLIC_ROOT` |
-| `sig1` | `SIG1_SEED`, `SIG2_PUBLIC_ROOT`, `RECOVERY_PUBLIC_ROOT` |
-| `sig2` | `SIG2_SEED` |
-
-Seeds are Base64-encoded 32-byte values; public roots are BIP32 extended public keys exported from the corresponding existing roots. Keep the recovery seed offline. API account-chain signing still requires sig2 and Ed25519 private material. `all` keeps both signing keys in one process and offers no process-level key isolation.
+Configure `SW_MPC_CA_FILE`, `SW_MPC_CLIENT_CERTIFICATE_FILE`, `SW_MPC_CLIENT_PRIVATE_KEY_FILE`, and `SW_MPC_NODE_{1,2,3}_ID` / `_URL`. The transport private key authenticates the API; wallet signing shares stay with the holders. Missing MPC configuration fails startup. See [native service configuration and recovery](resources/infra/mpc-signer/OPERATIONS.md) for holder setup and material preservation. A same-host cold restore has passed; Linux artifact verification has also passed; final all-chain regression remains a release requirement for this branch.
 
 ### Linux systemd deployment
 
-The repository includes service units for the API and both signing services under `resources/infra/systemd/`.
+The repository includes the API unit under `resources/infra/systemd/`. The native holder has a separate executable and configuration as described in its operations guide.
 
 1. Provision PostgreSQL 18 with PGMQ 1.11.1. Install the extension files on the existing database host before running the initialization SQL:
 
@@ -171,9 +147,9 @@ The repository includes service units for the API and both signing services unde
    make -C /tmp/wallet-pgmq/pgmq-extension install
    ```
 2. Initialize a new database with `resources/docs/db/surprising-wallet-init-pgsql.sql`.
-3. Install `/etc/surprising-wallet/wallet.env`; split deployments also need `sig1.env` and `sig2.env`, containing only each role's configuration.
-4. Install the units. For one process, enable `surprising-wallet-all.service`; for split deployment, enable `surprising-wallet.service`, `surprising-wallet-sig1.service`, and `surprising-wallet-sig2.service`.
-5. Disable the unused layout before starting the selected services. All units use `current/wallet-server.jar`.
+3. Install `/etc/surprising-wallet/wallet.env` with API configuration and the authorized MPC transport identity.
+4. Configure the three independent native holders, keeping each holder's secrets and storage separate.
+5. Install `surprising-wallet.service`, which runs `current/wallet-server.jar`, and validate the API and MPC configuration in an isolated environment before activation.
 
 The service units run as the unprivileged `wallet` user. The API health endpoint is `/actuator/health`.
 
@@ -195,9 +171,9 @@ systemctl enable --now surprising-wallet-auto-update.timer
 
 `journalctl -u surprising-wallet-auto-update.service` shows pull/build/deployment results. Run `systemctl start surprising-wallet-auto-update.service` to check immediately. The deployment lock prevents overlapping runs; local tracked source changes or a diverged branch stop deployment. The updater limits Maven/compiler/test heaps to fit the small host. PostgreSQL and HTTP bind to loopback; Nginx provides the public entry point.
 
-The existing activation script checks database prerequisites, stages an immutable release, updates the unit, and verifies health. A failed activation restores the previous JAR and unit when available. Environment files and databases are never replaced by automatic deployment; configuration changes require their own backups. The all-mode unit caps the heap at 640 MiB. To pause automatic updates, run `systemctl stop surprising-wallet-auto-update.timer`. To restore a previous release, stop the timer, repoint `/opt/surprising-wallet-backend/current` to its saved release directory, and restart `surprising-wallet-all.service`. Only the owner's Mac public key is authorized for root SSH; password and keyboard-interactive authentication are disabled.
+The activation script checks database prerequisites, stages an immutable release, updates the unit, and verifies health. A failed activation restores the previous JAR and unit when available. Environment files and databases are never replaced by automatic deployment; configuration changes require their own backups. The API unit caps the heap at 640 MiB. To pause automatic updates, run `systemctl stop surprising-wallet-auto-update.timer`. To restore a compatible previous API release, stop the timer, repoint `/opt/surprising-wallet-backend/current` to its saved release directory, and restart `surprising-wallet.service`. Keep the latest database and holder records, and use native binaries that understand the current REFRESH fence and epoch state.
 
-The canonical initialization SQL is applied only once to a new, explicitly provisioned database. Never run it during automatic deployment. Supply `SW_CUSTODY_SECRET_MASTER_KEY` and the mode-specific key variables; development faucet jobs are disabled by default.
+The canonical initialization SQL is applied only once to a new, explicitly provisioned database. Never run it during automatic deployment. Supply `SW_CUSTODY_SECRET_MASTER_KEY` and the MPC transport configuration; development faucet jobs are disabled by default.
 
 ### Logs and monitoring
 

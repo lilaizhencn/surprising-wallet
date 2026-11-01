@@ -12,7 +12,6 @@ import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.repository.UtxoRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
-import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +33,7 @@ public class RbfBumpService {
     private final QueueWorker worker;
     private final ChainFeeRateRepository feeRates;
     private final ObjectMapper json;
+    private final UtxoMpcSigningService mpc;
 
     /** Fee replacement, durable request receipt, next-stage enqueue and acknowledgement share the worker transaction. */
     public void process() {
@@ -42,10 +42,11 @@ public class RbfBumpService {
             var task = bumpFee(body.path("transactionId").asInt(), QueueTenant.require(json, message),
                     body.path("expectedTxId").asText());
             if (task == null) return null;
+            mpc.reserve(task);
             if (signing.recordEnqueued("BTC", task.transactionId(), task.request().requestId()) != 1) {
                 throw new IllegalStateException("replacement signing request changed");
             }
-            return new QueueWorker.Next(WalletQueue.SIGN_FIRST, JacksonJson.writeValue(json, task));
+            return new QueueWorker.Next(WalletQueue.MPC_SIGN, JacksonJson.writeValue(json, task));
         });
     }
 
@@ -72,8 +73,7 @@ public class RbfBumpService {
         if (oldRate <= 0 || nextRate > 1000) throw new IllegalArgumentException("RBF fee rate limit exceeded");
         request.validateForSigning();
         long input = request.inputAtomic();
-        long nextFee = Math.multiplyExact(P2wshFeeCalculator.estimateVBytes(request.inputs().size(),
-                collection ? 1 : request.payments().size() + 1), nextRate);
+        long nextFee = mpc.estimateFee(request, !collection, nextRate);
         if (nextFee > 100_000 || nextFee > input / 10 || nextFee <= transaction.signed().feeAtomic()) {
             throw new IllegalArgumentException("RBF absolute/relative fee limit exceeded");
         }

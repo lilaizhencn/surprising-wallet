@@ -1,0 +1,47 @@
+{
+  "source": "Official Monero 0.18.5.4 native root/account ceremonies through three independent authenticated signing nodes; public keys/addresses only, no funded wallet or secret material",
+  "vectors": [
+    {
+      "kind": "ROOT",
+      "network": "regtest",
+      "address": "42CJPrvfH3eX8g4dugMrNx1AemU77bEibVefYFU6xeZxUXgyVLBySs6hkyTjkLB9ieayAKnNXaizVNGRqqSnY1B11bUYsJW",
+      "publicKeyHex": "0f19fa1cb5f9b9b42635f62b61cb6d00fead887f862370ab4893241099ea73a495fc3d607c641df3ad58cf3bb9ffafcb15480638e348327f2421aca764cb8c05",
+      "paymentIdHex": ""
+    },
+    {
+      "kind": "INTEGRATED",
+      "network": "regtest",
+      "address": "4BtyQfk9tKAX8g4dugMrNx1AemU77bEibVefYFU6xeZxUXgyVLBySs6hkyTjkLB9ieayAKnNXaizVNGRqqSnY1B11qYs7cpBQtcTzPrUDX",
+      "publicKeyHex": "0f19fa1cb5f9b9b42635f62b61cb6d00fead887f862370ab4893241099ea73a495fc3d607c641df3ad58cf3bb9ffafcb15480638e348327f2421aca764cb8c05",
+      "paymentIdHex": "0123456789abcdef"
+    },
+    {
+      "kind": "ADDRESS",
+      "network": "regtest",
+      "address": "83VZzKQMWN43P3KuuzqnRmfd6XCwHwqVadqBZJXCcdPrekaGd5TAKheFFr9hMD42pbDiYqZCgZdUkGKDae26RWDAHNJ8P6E",
+      "publicKeyHex": "1b7151abae3ee90e3aa65e932d7180e6e8677777cba729dc324ebf68b3de65e1b3392f97b37cc5553b2276a5f316a44c06b1f36a1048a95b8e92defa2fc84591",
+      "paymentIdHex": ""
+    },
+    {
+      "kind": "ADDRESS",
+      "network": "regtest",
+      "address": "84wB9YsSCgrhw24swbfXkiVSob2thpGqDRyJTEaJc3MK4TCdC2jU9Y76HFrnnvZ3QQ7BqhKPHSzqxNU2Tf3U44YQBFJKV9z",
+      "publicKeyHex": "417b2855250dfbf4b66a7c8ee276efaa0f938427230a00954a437a2055bd4a14a2f52104e446641f9197fb3227a3c524fd2ead3610f343805627421cd8ba715a",
+      "paymentIdHex": ""
+    },
+    {
+      "kind": "ADDRESS",
+      "network": "regtest",
+      "address": "83F7KxLnHJm8R1j74hqiTr4NtB8ZTg5hqcJ9qmY8EBYUD8HCwtZcV5LW4VVEP6oHvhLmcjMKiMazpEqbss6sNqtMFfDrij8",
+      "publicKeyHex": "14dd29412e1a5e2c53518c68777e391431029f94295748d304f6d1ed3a9161487e6130f2cf7043adbd5257a51303ea76314ca2cf87e3ad52bb5210026b3c6a81",
+      "paymentIdHex": ""
+    },
+    {
+      "kind": "ADDRESS",
+      "network": "regtest",
+      "address": "85rLBb5N1T9ao6nMpTd1TeFbCQ4Y6KDZsMHeZkwrmSDeRLKLNCAByw8QtVDEXFjVfrZPDG8HpvJMDRUtNu5jivatHG9aHce",
+      "publicKeyHex": "59aa5ab0ccb9b4ca0bc9573cc3ca295739b9ac96caf6e27949c8ce4ec62bd1917a4bc124bf9fe38ed0b155f379d82dc19ae3cd76015f70925c6fc4f2c61e2990",
+      "paymentIdHex": ""
+    }
+  ]
+}

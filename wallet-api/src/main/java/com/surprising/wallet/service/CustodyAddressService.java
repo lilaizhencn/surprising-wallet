@@ -8,7 +8,14 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.model.custody.TenantRecord;
 import com.surprising.wallet.repository.Evm7702AccountRepository;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.MpcPublicAddressCodec;
+import com.surprising.wallet.chain.signing.MpcNodes;
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.util.HexFormat;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
@@ -50,21 +57,31 @@ public class CustodyAddressService {
     private final CustodyDerivationSubjectRepository subjects;
     private final CustodyAuditRepository audits;
     private final LedgerBalanceRepository balances;
-    private final BlockchainRuntimeService runtime;
+    private final ChainProfileRepository profiles;
+    private final MpcSigningService signing;
+    private final MpcNodes nodes;
+    private final TransactionTemplate transaction;
     private final CustodyTenantChainService tenantChains;
     private final ObjectMapper objectMapper;
 
     private final Evm7702AccountRepository evmAccounts;
+    private final CardanoScanAnchorService cardanoAnchors;
+    private final MoneroScanAnchorService moneroAnchors;
 
     public CustodyAddressService(CustodyTenantTableRepository tenants, ChainAddressRepository chainRepository,
-                                 BlockchainRuntimeService runtime, CustodyTenantChainService tenantChains,
+                                 ChainProfileRepository profiles, CustodyTenantChainService tenantChains,
                                  ObjectMapper objectMapper, Evm7702AccountRepository evmAccounts,
                                  CustodyAddressRepository addressRepository, CustodyGasAccountRepository gasAccounts,
                                  CustodyDerivationSubjectRepository subjects, CustodyAuditRepository audits,
-                                 LedgerBalanceRepository balances) {
+                                 LedgerBalanceRepository balances, MpcSigningService signing, MpcNodes nodes,
+                                 CardanoScanAnchorService cardanoAnchors,MoneroScanAnchorService moneroAnchors,
+                                 PlatformTransactionManager manager) {
         this.tenants = tenants;
         this.chainRepository = chainRepository;
-        this.runtime = runtime;
+        this.profiles = profiles;
+        this.signing = signing;
+        this.nodes = nodes;
+        this.transaction = new TransactionTemplate(manager);
         this.tenantChains = tenantChains;
         this.objectMapper = objectMapper;
         this.evmAccounts = evmAccounts;
@@ -73,92 +90,115 @@ public class CustodyAddressService {
         this.subjects = subjects;
         this.audits = audits;
         this.balances = balances;
+        this.cardanoAnchors = cardanoAnchors;
+        this.moneroAnchors = moneroAnchors;
     }
 
-    @Transactional(rollbackFor = Throwable.class)
     public AddressView create(CustodyPrincipal principal, CreateAddressCommand command,
                               String source, String sourceIp) {
-        long addressVersion = requireAddressVersion(command.addressVersion());
-        return createInternal(
-                principal, command, source, sourceIp, false,
-                addressVersion, addressVersion);
+        long version = requireAddressVersion(command.addressVersion());
+        var prepared = prepare(principal, command, source, sourceIp, false, version, version);
+        return transaction.execute(status -> publishPrepared(prepared));
     }
 
-    @Transactional(rollbackFor = Throwable.class)
-    AddressView createSystemAtChildIndex(CustodyPrincipal principal, CreateAddressCommand command,
-                                         long childIndex, String sourceIp) {
-        return createInternal(
-                principal, command, "CONSOLE", sourceIp, true,
-                DEFAULT_ADDRESS_VERSION, childIndex);
+    PreparedAddress prepareSystemAtChildIndex(CustodyPrincipal principal, CreateAddressCommand command,
+                                              long childIndex, String sourceIp) {
+        return prepare(principal, command, "CONSOLE", sourceIp, true, DEFAULT_ADDRESS_VERSION, childIndex);
     }
 
-    private AddressView createInternal(CustodyPrincipal principal, CreateAddressCommand command,
-                                       String source, String sourceIp, boolean allowReservedSubject,
-                                       long addressVersion, long childIndex) {
+    private PreparedAddress prepare(CustodyPrincipal principal, CreateAddressCommand command,
+                                    String source, String sourceIp, boolean allowReservedSubject,
+                                    long addressVersion, long childIndex) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("address creation requires a committed caller transaction");
+        }
         requireScope(principal, "addresses:write");
         String normalizedSource = normalizeSource(source);
         String chain = requireChain(command.chain());
         String subject = requireSubject(command.subject(), allowReservedSubject);
         String label = optional(command.label(), 160, "label");
         String metadataJson = metadataJson(command.metadata());
-
-        TenantRecord tenant = tenants.findById(principal.tenantId())
-                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
-        if (!"ACTIVE".equals(tenant.status())) {
-            throw new CustodyForbiddenException("tenant is not active");
+        if (childIndex < 0 || childIndex > MAX_ADDRESS_VERSION) throw new IllegalArgumentException("invalid address child index");
+        var reservation = transaction.execute(status -> {
+            var tenant = requireActiveTenant(principal.tenantId());
+            tenantChains.requireActive(tenant.id(), chain);
+            var existing = addressRepository.findBySubjectAndVersion(tenant.id(), chain, subject, addressVersion).orElse(null);
+            if (existing != null) return new AddressReservation(tenant, 0, null, toView(existing));
+            var profile = requireProfile(chain);
+            return new AddressReservation(tenant, subjects.resolve(tenant.id(), subject), profile, null);
+        });
+        var anchor = reservation.existing() == null && "ADA".equals(chain) ? cardanoAnchors.prepare(reservation.profile()) : null;
+        var moneroAnchor=reservation.existing()==null && "XMR".equals(chain)?moneroAnchors.prepare(reservation.profile()):null;
+        UUID keyId=null;
+        if(reservation.existing()==null) {
+            long user=Integer.toUnsignedLong(reservation.derivationSubject());int namespace=reservation.tenant().derivationNamespace();
+            keyId=(moneroAnchor!=null?signing.awaitMoneroKey(principal.tenantId(),user,namespace,childIndex,
+                    moneroAnchor.network(),moneroAnchor.genesisHash(),nodes)
+                    :signing.awaitKey(principal.tenantId(),ChainType.valueOf(chain),user,namespace,childIndex,nodes)).id();
         }
-        tenantChains.requireActive(tenant.id(), chain);
-
-        int derivationSubject = subjects.resolve(tenant.id(), subject);
-        CustodyAddressRecord existing = addressRepository.findBySubjectAndVersion(
-                tenant.id(), chain, subject, addressVersion).orElse(null);
-        if (existing != null) {
-            return toView(existing);
-        }
-
-        AccountChainProfile profile = runtime.requireProfile(chain);
-        ChainAddressRecord chainAddress = runtime.generateDepositAddressAtIndex(
-                profile, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(), childIndex);
-        if (chainRepository.assignTenant(tenant.id(), chainAddress.getId()) != 1) {
-            throw new IllegalStateException("generated chain address tenant assignment failed");
-        }
-
-        UUID addressId = UUID.randomUUID();
-        int inserted = addressRepository.insert(
-                addressId,
-                tenant.id(),
-                chainAddress.getId(),
-                profile.getChain(),
-                profile.getNetwork(),
-                chainAddress.getAddress(),
-                null,
-                subject,
-                label,
-                metadataJson,
-                normalizedSource,
-                derivationSubject,
-                addressVersion,
-                chainAddress.getAddressIndex(),
-                "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
-        if (inserted != 1) throw new IllegalStateException("failed to create custody address");
-        if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            evmAccounts.createProjection(
-                    tenant.id(), addressId, chain, profile.getNetwork(), chainAddress.getAddress());
-        }
-        AddressView result = toView(addressRepository.require(tenant.id(), addressId));
-        audits.insert(
-                UUID.randomUUID(),
-                tenant.id(),
-                principal.actorType().name(),
-                principal.actorId().toString(),
-                "ADDRESS.CREATE",
-                "CUSTODY_ADDRESS",
-                addressId.toString(),
-                sourceIp,
-                addressAuditDetails(
-                        chain, normalizedSource, subject, addressVersion, chainAddress.getAddressIndex()));
-        return result;
+        return new PreparedAddress(principal, chain, subject, normalizedSource, sourceIp, label, metadataJson,
+                addressVersion, childIndex, reservation.derivationSubject(), keyId, anchor,moneroAnchor);
     }
+
+    /** Joins the Gas account transaction when called by CustodyGasService; performs no network calls. */
+    AddressView publishPrepared(PreparedAddress prepared) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("address publication requires a transaction");
+        }
+        var principal = prepared.principal();
+        String chain = prepared.chain();
+        var tenant = requireActiveTenant(principal.tenantId());
+        tenantChains.requireActive(tenant.id(), chain);
+        var existing = addressRepository.findBySubjectAndVersion(tenant.id(), chain, prepared.subject(), prepared.version()).orElse(null);
+        if (existing != null) return toView(existing);
+        var type = ChainType.valueOf(chain);
+        var key = signing.lockActiveKey(principal.tenantId(), java.util.Objects.requireNonNull(prepared.keyId(),
+                "prepared address key is unavailable; retry the request"), type);
+        existing = addressRepository.findBySubjectAndVersion(tenant.id(), chain, prepared.subject(), prepared.version()).orElse(null);
+        if (existing != null) return toView(existing);
+        long userId = Integer.toUnsignedLong(prepared.derivationSubject());
+        if (key.userId() != userId || key.biz() != tenant.derivationNamespace() || key.addressIndex() != prepared.childIndex()) {
+            throw new IllegalStateException("MPC address key coordinates differ from tenant subject");
+        }
+        var profile = requireProfile(chain);
+        if (type == ChainType.ADA) cardanoAnchors.publish(prepared.cardanoAnchor(), profile);
+        if(type==ChainType.XMR)moneroAnchors.publish(prepared.moneroAnchor(),profile);
+        String address = MpcPublicAddressCodec.encode(profile, HexFormat.of().parseHex(key.publicKeyHex()));
+        boolean bitcoinLike = switch (type) { case BTC, LTC, DOGE, BCH -> true; default -> false; };
+        var chainAddress = chainRepository.publishMpc(ChainAddressRecord.builder()
+                .tenantId(tenant.id()).mpcKeyId(key.id()).chain(profile.getChain()).assetSymbol(profile.getNativeSymbol())
+                .userId(userId).biz(key.biz()).addressIndex(prepared.childIndex()).address(address)
+                .accountId(bitcoinLike ? Long.toString(userId) : address).ownerAddress(bitcoinLike ? null : address)
+                .derivationPath("mpc:" + key.id()).walletRole("DEPOSIT").enabled(true).build());
+        if (!Boolean.TRUE.equals(chainAddress.getEnabled())) throw new IllegalStateException("MPC chain address is disabled");
+        UUID addressId = UUID.randomUUID();
+        int inserted = addressRepository.insert(addressId, tenant.id(), chainAddress.getId(), profile.getChain(),
+                profile.getNetwork(), address, null, prepared.subject(), prepared.label(), prepared.metadataJson(), prepared.source(),
+                prepared.derivationSubject(), prepared.version(), prepared.childIndex(),
+                "CONSOLE".equals(prepared.source()) ? principal.actorId() : null);
+        if (inserted != 1) throw new IllegalStateException("failed to create custody address");
+        if (type.isEvm()) evmAccounts.createProjection(tenant.id(), addressId, chain, profile.getNetwork(), address);
+        audits.insert(UUID.randomUUID(), tenant.id(), principal.actorType().name(), principal.actorId().toString(),
+                "ADDRESS.CREATE", "CUSTODY_ADDRESS", addressId.toString(), prepared.sourceIp(),
+                addressAuditDetails(chain, prepared.source(), prepared.subject(), prepared.version(), prepared.childIndex(), key.id(), key.activeEpoch()));
+        return toView(addressRepository.require(tenant.id(), addressId));
+    }
+
+    record PreparedAddress(CustodyPrincipal principal, String chain, String subject, String source, String sourceIp,
+                           String label, String metadataJson, long version, long childIndex, int derivationSubject, UUID keyId,
+                           CardanoScanAnchorService.Anchor cardanoAnchor,MoneroScanAnchorService.Anchor moneroAnchor) { }
+
+    private TenantRecord requireActiveTenant(UUID tenantId) {
+        var tenant = tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant not found"));
+        if (!"ACTIVE".equals(tenant.status())) throw new CustodyForbiddenException("tenant is not active");
+        return tenant;
+    }
+
+    private AccountChainProfile requireProfile(String chain) {
+        return profiles.findAccountByChain(chain).orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chain));
+    }
+
+    private record AddressReservation(TenantRecord tenant, int derivationSubject, AccountChainProfile profile, AddressView existing) { }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<AddressView> list(CustodyPrincipal principal, String chain, String source,
@@ -313,13 +353,15 @@ public class CustodyAddressService {
     }
 
     private String addressAuditDetails(String chain, String source, String subject,
-                               long addressVersion, long childIndex) {
+                               long addressVersion, long childIndex, UUID keyId, int keyEpoch) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("chain", chain);
         details.put("source", source);
         details.put("subject", subject);
         details.put("addressVersion", addressVersion);
         details.put("childIndex", childIndex);
+        details.put("mpcKeyId", keyId);
+        details.put("mpcKeyEpoch", keyEpoch);
         return json(details);
     }
     public static long requireAddressVersion(Long value) {

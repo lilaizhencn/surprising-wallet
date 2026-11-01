@@ -1,0 +1,32 @@
+[Unit]
+Description=Surprising Wallet independent MPC holder
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=wallet-mpc
+Group=wallet-mpc
+WorkingDirectory=/var/lib/surprising-wallet-mpc
+ExecStart=/opt/surprising-wallet-mpc/current/bin/wallet-mpc-signer /etc/surprising-wallet-mpc/node.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+StateDirectory=surprising-wallet-mpc
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

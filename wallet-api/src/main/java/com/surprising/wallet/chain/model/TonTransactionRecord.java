@@ -41,4 +41,6 @@ public class TonTransactionRecord {
     private Integer confirmations;
     private String status;
     private String rawPayload;
+    /** 原始执行回执/内部消息链；与选定签名 BOC 分开保存。 */
+    private String executionReceipt;
 }

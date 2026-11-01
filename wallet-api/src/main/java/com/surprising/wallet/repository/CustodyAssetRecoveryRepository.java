@@ -202,7 +202,14 @@ public class CustodyAssetRecoveryRepository {
     }
     public void recoverExecutions() {
         jdbc.update("update custody_asset_recovery set status='BROADCAST',updated_at=now() where status='EXECUTING' and recovery_tx_hash is not null");
-        jdbc.update("update custody_asset_recovery set status='APPROVED',updated_at=now() where status='EXECUTING' and durable_submission and recovery_tx_hash is null and updated_at < now()-interval '10 minutes'");
+    }
+
+    public int recoverUnsignedExecution(UUID tenant, UUID id) {
+        return jdbc.update("update custody_asset_recovery set status='APPROVED',updated_at=now() where tenant_id=? and id=? and status='EXECUTING' and durable_submission and recovery_tx_hash is null and updated_at < now()-interval '10 minutes'", tenant,id);
+    }
+
+    public List<RecoveryRecord> unsignedExecutions(int limit) {
+        return jdbc.query("select * from custody_asset_recovery where status='EXECUTING' and durable_submission and recovery_tx_hash is null order by updated_at,id limit ?", this::map,limit);
     }
 
     public List<RecoveryRecord> broadcastRecoveries(int limit) {
@@ -212,6 +219,10 @@ public class CustodyAssetRecoveryRepository {
                          order by updated_at limit ?
                         """, this::map, limit);
     }
+    public void executionPending(UUID id, String reason) {
+        jdbc.update("update custody_asset_recovery set failure_reason=?,updated_at=now() where id=? and status='EXECUTING'",reason,id);
+    }
+
     public RecoveryRecord executionFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery

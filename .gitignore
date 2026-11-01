@@ -28,5 +28,9 @@ runlogs/
 # Node tooling
 node_modules/
 
+# Python acceptance harnesses
+__pycache__/
+*.py[cod]
+
 # Local database backups
 db-backups/

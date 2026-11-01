@@ -31,9 +31,9 @@ class WalletStartupValidatorTest {
     void enabledProfilesRejectPlaceholderRpcNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("ADA", "preprod")),
-                List.of(node("blockfrost-cardano-preprod",
-                        "https://cardano-preprod.blockfrost.io/api/v0",
-                        "CHANGE_ME_BLOCKFROST_PREPROD_PROJECT_ID")),
+                List.of(node("cardano-preprod-native",
+                        "https://CHANGE_ME_CARDANO_PREPROD_NATIVE_RPC:443",
+                        null)),
                 List.of()));
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
@@ -210,14 +210,14 @@ class WalletStartupValidatorTest {
     }
 
     /**
-     * 验证 {@code cardanoBlockfrostNodesRequireProjectId} 对应的测试场景，明确输入、预期结果和异常边界。
+     * 验证 {@code authenticatedCardanoNativeNodesRequireApiKey} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void cardanoBlockfrostNodesRequireProjectId() throws Exception {
+    void authenticatedCardanoNativeNodesRequireApiKey() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("ADA", "preprod")),
-                List.of(node("ADA", "rpc", "blockfrost-cardano-preprod", "BLOCKFROST",
-                        "PROJECT_ID", "https://cardano-preprod.blockfrost.io/api/v0", null, null, null)),
+                List.of(node("ADA", "rpc", "cardano-preprod-native", "GRPC",
+                        "BEARER", "https://cardano-native.example", null, null, null)),
                 List.of()));
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
@@ -230,11 +230,11 @@ class WalletStartupValidatorTest {
      * 验证 {@code digestWalletRpcNodesRequireCredentials} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void digestWalletRpcNodesRequireCredentials() throws Exception {
+    void digestMoneroDaemonNodesRequireCredentials() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("XMR", "regtest")),
-                List.of(node("XMR", "rpc", "local-monero-wallet-rpc-regtest", "WALLET_RPC",
-                        "DIGEST", "http://127.0.0.1:18088", null, "wallet", null)),
+                List.of(node("XMR", "daemon", "local-monerod-regtest", "HTTP_JSON_RPC",
+                        "DIGEST", "http://127.0.0.1:18081", null, "wallet", null)),
                 List.of()));
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
@@ -247,7 +247,7 @@ class WalletStartupValidatorTest {
      * 验证 {@code xmrRegtestProfilesRequireFaucetAndDaemonNodes} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void xmrRegtestProfilesRequireFaucetAndDaemonNodes() throws Exception {
+    void xmrProfilesRequirePublicDaemonNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("XMR", "regtest")),
                 List.of(node("XMR", "rpc", "local-monero-wallet-rpc-regtest", "WALLET_RPC",
@@ -256,7 +256,7 @@ class WalletStartupValidatorTest {
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
 
-        assertTrue(error.getMessage().contains("purpose=faucet"));
+        assertTrue(error.getMessage().contains("purpose=daemon"));
         assertTrue(error.getMessage().contains("XMR/regtest"));
     }
 
@@ -264,14 +264,10 @@ class WalletStartupValidatorTest {
      * 验证 {@code xmrRegtestProfilesAcceptConfiguredRpcFaucetAndDaemonNodes} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void xmrRegtestProfilesAcceptConfiguredRpcFaucetAndDaemonNodes() throws Exception {
+    void xmrProfilesAcceptOnlyThePublicDaemonWithoutPrivateWalletOrFaucet() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("XMR", "regtest")),
                 List.of(
-                        node("XMR", "rpc", "local-monero-wallet-rpc-regtest", "WALLET_RPC",
-                                "NONE", "http://127.0.0.1:18088", null, null, null),
-                        node("XMR", "faucet", "local-monero-wallet-rpc-funder-regtest", "WALLET_RPC",
-                                "NONE", "http://127.0.0.1:18090", null, null, null),
                         node("XMR", "daemon", "local-monerod-regtest", "HTTP_JSON_RPC",
                                 "NONE", "http://127.0.0.1:18081", null, null, null)),
                 List.of()));

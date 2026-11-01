@@ -13,7 +13,7 @@ import java.util.UUID;
 public class ChainAddressRepository {
     public Optional<ChainAddressRecord> findOwned(UUID tenantId, long id) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address where tenant_id=? and id=?
                 """, (rs, rowNum) -> map(rs), tenantId, id).stream().findFirst();
@@ -21,7 +21,7 @@ public class ChainAddressRepository {
     public List<ChainAddressRecord> findByIds(UUID tenantId, List<Long> ids) {
         if (ids.isEmpty()) return List.of();
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address where tenant_id = ? and id = any (?)
                 """, (rs, rowNum) -> map(rs), tenantId, new SqlArrayValue("bigint", ids.toArray()));
@@ -29,7 +29,7 @@ public class ChainAddressRepository {
 
     public List<ChainAddressRecord> listOwned(UUID tenantId) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address where tenant_id=? order by created_at desc, id
                 """, (rs, rowNum) -> map(rs), tenantId);
@@ -49,6 +49,11 @@ public class ChainAddressRepository {
                 """, chain).isEmpty();
     }
 
+    /** Disabled wallet senders remain internal for deposit accounting. */
+    public boolean existsAddress(String chain,String address) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from chain_address where chain=? and address=?)",Boolean.class,chain,address));
+    }
+
     /** 判断指定链和资产是否存在地址数据。 */
     public boolean existsByChainAndAsset(String chain, String symbol) {
         return !jdbc.queryForList("""
@@ -61,7 +66,7 @@ public class ChainAddressRepository {
     /** 按主键查询链地址。 */
     public Optional<ChainAddressRecord> findById(long id) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address where id = ?
                 """, (rs, rowNum) -> map(rs), id).stream().findFirst();
@@ -87,23 +92,43 @@ public class ChainAddressRepository {
     public int upsert(ChainAddressRecord address) {
         return jdbc.update("""
                 insert into chain_address(
-                    tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                    tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                     owner_address, derivation_path, wallet_role, enabled, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())
                 on conflict (chain, asset_symbol, user_id, biz, address_index, wallet_role) do update set
-                    tenant_id = excluded.tenant_id, account_id = excluded.account_id, address = excluded.address,
+                    tenant_id = excluded.tenant_id, mpc_key_id = excluded.mpc_key_id, account_id = excluded.account_id, address = excluded.address,
                     owner_address = excluded.owner_address, derivation_path = excluded.derivation_path,
                     enabled = excluded.enabled, updated_at = excluded.updated_at
-                """, address.getTenantId(), address.getChain(), address.getAssetSymbol(), address.getAccountId(),
+                """, address.getTenantId(), address.getMpcKeyId(), address.getChain(), address.getAssetSymbol(), address.getAccountId(),
                 address.getUserId(), address.getBiz(), address.getAddressIndex(), address.getAddress(),
                 address.getOwnerAddress(), address.getDerivationPath(), address.getWalletRole(), address.getEnabled());
+    }
+
+    /** Publishes one activated MPC address; duplicate coordinates may only replay the same identity. */
+    public ChainAddressRecord publishMpc(ChainAddressRecord address) {
+        java.util.Objects.requireNonNull(address.getTenantId(), "MPC address tenant is required");
+        java.util.Objects.requireNonNull(address.getMpcKeyId(), "MPC address key is required");
+        return jdbc.query("""
+                insert into chain_address(tenant_id,mpc_key_id,chain,asset_symbol,account_id,user_id,biz,address_index,
+                    address,owner_address,derivation_path,wallet_role,enabled)
+                values (?,?,?,?,?,?,?,?,?,?,?,?,true)
+                on conflict (chain,asset_symbol,user_id,biz,address_index,wallet_role) do update
+                    set updated_at=chain_address.updated_at
+                    where chain_address.tenant_id=excluded.tenant_id and chain_address.mpc_key_id=excluded.mpc_key_id
+                      and chain_address.address=excluded.address and chain_address.account_id=excluded.account_id
+                returning id,tenant_id,mpc_key_id,chain,asset_symbol,account_id,user_id,biz,address_index,
+                    address,owner_address,derivation_path,wallet_role,enabled
+                """, (rs, n) -> map(rs), address.getTenantId(), address.getMpcKeyId(), address.getChain(), address.getAssetSymbol(),
+                address.getAccountId(), address.getUserId(), address.getBiz(), address.getAddressIndex(), address.getAddress(),
+                address.getOwnerAddress(), address.getDerivationPath(), address.getWalletRole()).stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException("MPC address coordinates are already bound to another identity"));
     }
 
     /** 按业务主键查询链地址。 */
     public Optional<ChainAddressRecord> find(String chain, String assetSymbol, long userId, int biz,
                                              long addressIndex, String walletRole) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address
                  where chain = ? and asset_symbol = ? and user_id = ? and biz = ?
@@ -116,7 +141,7 @@ public class ChainAddressRepository {
     public List<ChainAddressRecord> listDefaultHot(String chain, String assetSymbol,
                                                    long userId, int biz, String walletRole) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address
                  where chain = ? and asset_symbol = ? and user_id = ? and biz = ? and wallet_role = ?
@@ -127,7 +152,7 @@ public class ChainAddressRepository {
     /** 查询保留的热钱包命名空间地址。 */
     public List<ChainAddressRecord> listReservedHot(String chain, long userId, int biz) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address where chain = ? and user_id = ? and biz = ?
                  order by asset_symbol, wallet_role, address_index, id
@@ -137,7 +162,7 @@ public class ChainAddressRepository {
     /** 查询指定链资产下的启用地址。 */
     public List<ChainAddressRecord> listEnabled(String chain, String assetSymbol) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address where chain = ? and asset_symbol = ? and enabled = true order by id
                 """, (rs, rowNum) -> map(rs), chain, assetSymbol);
@@ -146,16 +171,25 @@ public class ChainAddressRepository {
     /** 查询指定链上全部启用地址。 */
     public List<ChainAddressRecord> listEnabled(String chain) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address where chain = ? and enabled = true order by id
                 """, (rs, rowNum) -> map(rs), chain);
     }
 
+    /** Disabled owned senders remain recognizable while scanning canonical wallet history. */
+    public List<ChainAddressRecord> listMpcAddresses(String chain) {
+        return jdbc.query("""
+                select id,tenant_id,mpc_key_id,chain,asset_symbol,account_id,user_id,biz,address_index,
+                       address,owner_address,derivation_path,wallet_role,enabled
+                  from chain_address where chain=? and mpc_key_id is not null order by id
+                """, (row, index) -> map(row), chain);
+    }
+
     /** 按地址查询启用链地址。 */
     public Optional<ChainAddressRecord> findEnabledByAddress(String chain, String address) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address where chain = ? and address = ? and enabled = true
                 """, (rs, rowNum) -> map(rs), chain, address).stream().findFirst();
@@ -164,7 +198,7 @@ public class ChainAddressRepository {
     /** 按链和资产地址查询启用链地址。 */
     public Optional<ChainAddressRecord> findEnabledByAddress(String chain, String assetSymbol, String address) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address where chain = ? and asset_symbol = ? and address = ? and enabled = true
                 """, (rs, rowNum) -> map(rs), chain, assetSymbol, address).stream().findFirst();
@@ -174,7 +208,7 @@ public class ChainAddressRepository {
     public Optional<ChainAddressRecord> findEnabledByTenantAndAddress(UUID tenantId, String chain,
                                                                         String assetSymbol, String address) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address
                  where tenant_id = ? and chain = ? and asset_symbol = ? and address = ? and enabled = true
@@ -184,7 +218,7 @@ public class ChainAddressRepository {
     /** 按租户、链和地址查询启用链地址。 */
     public Optional<ChainAddressRecord> findEnabledByTenantAndAddress(UUID tenantId, String chain, String address) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                        owner_address, derivation_path, wallet_role, enabled
                   from chain_address
                  where tenant_id = ? and chain = ? and address = ? and enabled = true
@@ -204,6 +238,7 @@ public class ChainAddressRepository {
     private static ChainAddressRecord map(java.sql.ResultSet rs) throws java.sql.SQLException {
         return ChainAddressRecord.builder()
                 .id(rs.getLong("id")).tenantId(rs.getObject("tenant_id", UUID.class))
+                .mpcKeyId(rs.getObject("mpc_key_id", UUID.class))
                 .chain(rs.getString("chain")).assetSymbol(rs.getString("asset_symbol"))
                 .accountId(rs.getString("account_id")).userId(rs.getLong("user_id"))
                 .biz(rs.getInt("biz")).addressIndex(rs.getLong("address_index"))
@@ -225,14 +260,14 @@ public class ChainAddressRepository {
     public List<UUID> listTenantIds(String chain, String accountId, String address) {
         return jdbc.queryForList("""
                 select distinct tenant_id from chain_address
-                 where tenant_id is not null and enabled = true and chain = ?
+                 where tenant_id is not null and chain = ?
                    and (lower(account_id) = lower(?) or lower(address) = lower(?)) limit 2
                 """, UUID.class, chain, accountId, address);
     }
 
     public List<ChainAddressRecord> listCollectionCandidatesByChain(String chain) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address
                  where chain = ? and enabled = true and tenant_id is not null
@@ -246,13 +281,13 @@ public class ChainAddressRepository {
                 tenantId, chainAddressId);
     }
 
-    /** Enabled account aliases that can identify a deposit within one tenant. */
+    /** Owned account aliases, including disabled addresses that can still receive an observed deposit. */
     public List<ChainAddressRecord> findDepositMatches(UUID tenantId, String chain, String accountId, String address) {
         return jdbc.query("""
-                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                select id, tenant_id, mpc_key_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                        address, owner_address, derivation_path, wallet_role, enabled
                   from chain_address
-                 where tenant_id = ? and chain = ? and enabled = true
+                 where tenant_id = ? and chain = ?
                    and (lower(account_id) = lower(?) or lower(address) = lower(?))
                 """, (rs, rowNum) -> map(rs), tenantId, chain, accountId, address);
     }

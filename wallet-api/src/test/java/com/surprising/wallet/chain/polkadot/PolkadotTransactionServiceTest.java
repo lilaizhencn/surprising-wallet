@@ -1,268 +1,70 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.chain.WalletKeyTestFixture;
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.UtxoRepository;
-import com.surprising.wallet.service.HotWalletAddressService;
-import com.surprising.wallet.testutil.ChainRepositoryFixture;
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.common.chain.*;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.model.mpc.*;
+import com.surprising.wallet.service.PolkadotSubmissionService.*;
+import com.surprising.wallet.service.*;
+import java.math.*;
+import java.util.*;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mockito;
+import tools.jackson.databind.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/**
- * 验证 {@code PolkadotTransactionServiceTest} 覆盖的业务流程、边界条件和异常行为。
- */
 class PolkadotTransactionServiceTest {
-    /**
-     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
-     */
-    private static final String MASTER_SEED =
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-
-    /**
-     * 验证 {@code assetCollectionTopsUpAssetHubGasAndAllowsAssetAccountDeath} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void assetCollectionTopsUpAssetHubGasAndAllowsAssetAccountDeath() {
-        FakeRuntimeClient runtime = new FakeRuntimeClient();
-        FakeRepository repository = new FakeRepository();
-        ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
-        PolkadotTransactionService service = new PolkadotTransactionService(runtime,
-                new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED)),
-                repository.collectionRecordRepository,
-                repository.walletSystemConfigRepository, new FakeHotWalletAddressService(hot),
-                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
-        ChainAddressRecord user = address(7, 0, 3, "5UserAddress");
-        TokenDefinition token = TokenDefinition.builder()
-                .chain("DOT")
-                .symbol("USDC")
-                .contractAddress("1984")
-                .decimals(6)
-                .active(true)
-                .build();
-
-        String txHash = service.collectAsset(UUID.randomUUID(), "COLL-DOT-USDC-test",
-                user, token, hot.getAddress(),
-                new BigDecimal("2.5"));
-
-        assertEquals("asset-tx", txHash);
-        assertEquals("5UserAddress", runtime.topUpTo);
-        assertEquals(new BigInteger("100000000000"), runtime.topUpAmount);
-        assertEquals("1984", runtime.assetId);
-        assertEquals(new BigInteger("2500000"), runtime.assetAmount);
-        assertFalse(runtime.assetKeepAlive);
-        assertEquals("SENT", repository.status);
+    private final ObjectMapper json=new ObjectMapper();
+    @Test void collectionRetainsExistentialDepositAndConservativeActualFee() {
+        var rpc=mock(PolkadotRuntimeClient.class);var assets=mock(ChainAssetRepository.class);
+        when(assets.findActiveDefinition("DOT","DOT")).thenReturn(Optional.of(ChainAsset.builder().decimals(12).build()));
+        when(rpc.networkInfo(Role.ASSET_HUB,"source",null)).thenReturn(json.readTree("{\"nativeDecimals\":12,\"nativeBalance\":\"1000000000000\",\"frozenBalance\":\"0\",\"existentialDeposit\":\"100000000000\"}"));
+        when(rpc.paymentInfo(eq(Role.ASSET_HUB),eq("source"),eq("source"),any(BigInteger.class),isNull())).thenReturn(new BigInteger("1000000000"));
+        var service=new PolkadotTransactionService(rpc,mock(PolkadotSubmissionService.class),mock(ChainProfileRepository.class),assets,mock(TokenConfigRepository.class),mock(ChainAddressRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),mock(CustodyGasService.class),mock(WalletRuntimeConfigService.class));
+        assertEquals(0,new BigDecimal("0.897").compareTo(service.collectableNativeAmount("source",BigDecimal.TEN,new BigDecimal("0.002"))));
+        verify(rpc).paymentInfo(Role.ASSET_HUB,"source","source",new BigInteger("900000000000"),null);
+        when(rpc.networkInfo(Role.ASSET_HUB,"source",null)).thenReturn(json.readTree("{\"nativeDecimals\":12,\"nativeBalance\":\"1000000000000\",\"frozenBalance\":\"500000000000\",\"existentialDeposit\":\"100000000000\"}"));
+        assertEquals(0,new BigDecimal("0.397").compareTo(service.collectableNativeAmount("source",BigDecimal.TEN,new BigDecimal("0.002"))));
     }
-
-    /**
-     * 验证 {@code assetWithdrawalUsesKeepAliveWhenGasAlreadyExists} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void assetWithdrawalUsesKeepAliveWhenGasAlreadyExists() {
-        FakeRuntimeClient runtime = new FakeRuntimeClient();
-        runtime.senderGas = new BigInteger("30000000000");
-        FakeRepository repository = new FakeRepository();
-        ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
-        PolkadotTransactionService service = new PolkadotTransactionService(runtime,
-                new PolkadotKeyService(WalletKeyTestFixture.provider(MASTER_SEED)),
-                repository.collectionRecordRepository,
-                repository.walletSystemConfigRepository, new FakeHotWalletAddressService(hot),
-                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
-        ChainAddressRecord user = address(7, 0, 3, "5UserAddress");
-        TokenDefinition token = TokenDefinition.builder()
-                .chain("DOT")
-                .symbol("USDC")
-                .contractAddress("1984")
-                .decimals(6)
-                .active(true)
-                .build();
-
-        String txHash = service.sendAsset(user, token, "5RecipientAddress", new BigDecimal("1"));
-
-        assertEquals("asset-tx", txHash);
-        assertNull(runtime.topUpTo);
-        assertTrue(runtime.assetKeepAlive);
+    @Test void unreviewedExtensionTypesOrProductionRuntimeUnderLocalProfileAreRejected() {
+        var info=json.readTree("{\"extrinsicVersion\":4,\"extensionVersion\":0,\"specName\":\"westmint\",\"extensions\":[\"ChargeAssetTxPayment\",\"CheckMetadataHash\"],\"extraFields\":{\"era\":\"ExtrinsicEra\",\"nonce\":\"Compact<Index>\",\"tip\":\"Compact<Balance>\",\"assetId\":\"TAssetConversion\",\"mode\":\"u8\"},\"additionalSignedFields\":{\"specVersion\":\"u32\",\"transactionVersion\":\"u32\",\"genesisHash\":\"Hash\",\"blockHash\":\"Hash\",\"metadataHash\":\"Option<[u8;32]>\"}}");
+        assertDoesNotThrow(()->PolkadotTransactionService.verifyMetadata(info,"westend",Role.ASSET_HUB));
+        assertThrows(RuntimeException.class,()->PolkadotTransactionService.verifyMetadata(info,"mainnet",Role.ASSET_HUB));
+        var changed=json.readTree(info.toString());((tools.jackson.databind.node.ObjectNode)changed.path("extraFields")).put("assetId","u32");
+        assertThrows(RuntimeException.class,()->PolkadotTransactionService.verifyMetadata(changed,"westend",Role.ASSET_HUB));
+        ((tools.jackson.databind.node.ObjectNode)info).put("specName","statemint");
+        assertThrows(RuntimeException.class,()->PolkadotTransactionService.verifyMetadata(info,"localnet",Role.ASSET_HUB));
     }
-
-    /**
-     * 验证 {@code address} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static ChainAddressRecord address(long userId, int biz, long index, String address) {
-        return ChainAddressRecord.builder()
-                .chain("DOT")
-                .assetSymbol("DOT")
-                .accountId(address)
-                .userId(userId)
-                .biz(biz)
-                .addressIndex(index)
-                .address(address)
-                .ownerAddress(address)
-                .derivationPath("m/44/354/" + biz + "/" + userId + "/" + index)
-                .walletRole("DEPOSIT")
-                .enabled(true)
-                .build();
+    @Test void expiredUnknownOriginalIntentIsHeldWithoutResigningOrBroadcast() throws Exception {
+        var f=new Recovery();f.proof.put("finalizedHeight",f.u.validUntilHeight());
+        assertThrows(IllegalStateException.class,()->f.service.recover(f.op));
+        verify(f.rpc,never()).broadcast(any(),anyString());verify(f.submissions,never()).reserve(any(),any(),any());
     }
-
-    /**
-     * 测试替身 {@code FakeRuntimeClient}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeRuntimeClient extends PolkadotRuntimeClient {
-        /**
-         * 保存 {@code senderGas}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
-         */
-        private BigInteger senderGas = BigInteger.ZERO;
-        /**
-         * 保存 {@code topUpTo}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private String topUpTo;
-        /**
-         * 保存 {@code topUpAmount}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
-         */
-        private BigInteger topUpAmount;
-        /**
-         * 保存 {@code assetId}，表示测试所覆盖的链、网络、资产或代币配置。
-         */
-        private String assetId;
-        /**
-         * 保存 {@code assetAmount}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
-         */
-        private BigInteger assetAmount;
-        /**
-         * 保存 {@code assetKeepAlive}，表示测试所覆盖的链、网络、资产或代币配置。
-         */
-        private boolean assetKeepAlive;
-
-        /**
-         * 验证 {@code FakeRuntimeClient} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        FakeRuntimeClient() {
-            super(null, null);
-        }
-
-        /**
-         * 验证 {@code assetHubNativeBalance} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public BigInteger assetHubNativeBalance(String address) {
-            if (topUpTo != null && topUpTo.equals(address)) {
-                return senderGas.add(topUpAmount);
-            }
-            return senderGas;
-        }
-
-        /**
-         * 验证 {@code sendAssetHubNative} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public SubmittedTransaction sendAssetHubNative(String secretSeedHex, String expectedFrom,
-                                                       String toAddress, BigInteger amountPlanck,
-                                                       boolean keepAlive) {
-            topUpTo = toAddress;
-            topUpAmount = amountPlanck;
-            return new SubmittedTransaction("topup-tx", 1, "FINALIZED", "{}");
-        }
-
-        /**
-         * 验证 {@code sendAsset} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
-                                              String assetId, String toAddress, BigInteger amountAtomic,
-                                              boolean keepAlive) {
-            this.assetId = assetId;
-            this.assetAmount = amountAtomic;
-            this.assetKeepAlive = keepAlive;
-            return new SubmittedTransaction("asset-tx", 2, "FINALIZED", "{}");
+    @Test void genesisOrRuntimeChangesHoldTheOriginalWitness() throws Exception {
+        var f=new Recovery();f.proof.put("genesisHash","0x"+"ff".repeat(32));
+        assertThrows(IllegalStateException.class,()->f.service.recover(f.op));verify(f.rpc,never()).broadcast(any(),anyString());
+        f.proof.put("genesisHash",f.u.genesisHash());
+        when(f.rpc.networkInfo(f.u.role(),f.u.sender(),f.u.assetId())).thenReturn(json.createObjectNode().put("genesisHash",f.u.genesisHash()).put("specVersion",f.u.specVersion()+1).put("transactionVersion",f.u.transactionVersion()));
+        assertThrows(IllegalStateException.class,()->f.service.recover(f.op));verify(f.rpc,never()).broadcast(any(),anyString());verify(f.submissions,never()).reserve(any(),any(),any());
+    }
+    @Test void actualKnownFinalWireRecoversWithoutAnotherBroadcast() throws Exception {
+        var f=new Recovery();f.proof.put("found",true);
+        assertTrue(f.service.recover(f.op));verify(f.rpc,never()).broadcast(any(),anyString());verify(f.submissions).restoreSent(f.op,f.signed.txHash());
+    }
+    private final class Recovery {
+        final Operation op=new Operation(UUID.randomUUID(),"runtime-recovery",Kind.WITHDRAWAL);
+        final PolkadotRuntimeClient rpc=mock(PolkadotRuntimeClient.class);final PolkadotSubmissionService submissions=mock(PolkadotSubmissionService.class);
+        final MpcPolkadotTransactionCodec.Unsigned u;final MpcPolkadotTransactionCodec.Signed signed;
+        final tools.jackson.databind.node.ObjectNode proof;final PolkadotTransactionService service;
+        Recovery()throws Exception {
+            JsonNode item=null;try(var input=getClass().getResourceAsStream("/mpc/polkadot-actual-payment-proofs.json")){for(var candidate:json.readTree(input).path("payments"))if(candidate.path("unsigned").path("role").asText().equals("ASSET_HUB") && candidate.path("unsigned").path("assetId").isNull()){item=candidate;break;}}
+            assertNotNull(item);u=json.treeToValue(item.path("unsigned"),MpcPolkadotTransactionCodec.Unsigned.class);signed=json.treeToValue(item.path("selected"),MpcPolkadotTransactionCodec.Signed.class);proof=(tools.jackson.databind.node.ObjectNode)json.readTree(item.path("proof").toString());
+            var request=mock(MpcSignRequest.class);when(request.id()).thenReturn(UUID.randomUUID());when(submissions.intent(any())).thenAnswer(call->op.equals(call.getArgument(0))?Optional.of(request):Optional.empty());
+            when(submissions.commit(op,request.id())).thenReturn(signed);when(submissions.payload(request)).thenReturn(new PolkadotSigningPayload("DOT",new BigDecimal(u.amountAtomic()).movePointLeft(12),BigDecimal.ZERO,12,12,BigInteger.TEN.pow(10),BigInteger.ONE,u));
+            when(rpc.proof(u,signed.txHash())).thenReturn(proof);
+            service=new PolkadotTransactionService(rpc,submissions,mock(ChainProfileRepository.class),mock(ChainAssetRepository.class),mock(TokenConfigRepository.class),mock(ChainAddressRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),mock(CustodyGasService.class),mock(WalletRuntimeConfigService.class));
         }
     }
 
-    /**
-     * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeRepository extends ChainRepositoryFixture {
-        /**
-         * 保存 {@code status}，记录测试开关、处理状态、确认结果或重试信息。
-         */
-        private String status;
-
-        /**
-         * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        FakeRepository() {
-            super();
-            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
-            Mockito.doAnswer(invocation -> {
-                UUID arg_tenantId = invocation.getArgument(0);
-                String arg_chain = invocation.getArgument(1);
-                String arg_collectionNo = invocation.getArgument(2);
-                return Optional.empty();
-            }).when(collectionRecordRepository).findTxHash(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
-            Mockito.doAnswer(invocation -> {
-                UUID arg_tenantId = invocation.getArgument(0);
-                String arg_chain = invocation.getArgument(1);
-                String arg_collectionNo = invocation.getArgument(2);
-                String arg_rawPayload = invocation.getArgument(3);
-                return 1;
-            }).when(collectionRecordRepository).claimSigning(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
-            Mockito.doAnswer(invocation -> {
-                UUID arg_tenantId = invocation.getArgument(0);
-                String arg_chain = invocation.getArgument(1);
-                String arg_collectionNo = invocation.getArgument(2);
-                String arg_status = invocation.getArgument(3);
-                String arg_txHash = invocation.getArgument(4);
-                String arg_errorMessage = invocation.getArgument(5);
-                String arg_rawPayload = invocation.getArgument(6);
-                this.status = arg_status;
-                return 1;
-            }).when(collectionRecordRepository).updateStatus(
-                    ArgumentMatchers.<UUID>any(),
-                    ArgumentMatchers.<String>any(),
-                    ArgumentMatchers.<String>any(),
-                    ArgumentMatchers.<String>any(),
-                    ArgumentMatchers.<String>any(),
-                    ArgumentMatchers.<String>any(),
-                    ArgumentMatchers.<String>any());
-        }
-
-
-    }
-
-    /**
-     * 测试替身 {@code FakeHotWalletAddressService}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class FakeHotWalletAddressService extends HotWalletAddressService {
-        /**
-         * 保存 {@code hot}，用于承载当前测试夹具的配置或运行数据。
-         */
-        private final ChainAddressRecord hot;
-
-        /**
-         * 验证 {@code FakeHotWalletAddressService} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        FakeHotWalletAddressService(ChainAddressRecord hot) {
-            super(null, null, null, null, null, null, null, null, null, null, null);
-            this.hot = hot;
-        }
-
-        /**
-         * 验证 {@code findDefaultHotAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
-            return Optional.of(hot);
-        }
-    }
 }

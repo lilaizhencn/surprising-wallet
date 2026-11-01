@@ -2,6 +2,16 @@
 set -euo pipefail
 
 EVM_MATRIX_ROOT=$(git rev-parse --show-toplevel)
+
+# Explicit acceptance uses actual native nodes; do not silently substitute local private keys.
+if [[ -z "${SW_TEST_MPC_DIRECTORY:-}" ]]; then
+  EVM_MATRIX_MPC_BINARY=${MPC_NATIVE_BINARY:-${MPC_BUILD_DIR:-/tmp/surprising-wallet-mpc-build}/wallet-mpc-signer}
+  if [[ ! -x "$EVM_MATRIX_MPC_BINARY" ]]; then
+    bash "$EVM_MATRIX_ROOT/resources/infra/mpc-signer/build-and-test.sh"
+  fi
+  exec python3 "$EVM_MATRIX_ROOT/resources/infra/mpc-signer/with-test-nodes.py" \
+    "$EVM_MATRIX_MPC_BINARY" bash "${BASH_SOURCE[0]}" "$@"
+fi
 EVM_MATRIX_HARDHAT_ROOT="$EVM_MATRIX_ROOT/resources/infra/evm-fork"
 source "$EVM_MATRIX_ROOT/resources/scripts/regtest/local-postgres.sh"
 EVM_MATRIX_TMP=$(mktemp -d -t surprising-evm-matrix.XXXXXX)
@@ -68,7 +78,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in curl git jq ln mvn node npm psql rsync trash; do
+for command in curl git jq ln mvn node npm psql python3 rsync trash; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -210,6 +220,17 @@ SQL
     -Devm.db.user="$REGTEST_PG_USER" \
     -Devm.db.password="$REGTEST_PG_PASSWORD" \
     test
+
+  python3 - "$EVM_MATRIX_BUILD_ROOT/wallet-api/target/surefire-reports" <<'REPORTS'
+import pathlib
+import sys
+import xml.etree.ElementTree as ET
+root = pathlib.Path(sys.argv[1])
+for name in ('EvmForkFullChainIntegrationTest', 'EvmForkMultiUserBusinessFlowIntegrationTest', 'EvmForkTransactionServiceIntegrationTest'):
+    report = ET.parse(root / ('TEST-com.surprising.wallet.chain.evm.' + name + '.xml')).getroot()
+    if int(report.get('tests', '0')) <= 0 or any(int(report.get(field, '0')) for field in ('failures', 'errors', 'skipped')):
+        raise SystemExit('EVM matrix requires executed, passing tests: ' + name)
+REPORTS
 
   negative_balances=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
     "select count(*) from ledger_balance where chain='$chain' and (available_balance < 0 or locked_balance < 0 or total_balance < 0)")

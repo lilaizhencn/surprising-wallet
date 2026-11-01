@@ -1,0 +1,299 @@
+{
+  "provenance": "@polkadot/api16.5.6 and util-crypto14.0.3 against official isolated v1.25.0 relay/AssetHub metadata; ephemeral Node Ed25519 keys discarded.",
+  "snapshots": [
+    {
+      "role": "RELAY",
+      "genesisHash": "0xc88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353",
+      "specVersion": "1025002",
+      "transactionVersion": "26",
+      "extensions": [
+        "AuthorizeCall",
+        "CheckNonZeroSender",
+        "CheckSpecVersion",
+        "CheckTxVersion",
+        "CheckGenesis",
+        "CheckMortality",
+        "CheckNonce",
+        "CheckWeight",
+        "ChargeTransactionPayment",
+        "CheckMetadataHash",
+        "WeightReclaim"
+      ]
+    },
+    {
+      "role": "ASSET_HUB",
+      "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+      "specVersion": "1025002",
+      "transactionVersion": "16",
+      "extensions": [
+        "AuthorizeCall",
+        "CheckNonZeroSender",
+        "CheckSpecVersion",
+        "CheckTxVersion",
+        "CheckGenesis",
+        "CheckMortality",
+        "CheckNonce",
+        "CheckWeight",
+        "ChargeAssetTxPayment",
+        "CheckMetadataHash",
+        "EthSetOrigin",
+        "StorageWeightReclaim"
+      ]
+    }
+  ],
+  "vectors": [
+    {
+      "ss58Addresses": {
+        "0": "16YTYw29jHbYQFZiPdwjGGwSppdReCtwi1oPo9mfLhEWNkZM",
+        "42": "5HcAQbm5sWL4xiZCRztj887HyCdmwuLodX4udrnJncCzCBoU",
+        "1000": "vjipyJyiRAqk6pigNuRzcnHoKuoG4weSZbDcTbLh6j712vWko",
+        "16383": "yNasXJsC5xZdc6eT4V5j1GqEL3ALZ2R5xaCKc8TxN55x45kST"
+      },
+      "unsigned": {
+        "network": "localnet",
+        "role": "RELAY",
+        "genesisHash": "0xc88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353",
+        "specVersion": 1025002,
+        "transactionVersion": 26,
+        "sender": "5HcAQbm5sWL4xiZCRztj887HyCdmwuLodX4udrnJncCzCBoU",
+        "publicKeyHex": "f52b26e224ef5b2bb3e2b4dbeae57b60578e566690cb4ff4563d7204dfd71c38",
+        "recipient": "5GiYowJ1A5h6K97yVfx5Nxw6Gmdb1vYLc1LjnYwWsv3KiM4a",
+        "amountAtomic": "1000000000000",
+        "assetId": null,
+        "nonce": 0,
+        "eraPeriod": 64,
+        "blockHeight": 108,
+        "blockHash": "0xcdc055396c38537fbb476a4b8464fa9916752bc96b722e68eb57abefaf0aecd9",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeTransactionPayment",
+          "CheckMetadataHash",
+          "WeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x0403",
+          "allowDeath": "0x0400"
+        },
+        "keepAlive": true
+      },
+      "callHex": "0x040300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e8",
+      "payloadHex": "0x040300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e8c502000000eaa30f001a000000c88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353cdc055396c38537fbb476a4b8464fa9916752bc96b722e68eb57abefaf0aecd900",
+      "signingMessageHex": "0x040300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e8c502000000eaa30f001a000000c88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353cdc055396c38537fbb476a4b8464fa9916752bc96b722e68eb57abefaf0aecd900",
+      "signatureHex": "a6882dca72546912f0bf0b6fbc7f8d6f346ef64baffb465b77a1b5ff36421ec7aae3edef31b314e8bf40f44c19da6a7b1f91156e66bc92d7f6171d752e3ff60b",
+      "selected": {
+        "extrinsicHex": "0x45028400f52b26e224ef5b2bb3e2b4dbeae57b60578e566690cb4ff4563d7204dfd71c3800a6882dca72546912f0bf0b6fbc7f8d6f346ef64baffb465b77a1b5ff36421ec7aae3edef31b314e8bf40f44c19da6a7b1f91156e66bc92d7f6171d752e3ff60bc502000000040300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e8",
+        "txHash": "0x1ab143636c7ee0b140bd7ee35f6176ed8d9f7ca0f6abcbd2ccf3440289eaae20"
+      }
+    },
+    {
+      "ss58Addresses": {
+        "0": "142RXjoty4ve9RrJkmE8GwBDQkWaYESUvaTtVDfNRfqV8acJ",
+        "42": "5F68PQYq7HfAhtqno8B88nM4Z8WvqvtLr5jQKvg1saoxx9gq",
+        "1000": "vjgJwHnWAQd5CZtxyGZH1nx36Vj9Dqfz6onGxHQaop5c1gPMC",
+        "16383": "yNYMVHfyqCLxhqpjerD1QHVU6d6DhvSdVnkz6pXr5A4Z2qEqw"
+      },
+      "unsigned": {
+        "network": "localnet",
+        "role": "RELAY",
+        "genesisHash": "0xc88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353",
+        "specVersion": 1025002,
+        "transactionVersion": 26,
+        "sender": "5F68PQYq7HfAhtqno8B88nM4Z8WvqvtLr5jQKvg1saoxx9gq",
+        "publicKeyHex": "85ca855fc5b8a236d10d1d1e7e792f24076c47280f7caea27f6dc4b87690be54",
+        "recipient": "5GiYowJ1A5h6K97yVfx5Nxw6Gmdb1vYLc1LjnYwWsv3KiM4a",
+        "amountAtomic": "340282366920938463463374607431768211455",
+        "assetId": null,
+        "nonce": 4294967295,
+        "eraPeriod": 64,
+        "blockHeight": 108,
+        "blockHash": "0xcdc055396c38537fbb476a4b8464fa9916752bc96b722e68eb57abefaf0aecd9",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeTransactionPayment",
+          "CheckMetadataHash",
+          "WeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x0403",
+          "allowDeath": "0x0400"
+        },
+        "keepAlive": false
+      },
+      "callHex": "0x040000cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffff",
+      "payloadHex": "0x040000cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffffc50203ffffffff0000eaa30f001a000000c88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353cdc055396c38537fbb476a4b8464fa9916752bc96b722e68eb57abefaf0aecd900",
+      "signingMessageHex": "0x040000cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffffc50203ffffffff0000eaa30f001a000000c88917230c50cee1119511a1755c13e18f52bd03ac45d6402b5387e367fc9353cdc055396c38537fbb476a4b8464fa9916752bc96b722e68eb57abefaf0aecd900",
+      "signatureHex": "4eece94a7b0f1f650c9000389327d0fac4e7015153efeb9acddca742aa8842d41d73f2f78b85bfc512842f64b742932d9f3ab9a743376acd2d4968300d1f7703",
+      "selected": {
+        "extrinsicHex": "0x8102840085ca855fc5b8a236d10d1d1e7e792f24076c47280f7caea27f6dc4b87690be54004eece94a7b0f1f650c9000389327d0fac4e7015153efeb9acddca742aa8842d41d73f2f78b85bfc512842f64b742932d9f3ab9a743376acd2d4968300d1f7703c50203ffffffff0000040000cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffff",
+        "txHash": "0x24c8eef79e0e5ef2622eadcf35c420d3b954c198ea41f6ca2d0f7f637f21716e"
+      }
+    },
+    {
+      "ss58Addresses": {
+        "0": "14qwNGnfLVufYAYHGCydFg5yqtvaHhxTptSDcNQddgCuiqeP",
+        "42": "5FueDwXbUieC6dXmJZvd7XFpzGvvbQQKkPhjT5RH5bBPYPdM",
+        "1000": "vjh8T8KUvn44Dxdewn12WmgwrvsZDb9W5i6FHQZL525ySGSk4",
+        "16383": "yNZB18CxbZmwjEZRdMekuGENs4Edhfv9Uh4xRwgbLN4vTRjYc"
+      },
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5FueDwXbUieC6dXmJZvd7XFpzGvvbQQKkPhjT5RH5bBPYPdM",
+        "publicKeyHex": "aa077e9e50b84be94900b89baa96b853e3c129b8c3a76a6a4c8edb4823f25098",
+        "recipient": "5GiYowJ1A5h6K97yVfx5Nxw6Gmdb1vYLc1LjnYwWsv3KiM4a",
+        "amountAtomic": "1000000000000",
+        "assetId": null,
+        "nonce": 64,
+        "eraPeriod": 64,
+        "blockHeight": 487,
+        "blockHash": "0x469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a89806",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x0a03",
+          "allowDeath": "0x0a00"
+        },
+        "keepAlive": true
+      },
+      "callHex": "0x0a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e8",
+      "payloadHex": "0x0a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e875020101000000eaa30f00100000002292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a8980600",
+      "signingMessageHex": "0x0a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e875020101000000eaa30f00100000002292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a8980600",
+      "signatureHex": "c4d5915cadd54abfccfbfe119dbc435289423913adbac15553ad7950a8ed94d3f93f5fcd4f97afbef7a0d9da6f6fca9b19987c67040120ea02fde0a05de8c304",
+      "selected": {
+        "extrinsicHex": "0x4d028400aa077e9e50b84be94900b89baa96b853e3c129b8c3a76a6a4c8edb4823f2509800c4d5915cadd54abfccfbfe119dbc435289423913adbac15553ad7950a8ed94d3f93f5fcd4f97afbef7a0d9da6f6fca9b19987c67040120ea02fde0a05de8c304750201010000000a0300cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd070010a5d4e8",
+        "txHash": "0x6edba862a6d0fd2f10450f82910039ed3651d40a6905af504c189f8417f4c282"
+      }
+    },
+    {
+      "ss58Addresses": {
+        "0": "15JWnrNk84LCUag1yyepHhD7vxAUb4r9naX2Y8F1EKX7hGVd",
+        "42": "5GNDeX7gGH4j33fW2Lbp9YNy5LAptmJ1i5nYNqFegEVbX695",
+        "1000": "vjhb2Yu51ZcUku3ngVmhhoi511vo7tWPmfnL6LKAScjHeFCbV",
+        "16383": "yNZdaYnYgMLNGAyZN5RS6JFW19HsbyH3Aem3EsSRhxiEfQMjP"
+      },
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5GNDeX7gGH4j33fW2Lbp9YNy5LAptmJ1i5nYNqFegEVbX695",
+        "publicKeyHex": "be4c63bb9be6401f490a8f9a5d6d55e5e4999ae06df02e82dbd3976b244d1156",
+        "recipient": "5GiYowJ1A5h6K97yVfx5Nxw6Gmdb1vYLc1LjnYwWsv3KiM4a",
+        "amountAtomic": "1000000",
+        "assetId": "10001",
+        "nonce": 63,
+        "eraPeriod": 64,
+        "blockHeight": 487,
+        "blockHash": "0x469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a89806",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x3209",
+          "allowDeath": "0x3208"
+        },
+        "keepAlive": true
+      },
+      "callHex": "0x3209459c00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd02093d00",
+      "payloadHex": "0x3209459c00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd02093d007502fc000000eaa30f00100000002292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a8980600",
+      "signingMessageHex": "0x3209459c00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd02093d007502fc000000eaa30f00100000002292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a8980600",
+      "signatureHex": "7bfc4d02011643981ae33d1d827ac2cc78821e88cb5e4fd7793daef2bcd7fb539b984a43f4f6c62b5dea3b9dbc87f0a7855110652014c00a094396b65dd6670a",
+      "selected": {
+        "extrinsicHex": "0x49028400be4c63bb9be6401f490a8f9a5d6d55e5e4999ae06df02e82dbd3976b244d1156007bfc4d02011643981ae33d1d827ac2cc78821e88cb5e4fd7793daef2bcd7fb539b984a43f4f6c62b5dea3b9dbc87f0a7855110652014c00a094396b65dd6670a7502fc0000003209459c00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd02093d00",
+        "txHash": "0x53e78b2fcd987321e0829f02206e535c58c161dc4dff7b59ea02f8212651fdcc"
+      }
+    },
+    {
+      "ss58Addresses": {
+        "0": "12KATBWuudE1C6HSZFFirG3ywBkgFAx3UiGzTV3dZTfhHKGD",
+        "42": "5DNsJrFr3qxXkZGvbcCii7Dq5Zm2YsPuQDYWJC4H1NeB6u8W",
+        "1000": "vjebgDEDBMBNZcZQ753JcNGus2APKYcVfMv64Ffy4wsSDqEdh",
+        "16383": "yNWeED7gr8uG4tVAneh2zrpLs9XTodP94LtoCnoELHrPEzHo2"
+      },
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5DNsJrFr3qxXkZGvbcCii7Dq5Zm2YsPuQDYWJC4H1NeB6u8W",
+        "publicKeyHex": "3a16778c678e23410586909ec4da678983ae0ea393f4ca7f25b2546d37c1cbd5",
+        "recipient": "5GiYowJ1A5h6K97yVfx5Nxw6Gmdb1vYLc1LjnYwWsv3KiM4a",
+        "amountAtomic": "340282366920938463463374607431768211455",
+        "assetId": "4294967295",
+        "nonce": 16384,
+        "eraPeriod": 64,
+        "blockHeight": 487,
+        "blockHash": "0x469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a89806",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x3209",
+          "allowDeath": "0x3208"
+        },
+        "keepAlive": false
+      },
+      "callHex": "0x320803ffffffff00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffff",
+      "payloadHex": "0x320803ffffffff00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffff750202000100000000eaa30f00100000002292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a8980600",
+      "signingMessageHex": "0x320803ffffffff00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffff750202000100000000eaa30f00100000002292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc469525a4165919b116fd6440767486a1eb47308b517010fd0f1c499068a8980600",
+      "signatureHex": "e3d6aa296dee47fd62920f6c8df0ac6d1053311c9d36f026df694b50e82a8ef1a25ac547cff7042581fc98b65cb9ebf5a076e5b9db4c9f1e501b2f22c3097a0f",
+      "selected": {
+        "extrinsicHex": "0x950284003a16778c678e23410586909ec4da678983ae0ea393f4ca7f25b2546d37c1cbd500e3d6aa296dee47fd62920f6c8df0ac6d1053311c9d36f026df694b50e82a8ef1a25ac547cff7042581fc98b65cb9ebf5a076e5b9db4c9f1e501b2f22c3097a0f750202000100000000320803ffffffff00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd33ffffffffffffffffffffffffffffffff",
+        "txHash": "0xb5d59085d297acaa9d784d17b5e6d7a4608f496a0aac8a2ace82cb111bc1cdeb"
+      }
+    }
+  ]
+}

@@ -105,6 +105,19 @@ public class DepositRecordRepository {
                 rs.getString("raw_payload")), chain, requiredConfirmations, limit);
     }
 
+    /** Locked native outputs are revisited fairly even when older outputs remain locked indefinitely. */
+    public List<PendingRecord> listPendingMaturity(String chain,int limit) {
+        if(limit<1 || limit>500)throw new IllegalArgumentException("invalid native maturity refresh limit");
+        return jdbc.query("""
+                select asset_symbol,tx_hash,log_index,from_address,to_address,contract_address,amount,
+                       block_height,block_hash,confirmations,account_id,raw_payload
+                  from deposit_record where chain=? and credited=false and canonical_status='CANONICAL'
+                   and status in ('DETECTED','CONFIRMING') order by updated_at,id limit ?
+                """,(rs,row)->new PendingRecord(rs.getString("asset_symbol"),rs.getString("tx_hash"),rs.getLong("log_index"),
+                rs.getString("from_address"),rs.getString("to_address"),rs.getString("contract_address"),rs.getBigDecimal("amount"),
+                rs.getLong("block_height"),rs.getString("block_hash"),rs.getInt("confirmations"),rs.getString("account_id"),rs.getString("raw_payload")),chain,limit);
+    }
+
     /** 查询指定区块上需要重组的充值。 */
     public List<ReorgRecord> listForReorg(String chain, long blockHeight, String replacementHash) {
         return jdbc.query("""
@@ -119,6 +132,18 @@ public class DepositRecordRepository {
                 rs.getLong("log_index"), rs.getString("account_id"), rs.getString("to_address"),
                 rs.getBigDecimal("amount"), rs.getBoolean("credited"), rs.getInt("credit_generation"),
                 rs.getLong("block_height"), rs.getString("block_hash")), chain, blockHeight, replacementHash);
+    }
+
+    public List<ReorgRecord> listCanonicalAbove(String chain, long commonHeight) {
+        return jdbc.query("""
+                select id,tenant_id,chain,asset_symbol,tx_hash,log_index,account_id,to_address,amount,
+                       credited,credit_generation,block_height,block_hash
+                  from deposit_record where chain=? and block_height>? and canonical_status='CANONICAL'
+                 order by block_height desc,id for update
+                """, (row, index) -> new ReorgRecord(row.getLong("id"), row.getObject("tenant_id", java.util.UUID.class),
+                row.getString("chain"), row.getString("asset_symbol"), row.getString("tx_hash"), row.getLong("log_index"),
+                row.getString("account_id"), row.getString("to_address"), row.getBigDecimal("amount"), row.getBoolean("credited"),
+                row.getInt("credit_generation"), row.getLong("block_height"), row.getString("block_hash")), chain, commonHeight);
     }
 
     /** 查询已经入账且仍处于 canonical 状态的充值区块高度。 */

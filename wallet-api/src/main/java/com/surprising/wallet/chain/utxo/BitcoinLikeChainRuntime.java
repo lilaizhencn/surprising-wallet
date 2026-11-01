@@ -3,7 +3,6 @@ package com.surprising.wallet.chain.utxo;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.chain.ltc.LitecoinEsploraCommand;
 import com.surprising.wallet.chain.model.ChainAsset;
-import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.chain.model.UtxoBlock;
 import com.surprising.wallet.chain.rpc.BchCommand;
 import com.surprising.wallet.chain.rpc.BtcCommand;
@@ -14,10 +13,8 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.UtxoOutput;
-import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.config.PubKeyConfig;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -50,7 +47,6 @@ public class BitcoinLikeChainRuntime {
     private final ChainProfileRepository chainProfileRepository;
     private final ChainAssetRepository chainAssetRepository;
     private final ChainAddressRepository addresses;
-    private final PubKeyConfig pubKeyConfig;
 
     /** BTC JSON-RPC 命令执行器 */
     private final BtcCommand btcCommand;
@@ -67,7 +63,6 @@ public class BitcoinLikeChainRuntime {
     public BitcoinLikeChainRuntime(
             ChainProfileRepository chainProfileRepository,
             ChainAssetRepository chainAssetRepository,
-            PubKeyConfig pubKeyConfig,
             BtcCommand btcCommand,
             LitecoinEsploraCommand ltcCommand,
             DogeCommand dogeCommand,
@@ -75,7 +70,6 @@ public class BitcoinLikeChainRuntime {
             ChainAddressRepository addresses) {
         this.chainProfileRepository = java.util.Objects.requireNonNull(chainProfileRepository);
         this.chainAssetRepository = java.util.Objects.requireNonNull(chainAssetRepository);
-        this.pubKeyConfig = java.util.Objects.requireNonNull(pubKeyConfig);
         this.btcCommand = java.util.Objects.requireNonNull(btcCommand);
         this.ltcCommand = java.util.Objects.requireNonNull(ltcCommand);
         this.dogeCommand = java.util.Objects.requireNonNull(dogeCommand);
@@ -83,60 +77,9 @@ public class BitcoinLikeChainRuntime {
         this.addresses = java.util.Objects.requireNonNull(addresses);
     }
 
-    /**
-     * 生成充值地址（自动递增派生索引）。
-     *
-     * <p>最多重试 5 次以避免索引冲突，禁止为默认热钱包用户（userId=0, biz=0）生成地址。
-     *
-     * @param chainType 链类型
-     * @param userId    用户 ID
-     * @param biz       业务标识
-     * @return 新生成的地址对象
-     * @throws DuplicateKeyException 如果 5 次尝试后仍遇到索引冲突
-     */
-    @Transactional(rollbackFor = Throwable.class)
-    public synchronized Address generateDepositAddress(ChainType chainType, long userId, int biz) {
-        rejectReservedHotAddress(userId, biz);
-        AccountChainProfile profile = profile(chainType);
-        AssetRuntimeMetadata asset = assetMetadata(profile);
-        for (int attempt = 0; attempt < 5; attempt++) {
-            try {
-                int index = nextAddressIndex(asset, userId, biz);
-                Address address = buildAddress(profile, asset, userId, biz, index);
-                addresses.upsert(toChainAddressRecord(address, asset));
-                return address;
-            } catch (DuplicateKeyException e) {
-                if (attempt == 4) {
-                    throw e;
-                }
-            }
-        }
-        throw new IllegalStateException("failed to allocate a unique address index for " + chainType);
-    }
 
-    /**
-     * 按指定派生索引生成充值地址。
-     *
-     * @param profile    本次操作已读取的启用链配置
-     * @param userId     用户 ID
-     * @param biz        业务标识
-     * @param childIndex BIP44 子索引（0 到 2147483647）
-     * @return 指定索引的地址对象
-     * @throws IllegalArgumentException 如果 childIndex 超出范围
-     */
-    @Transactional(rollbackFor = Throwable.class)
-    public synchronized ChainAddressRecord generateDepositAddressAtIndex(
-            AccountChainProfile profile, long userId, int biz, long childIndex) {
-        rejectReservedHotAddress(userId, biz);
-        if (childIndex < 0 || childIndex > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("childIndex must be between 0 and 2147483647");
-        }
-        AssetRuntimeMetadata asset = assetMetadata(profile);
-        Address address = buildAddress(profile, asset, userId, biz, Math.toIntExact(childIndex));
-        addresses.upsert(toChainAddressRecord(address, asset));
-        return addresses.find(profile.getChain(), profile.getNativeSymbol(), userId, biz, childIndex, "DEPOSIT")
-                .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
-    }
+
+
     /**
      * 校验链地址格式是否合法。
      *
@@ -289,64 +232,9 @@ public class BitcoinLikeChainRuntime {
                 asset == null ? null : asset.getDecimals(),
                 asset == null ? null : asset.getContractAddress());
     }
-    private int nextAddressIndex(AssetRuntimeMetadata asset, long userId, int biz) {
-        return addresses.findMaxIndex(asset.chain(), asset.assetSymbol(), userId, biz, "DEPOSIT")
-                .map(value -> Math.toIntExact(value + 1))
-                .orElse(0);
-    }
-    private Address buildAddress(AccountChainProfile profile, AssetRuntimeMetadata asset, long userId, int biz, int index) {
-        ChainType chainType = ChainType.valueOf(profile.getChain());
-        NetworkParameters params = BitcoinLikeNetwork.parse(profile.getNetwork()).parameters(profile.getChain());
-        PubKeyConfig.AddressMetadata metadata;
-        String address;
-        if (chainType == ChainType.DOGE || chainType == ChainType.BCH) {
-            metadata = pubKeyConfig.genLegacyThreeTwoAddressMetadata(
-                    params, asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
-            address = metadata.address();
-            if (chainType == ChainType.BCH) {
-                BitcoinCashNetworkParameters bchParams = (BitcoinCashNetworkParameters) params;
-                address = BitcoinCashAddressCodec.fromLegacy(
-                        LegacyAddress.fromBase58(bchParams, metadata.address()), bchParams.cashPrefix());
-            }
-        } else {
-            metadata = pubKeyConfig.genThreeTwoAddressMetadata(
-                    params, asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
-            address = metadata.address();
-        }
-        return Address.builder()
-                .address(address)
-                .network(params.getPaymentProtocolId())
-                .scriptType(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "P2SH" : "P2WSH")
-                .redeemScript(metadata.redeemScript())
-                .witnessScript(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "" : metadata.witnessScript())
-                .derivationPath(metadata.path())
-                .publicKeys(metadata.publicKeys())
-                .biz(biz)
-                .currency(asset.getName())
-                .userId(userId)
-                .index(index)
-                .balance(BigDecimal.ZERO)
-                .nonce(0)
-                .status((byte) Constants.WAITING)
-                .createDate(Date.from(Instant.now()))
-                .updateDate(Date.from(Instant.now()))
-                .build();
-    }
-    private ChainAddressRecord toChainAddressRecord(Address address, AssetRuntimeMetadata asset) {
-        return ChainAddressRecord.builder()
-                .chain(asset.chain())
-                .assetSymbol(asset.assetSymbol())
-                .accountId(address.getUserId().toString())
-                .userId(address.getUserId())
-                .biz(address.getBiz())
-                .addressIndex(address.getIndex().longValue())
-                .address(address.getAddress())
-                .ownerAddress(null)
-                .derivationPath(address.getDerivationPath())
-                .walletRole("DEPOSIT")
-                .enabled(true)
-                .build();
-    }
+
+
+
 
     private String extractOutputAddress(ChainType chainType, ScriptPubKey pubKey) {
         if (pubKey == null) {
@@ -412,11 +300,7 @@ public class BitcoinLikeChainRuntime {
             return false;
         }
     }
-    private void rejectReservedHotAddress(long userId, int biz) {
-        if (HotWalletRules.isDefaultHotUser(userId, biz)) {
-            throw new IllegalArgumentException("userId=0,biz=0 is reserved for the unique default hot wallet address");
-        }
-    }
+
     private AccountChainProfile bitcoinLikeProfile(ChainType chainType) {
         return chainProfileRepository.findAccountByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));

@@ -4,145 +4,51 @@ import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.ton.ton4j.address.Address;
-import org.ton.ton4j.smartcontract.wallet.v4.WalletV4R2;
 
-/**
- * TON 链地址管理服务，负责创建和管理 TON 地址（原生 TON 地址和 Jetton Wallet 地址）。
- *
- * <p>原生地址基于 WalletV4R2 智能合约，从 Ed25519 密钥对生成链上钱包地址。
- * Jetton Wallet 地址由 TON API 解析后注册，通过 {@link TonKeyService} 关联所有者。</p>
- *
- * <p>地址格式支持：
- * <ul>
- *   <li><b>Raw</b>：0:&lt;64 hex&gt;（workchain:hash）</li>
- *   <li><b>Friendly (bounceable)</b>：EQ...（base64-url）</li>
- *   <li><b>Friendly (non-bounceable)</b>：UQ...（base64-url）</li>
- * </ul>
- * 存储和比较统一使用 raw 格式。</p>
- *
- * @see TonKeyService
- */
+/** Public-only owner lookup and configured-master Jetton registration; native addresses are published by MPC DKG. */
 @Service
 @RequiredArgsConstructor
 public class TonAddressService {
+    private final TonCenterClient rpc;
+    private final ChainAddressRepository addresses;
+    private final ChainProfileRepository profiles;
+    private final TokenConfigRepository tokens;
 
-    /** 链标识常量 */
-    private static final String CHAIN = "TON";
-
-    /** TON 密钥服务 */
-    private final TonKeyService keyService;
-    private final ChainAddressRepository chainAddressRepository;
-    private final ChainProfileRepository chainProfileRepository;
-
-
-    /**
-     * 创建原生 TON 地址并持久化。
-     *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param biz            业务标识
-     * @param derivationIndex 派生索引
-     * @param walletRole     钱包角色（DEPOSIT、HOT 等）
-     * @return 创建或已存在的地址记录
-     */
-    public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
-                                                  long derivationIndex, String walletRole) {
-        Objects.requireNonNull(tenantId, "tenantId is required");
-        HotWalletRules.requireAllowedReservedAddress(CHAIN, "TON", "TON", userId, biz, derivationIndex, walletRole);
-        return chainAddressRepository.find(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
-                .orElseGet(() -> {
-                    WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
-                    String address = friendly(wallet.getAddress(), false);
-                    ChainAddressRecord record = ChainAddressRecord.builder()
-                            .tenantId(tenantId)
-                            .chain(CHAIN)
-                            .assetSymbol("TON")
-                            .accountId(address)
-                            .userId(userId)
-                            .biz(biz)
-                            .addressIndex(derivationIndex)
-                            .address(address)
-                            .ownerAddress(address)
-                            .derivationPath(keyService.derive(userId, biz, derivationIndex).derivationPath())
-                            .walletRole(walletRole)
-                            .enabled(true)
-                            .build();
-                    chainAddressRepository.upsert(record);
-                    return chainAddressRepository.find(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
-                            .orElseThrow();
-                });
+    public ChainAddressRecord requireNativeAddress(UUID tenant, long user, int biz, long index, String role) {
+        Objects.requireNonNull(tenant, "TON tenant is required");
+        HotWalletRules.requireAllowedReservedAddress("TON", "TON", "TON", user, biz, index, role);
+        var owner = addresses.find("TON", "TON", user, biz, index, role).orElseThrow(() -> new IllegalStateException("TON owner must be published through MPC first"));
+        require(tenant.equals(owner.getTenantId()) && Boolean.TRUE.equals(owner.getEnabled()) && owner.getMpcKeyId() != null,
+                "TON owner is not an active tenant MPC address");
+        return owner;
     }
-
-    /**
-     * 注册 Jetton Wallet 地址并持久化。
-     *
-     * <p>Jetton Wallet 是 TEP-74 标准中管理用户 Jetton 余额的独立合约地址。
-     * 先确保所有者原生地址已创建，再以 Jetton wallet 地址作为 chain_address 记录。</p>
-     *
-     * @param tenantId            租户 ID
-     * @param symbol              代币符号
-     * @param jettonWalletAddress Jetton Wallet 合约地址
-     * @param userId              用户 ID
-     * @param biz                 业务标识
-     * @param derivationIndex     派生索引
-     * @param walletRole          钱包角色
-     * @return 创建或已存在的地址记录
-     */
-    public ChainAddressRecord registerJettonWallet(UUID tenantId, String symbol, String jettonWalletAddress,
-                                                   long userId, int biz, long derivationIndex,
-                                                   String walletRole) {
-        Objects.requireNonNull(tenantId, "tenantId is required");
-        HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "TON", userId, biz, derivationIndex, walletRole);
-        ChainAddressRecord owner = createNativeAddress(tenantId, userId, biz, derivationIndex, walletRole);
-        return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
-                .orElseGet(() -> {
-                    String address = friendly(Address.of(jettonWalletAddress), true);
-                    ChainAddressRecord record = ChainAddressRecord.builder()
-                            .tenantId(tenantId)
-                            .chain(CHAIN)
-                            .assetSymbol(symbol)
-                            .accountId(owner.getAddress())
-                            .userId(userId)
-                            .biz(biz)
-                            .addressIndex(derivationIndex)
-                            .address(address)
-                            .ownerAddress(owner.getAddress())
-                            .derivationPath(owner.getDerivationPath())
-                            .walletRole(walletRole)
-                            .enabled(true)
-                            .build();
-                    chainAddressRepository.upsert(record);
-                    return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
-                            .orElseThrow();
-                });
+    public ChainAddressRecord registerJettonWallet(UUID tenant, String symbol, String walletAddress,
+                                                    long user, int biz, long index, String role) {
+        HotWalletRules.requireAllowedReservedAddress("TON", symbol, "TON", user, biz, index, role);
+        require(!"TON".equals(symbol), "TON native address is not a Jetton wallet");
+        var owner = requireNativeAddress(tenant, user, biz, index, role);
+        var profile = profiles.findAccountByChain("TON").orElseThrow();
+        var token = tokens.findDefinition("TON", profile.getNetwork(), symbol).orElseThrow();
+        String expected = rpc.jettonWallet(owner.getAddress(), token.getContractAddress());
+        require(expected.equals(normalizeRaw(walletAddress)), "TON Jetton wallet differs from configured master getter");
+        var existing = addresses.find("TON", symbol, user, biz, index, role);
+        if (existing.isPresent()) {
+            var row = existing.get();
+            require(tenant.equals(row.getTenantId()) && owner.getMpcKeyId().equals(row.getMpcKeyId())
+                    && owner.getAccountId().equals(row.getAccountId()) && normalizeRaw(owner.getAddress()).equals(normalizeRaw(row.getOwnerAddress()))
+                    && expected.equals(normalizeRaw(row.getAddress())) && Boolean.TRUE.equals(row.getEnabled()), "TON existing Jetton registration differs from published owner");
+            return row;
+        }
+        var record = ChainAddressRecord.builder().tenantId(tenant).mpcKeyId(owner.getMpcKeyId())
+                .chain("TON").assetSymbol(symbol).accountId(owner.getAccountId()).userId(user).biz(biz).addressIndex(index)
+                .address(expected).ownerAddress(owner.getAddress()).derivationPath(owner.getDerivationPath()).walletRole(role).enabled(true).build();
+        return addresses.publishMpc(record);
     }
-
-    /**
-     * 将地址转换为 raw 格式用于比较。
-     *
-     * @param address 任意格式的 TON 地址
-     * @return raw 格式地址（0:&lt;64 hex&gt;）
-     */
-    public String normalizeRaw(String address) {
-        return Address.of(address).toRaw();
-    }
-
-    /**
-     * 根据网络类型生成 friendly 格式地址。
-     *
-     * @param address    TON 地址对象
-     * @param bounceable 是否生成 bounceable 格式
-     * @return friendly 格式地址
-     */
-    private String friendly(Address address, boolean bounceable) {
-        boolean testnet = chainProfileRepository.findAccountByChain(CHAIN)
-                .map(profile -> profile.getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test"))
-                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-        return address.toString(true, true, bounceable, testnet);
-    }
+    public String normalizeRaw(String value) { return MpcTonTransactionCodec.canonicalAddress(value); }
+    private static void require(boolean condition, String message) { if (!condition) throw new IllegalStateException(message); }
 }

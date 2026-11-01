@@ -8,7 +8,12 @@ import com.surprising.wallet.common.queue.PgmqClient;
 import com.surprising.wallet.common.queue.WalletQueue;
 import com.surprising.wallet.common.signing.*;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.repository.ChainFeeRateRepository;
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.service.*;
+import com.surprising.wallet.testutil.MpcSigningTestSupport;
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import java.util.List;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.service.UtxoBatchService;
@@ -48,6 +53,8 @@ class UtxoSigningSubmissionIntegrationTest {
     private ChainSigningTransactionRepository transactions;
     private UtxoSigningSubmissionService submissions;
     private PgmqClient queue;
+    private MpcSigningTestSupport mpc;
+    private ChainAddressRecord source;
 
     @Configuration(proxyBeanMethods = false)
     @EnableTransactionManagement
@@ -57,8 +64,12 @@ class UtxoSigningSubmissionIntegrationTest {
         var ds = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(ds);
         jdbc = new JdbcTemplate(ds);
-        jdbc.execute("truncate pgmq.q_wallet_sign_first, pgmq.a_wallet_sign_first");
+        jdbc.execute("truncate pgmq.q_wallet_mpc_sign, pgmq.a_wallet_mpc_sign");
+        jdbc.update("update chain_profile set enabled=false where chain='BTC'");
+        jdbc.update("update chain_profile set enabled=true where chain='BTC' and network='regtest'");
         repository = DepositTestSupport.repository(jdbc);
+        mpc = new MpcSigningTestSupport(jdbc);
+        source = mpc.address(jdbc,TENANT,ChainType.BTC,198,0,"HOT");
         transactions = new ChainSigningTransactionRepository(jdbc, json);
         queue = new PgmqClient(jdbc);
         var runtime = mock(BlockchainRuntimeService.class);
@@ -80,6 +91,11 @@ class UtxoSigningSubmissionIntegrationTest {
         context.registerBean(ChainFeeRateRepository.class, () -> rates);
         context.registerBean(PgmqClient.class, () -> queue);
         context.registerBean(ObjectMapper.class, () -> json);
+        context.registerBean(com.surprising.wallet.chain.signing.MpcNodes.class, () -> mpc.nodes);
+        context.registerBean(MpcSigningService.class, () -> mpc.signing);
+        context.registerBean(WalletMpcSignRequestRepository.class, () -> new WalletMpcSignRequestRepository(jdbc));
+        context.registerBean(com.surprising.wallet.common.queue.QueueWorker.class, () -> new com.surprising.wallet.common.queue.QueueWorker(queue,mpc.manager));
+        context.registerBean(UtxoMpcSigningService.class);
         context.registerBean(UtxoSigningSubmissionService.class);
         context.registerBean(UtxoBatchService.class);
         repository.register(context);
@@ -99,14 +115,14 @@ class UtxoSigningSubmissionIntegrationTest {
         }
         assertEquals(1, queued());
         var payload = JacksonJson.readObject(json, jdbc.queryForObject(
-                "select message::text from pgmq.q_wallet_sign_first", String.class));
+                "select message::text from pgmq.q_wallet_mpc_sign", String.class));
         assertEquals("BTC", payload.path("request").path("asset").path("chain").asText());
         assertEquals(0, new BigDecimal("0.01000001").compareTo(payload.path("request").path("inputs").get(0).path("amount").decimalValue()));
         assertEquals(request.toString(), payload.path("request").path("requestId").asText());
         assertEquals(TENANT.toString(), jdbc.queryForObject(
-                "select headers->>'tenant_id' from pgmq.q_wallet_sign_first", String.class));
-        queue.archive(WalletQueue.SIGN_FIRST, queue.read(WalletQueue.SIGN_FIRST, 30, 1).getFirst());
-        jdbc.execute("truncate pgmq.a_wallet_sign_first");
+                "select headers->>'tenant_id' from pgmq.q_wallet_mpc_sign", String.class));
+        queue.archive(WalletQueue.MPC_SIGN, queue.read(WalletQueue.MPC_SIGN, 30, 1).getFirst());
+        jdbc.execute("truncate pgmq.a_wallet_mpc_sign");
         submissions.enqueue(TENANT, "BTC", tx.id(), request);
         assertEquals(0, queued());
         assertEquals(request, receipt(tx.id()));
@@ -148,6 +164,8 @@ class UtxoSigningSubmissionIntegrationTest {
         });
         assertEquals(0, queued());
         assertNull(receipt(tx.id()));
+        assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_attempt",Integer.class));
         submissions.enqueue(TENANT, "BTC", tx.id(), request);
         assertEquals(1, queued());
     }
@@ -155,16 +173,18 @@ class UtxoSigningSubmissionIntegrationTest {
     @Test void queueFailureRollsBackOrderInputLocksAndSigningRecordThenRetrySucceeds() {
         seedWithdrawal();
         var batch = context.getBean(UtxoBatchService.class);
-        jdbc.execute("alter table pgmq.q_wallet_sign_first rename to q_wallet_sign_first_unavailable");
+        jdbc.execute("alter table pgmq.q_wallet_mpc_sign rename to q_wallet_mpc_sign_unavailable");
         try {
             assertThrows(IllegalStateException.class, () -> batch.execute("BTC"));
         } finally {
-            jdbc.execute("alter table pgmq.q_wallet_sign_first_unavailable rename to q_wallet_sign_first");
+            jdbc.execute("alter table pgmq.q_wallet_mpc_sign_unavailable rename to q_wallet_mpc_sign");
         }
         assertEquals("FROZEN", jdbc.queryForObject("select status from withdrawal_order where order_no='TEST-SUBMIT'", String.class));
         assertEquals("AVAILABLE", jdbc.queryForObject("select state from utxo_record", String.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from chain_signing_transaction", Integer.class));
         assertEquals(0, queued());
+        assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_attempt",Integer.class));
         batch.execute("BTC");
         batch.execute("BTC");
         assertEquals("SIGNING", jdbc.queryForObject("select status from withdrawal_order where order_no='TEST-SUBMIT'", String.class));
@@ -174,44 +194,47 @@ class UtxoSigningSubmissionIntegrationTest {
     }
 
     private UtxoSigningTransaction createSigning(UUID requestId) {
-        var request = request(TENANT, UtxoSigningRequest.Operation.WITHDRAWAL, "0.01000001", "0.005");
-        return transactions.create(request.replacement(requestId, 10, request.payments()), "TEST-REQUEST");
+        var amount = new BigDecimal("0.01000001");
+        var request = new UtxoSigningRequest(TENANT,requestId,
+                new UtxoSigningRequest.Asset("BTC",com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork.REGTEST,1,8,0),
+                UtxoSigningRequest.Operation.WITHDRAWAL,null,
+                List.of(new UtxoSigningRequest.Input("c".repeat(64),0,source.getAddress(),amount,
+                        new UtxoSigningRequest.Key(198,source.getBiz(),0,null))),
+                List.of(new UtxoSigningRequest.Payment("TEST-REQUEST",100,source.getAddress(),new BigDecimal("0.005"),BigDecimal.ZERO)),
+                source.getAddress(),10,546);
+        repository.withdrawalOrderRepository.createForTenant(TENANT,"TEST-REQUEST",100,"BTC","BTC",source.getAddress(),"user",source.getAddress(),new BigDecimal("0.005"),BigDecimal.ZERO);
+        repository.withdrawalOrderRepository.updateStatus(TENANT,"BTC","TEST-REQUEST","SIGNING",source.getAddress(),null,null);
+        var tx=transactions.create(request,"TEST-REQUEST");
+        repository.utxoRepository.upsert("BTC","BTC","c".repeat(64),0,source.getAddress(),amount,1,"block",6,true);
+        assertEquals(1,repository.utxoRepository.lock("BTC","c".repeat(64),0,Integer.toString(tx.id())));
+        return tx;
     }
 
-    private int queued() { return jdbc.queryForObject("select count(*) from pgmq.q_wallet_sign_first", Integer.class); }
+    private int queued() { return jdbc.queryForObject("select count(*) from pgmq.q_wallet_mpc_sign", Integer.class); }
     private UUID receipt(int id) {
         return jdbc.queryForObject("select enqueued_signing_request_id from chain_signing_transaction where id=?", UUID.class, id);
     }
 
     private void seedWithdrawal() {
-        Long addressId = jdbc.queryForObject("""
-                insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz,
-                    address_index, address, owner_address, derivation_path, wallet_role, enabled)
-                values (?, 'BTC', 'BTC', 'hot', 198, 1, 0, 'hot', 'hot', 'test-derivation', 'HOT', true)
-                returning id
-                """, Long.class, TENANT);
         UUID custody = UUID.randomUUID();
         jdbc.update("""
-                insert into custody_address(id, tenant_id, chain_address_id, chain, network, address,
-                    subject, source, derivation_subject, derivation_child)
-                values (?, ?, ?, 'BTC', 'regtest', 'hot', 'hot', 'API', 198, 0)
-                """, custody, TENANT, addressId);
-        jdbc.update("""
-                insert into custody_gas_account(id, tenant_id, custody_address_id, chain, network, native_symbol)
-                values (?, ?, ?, 'BTC', 'regtest', 'BTC')
-                """, UUID.randomUUID(), TENANT, custody);
+                insert into custody_address(id,tenant_id,chain_address_id,chain,network,address,subject,source,derivation_subject,derivation_child)
+                values (?, ?, ?, 'BTC','regtest',?,'hot','API',198,0)
+                """,custody,TENANT,source.getId(),source.getAddress());
+        jdbc.update("insert into custody_gas_account(id,tenant_id,custody_address_id,chain,network,native_symbol) values (?, ?, ?, 'BTC','regtest','BTC')",
+                UUID.randomUUID(),TENANT,custody);
         repository.withdrawalOrderRepository.createForTenant(
                 TENANT,
                 "TEST-SUBMIT",
                 100,
                 "BTC",
                 "BTC",
-                "hot",
+                source.getAddress(),
                 "user",
-                "destination",
+                source.getAddress(),
                 new BigDecimal("0.001"),
                 new BigDecimal("0.00002"));
-        repository.withdrawalOrderRepository.updateStatus(TENANT, "BTC", "TEST-SUBMIT", "FROZEN", "hot", null, null);
-        repository.utxoRepository.upsert("BTC", "BTC", "c".repeat(64), 0, "hot", new BigDecimal("0.01"), 1, "block", 6, true);
+        repository.withdrawalOrderRepository.updateStatus(TENANT, "BTC", "TEST-SUBMIT", "FROZEN", source.getAddress(), null, null);
+        repository.utxoRepository.upsert("BTC", "BTC", "c".repeat(64), 0, source.getAddress(), new BigDecimal("0.01"), 1, "block", 6, true);
     }
 }

@@ -73,7 +73,7 @@ class Evm7702RpcClientTest {
     @ParameterizedTest @ValueSource(booleans = {true, false})
     void estimatesTheSameEnvelopeThatWillBeSignedIncludingFullWidthAuthorizationValues(boolean authorized) throws Exception {
         BigInteger nonce = BigInteger.ONE.shiftLeft(63).add(BigInteger.valueOf(3));
-        var tuple = new Evm7702AuthorizationService().authorize(BigInteger.valueOf(84532), ADDRESS,
+        var tuple = new com.surprising.wallet.testutil.Evm7702TestSigning().authorize(BigInteger.valueOf(84532), ADDRESS,
                 nonce, Credentials.create("11".repeat(32)));
         assertEquals(BigInteger.valueOf(21000), rpc.estimateGas(http, ADDRESS, ADDRESS, "0x1234",
                 BigInteger.TWO, BigInteger.TEN, authorized ? List.of(tuple) : List.of()));

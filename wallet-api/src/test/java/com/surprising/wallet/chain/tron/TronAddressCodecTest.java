@@ -19,7 +19,7 @@ class TronAddressCodecTest {
      */
     @Test
     void base58AndHex_shouldRoundTrip() {
-        String address = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(42), true));
+        String address = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(42), true));
         String hex = TronAddressCodec.base58ToHex(address);
         assertEquals(42, hex.length());
         assertTrue(hex.startsWith("41"));
@@ -31,7 +31,7 @@ class TronAddressCodecTest {
      */
     @Test
     void topicAddress_shouldDecodeToBase58() {
-        String address = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(43), true));
+        String address = TronPublicTestAddress.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(43), true));
         String hex = TronAddressCodec.base58ToHex(address);
         String topic = "000000000000000000000000" + hex.substring(2);
         assertEquals(address, TronAddressCodec.topicAddressToBase58(topic));

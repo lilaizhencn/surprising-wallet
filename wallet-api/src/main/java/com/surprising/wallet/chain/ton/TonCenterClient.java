@@ -21,6 +21,11 @@ import java.util.Base64;
 
 import java.util.HexFormat;
 import java.util.Optional;
+import java.math.BigInteger;
+import org.ton.ton4j.address.Address;
+import org.ton.ton4j.cell.Cell;
+import org.ton.ton4j.cell.CellBuilder;
+import org.ton.ton4j.cell.CellSlice;
 
 /**
  * TON Center REST API 客户端，通过 HTTP 与 TON Center 节点交互。
@@ -57,9 +62,6 @@ public class TonCenterClient {
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
-
-    /** 上次请求时间戳（用于无 API Key 时的速率限制） */
-    private long lastRequestMillis;
 
     public TonCenterClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
                             ChainRpcNodeService rpcNodeService) {
@@ -134,6 +136,47 @@ public class TonCenterClient {
         }
         return Optional.empty();
     }
+    public Optional<JsonNode> findIncomingMessageTransaction(String address, String messageHash, int limit) {
+        JsonNode history = transactions(address, limit);
+        if (!history.isArray()) throw new IllegalStateException("TON transaction history is not an array");
+        for (var tx : history) if (sameHash(messageHash, tx.path("in_msg").path("hash").asText())) return Optional.of(tx);
+        return Optional.empty();
+    }
+
+    /** Resolve with the configured master's getter; never assume a particular Jetton wallet code layout. */
+    public String jettonWallet(String owner, String master) {
+        var argument = CellBuilder.beginCell().storeAddress(Address.of(MpcTonTransactionCodec.canonicalAddress(owner))).endCell();
+        var stack = objectMapper.createArrayNode();
+        stack.add(objectMapper.createArrayNode().add("tvm.Slice").add(Base64.getEncoder().encodeToString(argument.toBoc(false))));
+        var result = runGetMethod(MpcTonTransactionCodec.canonicalAddress(master), "get_wallet_address", stack);
+        requireGetter(result, 1);
+        return MpcTonTransactionCodec.canonicalAddress(CellSlice.beginParse(stackCell(result.path("stack").path(0))).loadAddress().toRaw());
+    }
+
+    public record JettonData(BigInteger balance, String owner, String master, String codeHashHex) { }
+    public JettonData jettonData(String wallet) {
+        var result = runGetMethod(MpcTonTransactionCodec.canonicalAddress(wallet), "get_wallet_data", objectMapper.createArrayNode());
+        requireGetter(result, 4);
+        var stack = result.path("stack");var number = stack.path(0);
+        if (!"num".equals(number.path(0).asText()) || !number.path(1).asText().matches("0x[0-9a-fA-F]+")) {
+            throw new IllegalStateException("TON Jetton balance getter is invalid");
+        }
+        return new JettonData(new BigInteger(number.path(1).asText().substring(2),16),
+                MpcTonTransactionCodec.canonicalAddress(CellSlice.beginParse(stackCell(stack.path(1))).loadAddress().toRaw()),
+                MpcTonTransactionCodec.canonicalAddress(CellSlice.beginParse(stackCell(stack.path(2))).loadAddress().toRaw()),
+                HexFormat.of().formatHex(stackCell(stack.path(3)).hash()));
+    }
+    private static void requireGetter(JsonNode result, int count) {
+        if (!result.path("exit_code").isIntegralNumber() || result.path("exit_code").asInt() != 0
+                || !result.path("stack").isArray() || result.path("stack").size() != count) {
+            throw new IllegalStateException("TON getter did not return the expected successful stack");
+        }
+    }
+    private static Cell stackCell(JsonNode item) {
+        if (!("cell".equals(item.path(0).asText()) || "slice".equals(item.path(0).asText()))
+                || !item.path(1).path("bytes").isTextual()) throw new IllegalStateException("TON getter cell is invalid");
+        return Cell.fromBocBase64(item.path(1).path("bytes").asText());
+    }
     public JsonNode runGetMethod(String address, String method, JsonNode stack) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("address", address);
@@ -159,15 +202,10 @@ public class TonCenterClient {
                 node -> execute(method, URI.create(trim(node.getRpcUrl()) + path), body, node));
     }
     private synchronized JsonNode execute(String method, URI uri, String body, ChainRpcNode node) {
-        String apiKey = node.getApiKey() == null ? "" : node.getApiKey();
         int attempts = 3;
         IllegalStateException lastFailure = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                long wait = 1_050L - (System.currentTimeMillis() - lastRequestMillis);
-                if (apiKey.isBlank() && wait > 0) {
-                    Thread.sleep(wait);
-                }
                 HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                         .timeout(Duration.ofSeconds(30))
                         .method(method, body == null
@@ -180,7 +218,6 @@ public class TonCenterClient {
                 }
                 rpcNodeService.applyAuthHeaders(builder, node);
                 HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-                lastRequestMillis = System.currentTimeMillis();
                 if (response.statusCode() / 100 != 2) {
                     String message = "TON Center HTTP " + response.statusCode() + ": " + abbreviate(response.body());
                     if (isRetryable(response.statusCode()) && attempt < attempts) {
@@ -246,10 +283,11 @@ public class TonCenterClient {
      * @param second 第二个哈希字符串（Hex 或 Base64）
      * @return true 表示字节级相等
      */
-    static boolean sameHash(String first, String second) {
+    public static boolean sameHash(String first, String second) {
         byte[] firstBytes = decodeHash(first);
         byte[] secondBytes = decodeHash(second);
-        return firstBytes != null && secondBytes != null && Arrays.equals(firstBytes, secondBytes);
+        return firstBytes != null && secondBytes != null && firstBytes.length == 32 && secondBytes.length == 32
+                && Arrays.equals(firstBytes, secondBytes);
     }
     private static byte[] decodeHash(String value) {
         if (value == null || value.isBlank()) {

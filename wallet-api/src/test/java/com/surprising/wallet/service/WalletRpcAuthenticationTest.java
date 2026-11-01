@@ -82,7 +82,7 @@ class WalletRpcAuthenticationTest {
                 Arguments.of("API_KEY", "HTTP_JSON_RPC", null, "X-API-Key", "test-key"),
                 Arguments.of("BEARER", "HTTP_JSON_RPC", null, "Authorization", "Bearer test-key"),
                 Arguments.of("API_KEY", "HTTP_JSON_RPC", "custom-key", "custom-key", "test-key"),
-                Arguments.of("NONE", "BLOCKFROST", null, "project_id", "test-key"),
+                Arguments.of("API_KEY", "GRPC", "api-key", "api-key", "test-key"),
                 Arguments.of("BASIC", "HTTP_JSON_RPC", null, "Authorization", "Basic "
                         + Base64.getEncoder().encodeToString("test-user:test-password".getBytes(StandardCharsets.UTF_8))));
     }

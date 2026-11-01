@@ -44,7 +44,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     ChainRepositoryFixture repository;
     RbfBumpService rbf;
     BitcoinLikeSettlementService settlement;
-    UtxoBroadcastService broadcaster;
+    com.surprising.wallet.service.WithdrawalQueueService queueService;
     ChainSigningTransactionRepository signing;
     BlockchainRuntimeService runtime;
     PgmqClient queue;
@@ -67,6 +67,11 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         when(switches.isTaskEnabled(eq("BTC"), anyString())).thenReturn(true);
         when(rates.find("btc")).thenReturn("10");
         queue = new PgmqClient(jdbc);
+        for (var stage : WalletQueue.values()) {
+            for (var suffix : List.of("", "_dead")) {
+                jdbc.execute("truncate pgmq.q_" + stage.queueName() + suffix + ", pgmq.a_" + stage.queueName() + suffix);
+            }
+        }
         var manager = new DataSourceTransactionManager(ds);
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
@@ -87,16 +92,26 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context.registerBean(WalletTaskLeaseService.class, () -> {
             var lease = mock(WalletTaskLeaseService.class); when(lease.ownerId()).thenReturn("test-rbf"); return lease;
         });
+        var mpc=mock(UtxoMpcSigningService.class);
+        when(mpc.estimateFee(any(),anyBoolean(),anyLong())).thenAnswer(call->Math.multiplyExact(159L,call.<Long>getArgument(2)));
+        doAnswer(call->{
+            UtxoSigningResult result=call.getArgument(1);
+            if(!result.successful()) throw new IllegalStateException("MPC signing error cannot release funds");
+            return null;
+        }).when(mpc).verifyResult(any(),any());
+        context.registerBean(UtxoMpcSigningService.class,()->mpc);
         context.registerBean(RbfBumpService.class);
         context.registerBean(WithdrawalSettlementService.class,
                 () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         context.registerBean(BitcoinLikeSettlementService.class);
         context.registerBean(UtxoBroadcastService.class);
+        context.registerBean(com.surprising.wallet.service.QueuedUtxoWithdrawalService.class,()->mock(com.surprising.wallet.service.QueuedUtxoWithdrawalService.class));
+        context.registerBean(com.surprising.wallet.service.WithdrawalQueueService.class);
         repository.register(context);
         context.refresh();
         rbf = context.getBean(RbfBumpService.class);
         settlement = context.getBean(BitcoinLikeSettlementService.class);
-        broadcaster = context.getBean(UtxoBroadcastService.class);
+        queueService = context.getBean(com.surprising.wallet.service.WithdrawalQueueService.class);
         Long addressId = jdbc.queryForObject("""
                 insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz,
                     address_index, address, owner_address, derivation_path, wallet_role, enabled)
@@ -132,11 +147,16 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
                 + "values (?, 'BTC', 'BTC', 'test-user', 0.01, 0.01)", TENANT);
     }
     @AfterEach void close() { if (context != null) context.close(); }
+    private void publish(UtxoSigningResult result) {
+        queue.send(WalletQueue.SIGN_DONE,com.surprising.wallet.common.json.JacksonJson.writeValue(json,result),QueueTenant.headers(result.tenantId()));
+        queueService.broadcast();
+    }
+
     @Test void duplicateRequestsEnqueueOneReplacementAndKeepInputsLocked() throws Exception {
         for (int i = 0; i < 24; i++) queue.send(WalletQueue.RBF,
                 "{\"transactionId\":" + id + ",\"expectedTxId\":\"" + ORIGINAL + "\"}", QueueTenant.headers(TENANT));
         parallel(12, () -> rbf.process());
-        assertEquals(1, jdbc.queryForObject("select count(*) from pgmq.q_wallet_sign_first", Integer.class));
+        assertEquals(1, jdbc.queryForObject("select count(*) from pgmq.q_wallet_mpc_sign", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from pgmq.q_wallet_rbf", Integer.class));
         assertEquals(1, current().attempts().size());
         assertEquals(20, current().request().feeRate());
@@ -146,7 +166,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     @Test void concurrentBroadcastAndFinalizationSettleOnlyOnce() throws Exception {
         var body = rbf.bumpFee(id, TENANT, ORIGINAL);
         var signed = signed(body, true);
-        parallel(12, () -> broadcaster.apply(signed));
+        parallel(12, () -> publish(signed));
         verify(runtime, times(1)).broadcastSignedTransaction(any(), any());
         assertNull(rbf.bumpFee(id, TENANT, ORIGINAL)); // replay after replacement was broadcast
         parallel(16, () -> settlement.settleConfirmed("BTC", id, REPLACEMENT));
@@ -165,7 +185,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
     @Test void originalConfirmationRestoresAmountsAfterReplacementBroadcast() {
-        broadcaster.apply(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
+        publish(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
         assertTrue(repository.depositService.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "collector"));
         assertFalse(repository.depositService.isInternalCollectionTransfer(UUID.randomUUID(), "BTC", ORIGINAL, "collector"));
         assertFalse(repository.depositService.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "external"));
@@ -187,15 +207,15 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     @Test void replacementSigningFailureRetainsInputsUntilOriginalConfirms() {
         var failed = signed(rbf.bumpFee(id, TENANT, ORIGINAL), false);
         assertFalse(json.valueToTree(failed).has("attempts")); // history has no slot in a signer result
-        broadcaster.apply(failed);
-        assertEquals("LOCKED", inputState()); assertEquals("BROADCAST_UNKNOWN", collectionStatus());
+        publish(failed);
+        assertEquals("LOCKED", inputState()); assertEquals("SIGNING", collectionStatus());
         assertEquals(1, signing.listPendingConfirmation("BTC").size());
         settlement.settleConfirmed("BTC", id, ORIGINAL);
         assertEquals("SPENT", inputState()); assertLedger();
     }
     @Test void unknownReplacementBroadcastIsTrackedAndCanConfirm() {
         when(runtime.broadcastSignedTransaction(any(), any())).thenReturn("");
-        broadcaster.apply(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
+        publish(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
         assertEquals(REPLACEMENT, current().txId()); assertEquals("LOCKED", inputState());
         assertEquals("BROADCAST_UNKNOWN", collectionStatus());
         assertEquals(1, signing.listPendingConfirmation("BTC").size());
@@ -205,7 +225,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     @Test void obsoleteSignatureAfterOriginalConfirmationIsAcknowledgedWithoutBroadcast() {
         var signed = signed(rbf.bumpFee(id, TENANT, ORIGINAL), true);
         settlement.settleConfirmed("BTC", id, ORIGINAL);
-        broadcaster.apply(signed);
+        publish(signed);
         verify(runtime, never()).broadcastSignedTransaction(any(), any());
         assertEquals("CONFIRMED", collectionStatus()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
@@ -232,9 +252,9 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     }
     @Test void unavailableNextQueueRollsBackReplacementAndAmounts() {
         queue.send(WalletQueue.RBF, "{\"transactionId\":" + id + ",\"expectedTxId\":\"" + ORIGINAL + "\"}", QueueTenant.headers(TENANT));
-        jdbc.execute("alter table pgmq.q_wallet_sign_first rename to q_wallet_sign_first_unavailable");
+        jdbc.execute("alter table pgmq.q_wallet_mpc_sign rename to q_wallet_mpc_sign_unavailable");
         try { rbf.process(); }
-        finally { jdbc.execute("alter table pgmq.q_wallet_sign_first_unavailable rename to q_wallet_sign_first"); }
+        finally { jdbc.execute("alter table pgmq.q_wallet_mpc_sign_unavailable rename to q_wallet_mpc_sign"); }
         assertEquals(ORIGINAL, current().txId()); assertTrue(current().attempts().isEmpty());
         assertEquals("LOCKED", inputState()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }

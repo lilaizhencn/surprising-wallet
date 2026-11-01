@@ -1,137 +1,99 @@
 package com.surprising.wallet.chain.hypercore;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.AccountSequenceRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.repository.HyperCoreActionRepository;
-import com.surprising.wallet.repository.HyperCoreTokenMetadataRepository;
-import java.sql.Timestamp;
-import java.time.Instant;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
-import com.surprising.wallet.service.WithdrawalSettlementService;
-import java.math.BigDecimal;
-import java.util.Locale;
+import com.surprising.wallet.service.HyperCoreSubmissionService;
+import com.surprising.wallet.service.HyperCoreSubmissionService.Operation;
+import com.surprising.wallet.service.HyperCoreSubmissionService.Kind;
+import com.surprising.wallet.service.WalletRuntimeConfigService;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * HyperCore 链交易服务，负责 EIP-712 签名和 exchange 接口提交。
- *
- * <p>支持 usdSend（USDC 转账）和 spotSend（现货代币转账）两种交易类型。
- * 交易通过 {@link HyperCoreSigner} 进行 EIP-712 签名后提交到 /exchange 接口。</p>
- *
- * <p>提现确认：通过检查 action 是否已被 exchange 接受（accepted）来判断。</p>
- *
- * @see HyperCoreApiClient
- * @see HyperCoreSigner
- */
+/** Remote MPC user-signed transfers. Unknown responses retain the original body and nonce. */
 @Service
 @RequiredArgsConstructor
 public class HyperCoreTransactionService {
-
-    private static final String CHAIN = "HYPERCORE";
-
-    private final HyperCoreApiClient apiClient;
-
-    private final HyperCoreSigner signer;
-
+    private final HyperCoreApiClient api;
+    private final HyperCoreSubmissionService submissions;
     private final HyperCoreActionRepository actions;
-    private final HyperCoreTokenMetadataRepository tokenMetadata;
-    private final CollectionRecordRepository collectionRecordRepository;
-    private final AccountSequenceRepository accountSequenceRepository;
+    private final CollectionRecordRepository collections;
+    private final WalletRuntimeConfigService runtime;
+    private final ObjectMapper json;
 
-    private final AccountSecp256k1KeyService keyService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final WithdrawalSettlementService settlements;
-
-    public String sendUsd(AccountChainProfile profile, ChainAddressRecord from,
-                          String destination, BigDecimal amount) {
-        long nonce = nextNonce(from);
-        ObjectNode action = objectMapper.createObjectNode();
-        action.put("destination", normalizeAddress(destination));
-        action.put("amount", amountString(amount));
-        action.put("time", nonce);
-        action.put("type", "usdSend");
-        ECKey key = keyService.key(profile, from);
-        ObjectNode signature = signer.signUsdSend(action, key, isMainnet(profile));
-        return submit("usdSend", "USDC", from.getAddress(), destination, amount, nonce, action, signature);
+    public String send(Operation operation,ChainAddressRecord source) {
+        runtime.requireTaskEnabled("HYPERCORE",WalletRuntimeConfigService.TASK_WITHDRAW,"hypercore withdrawal");
+        if(operation.kind()!=Kind.WITHDRAWAL)throw new IllegalArgumentException("withdrawal operation required");
+        var request=reserve(operation,source);submissions.sign(operation,request.id());
+        return broadcast(operation,submissions.commit(operation,request.id()));
     }
-
-    public String sendSpot(AccountChainProfile profile, ChainAddressRecord from,
-                           TokenDefinition token, String destination, BigDecimal amount) {
-        long nonce = nextNonce(from);
-        ObjectNode action = objectMapper.createObjectNode();
-        action.put("destination", normalizeAddress(destination));
-        action.put("amount", amountString(amount));
-        action.put("token", wireToken(profile, token));
-        action.put("time", nonce);
-        action.put("type", "spotSend");
-        ECKey key = keyService.key(profile, from);
-        ObjectNode signature = signer.signSpotSend(action, key, isMainnet(profile));
-        return submit("spotSend", token.getSymbol(), from.getAddress(), destination, amount, nonce, action, signature);
-    }
-
-    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String actionId) {
-        if (!actions.accepted(actionId)) {
-            return false;
-        }
-        return settlements.confirm(tenantId, CHAIN, orderNo, actionId);
-    }
-
-    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String actionId) {
-        return actions.accepted(actionId)
-                && collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, actionId) == 1;
-    }
-
-    private String submit(String actionType, String symbol, String fromAddress, String destination,
-                          BigDecimal amount, long nonce, ObjectNode action, ObjectNode signature) {
-        String actionId = "HC-" + actionType + "-" + fromAddress.toLowerCase(Locale.ROOT) + "-" + nonce;
-        ObjectNode body = objectMapper.createObjectNode();
-        body.set("action", action);
-        body.put("nonce", nonce);
-        body.set("signature", signature);
-        String requestPayload = body.toString();
-        actions.create(actionId, actionType, CHAIN, symbol,
-                fromAddress, normalizeAddress(destination), amount, nonce, requestPayload, Timestamp.from(Instant.now()));
+    public void collect(UUID tenant,String reference,ChainAddressRecord source) {
+        runtime.requireTaskEnabled("HYPERCORE",WalletRuntimeConfigService.TASK_COLLECTION,"hypercore collection");
+        if(collections.claimSigningDurable(tenant,"HYPERCORE",reference)!=1)return;
+        var operation=new Operation(tenant,reference,Kind.COLLECTION);
         try {
-            JsonNode response = apiClient.postExchange(body);
-            if (!"ok".equalsIgnoreCase(response.path("status").asText())) {
-                throw new IllegalStateException("HyperCore exchange rejected action: " + response);
-            }
-            actions.markAccepted(actionId, response.toString(), Timestamp.from(Instant.now()));
-            return actionId;
-        } catch (RuntimeException e) {
-            actions.markFailed(actionId, e.getMessage(), Timestamp.from(Instant.now()));
-            throw e;
+            var request=reserve(operation,source);submissions.sign(operation,request.id());
+            String id=broadcast(operation,submissions.commit(operation,request.id()));submissions.restoreSent(operation,id);
+        } catch(RuntimeException error){submissions.unknown(operation,error.getClass().getSimpleName());throw error;}
+    }
+    public boolean recover(Operation operation) {
+        var request=submissions.intent(operation);if(request.isEmpty())return false;
+        submissions.sign(operation,request.get().id());
+        String id=broadcast(operation,submissions.commit(operation,request.get().id()));submissions.restoreSent(operation,id);return true;
+    }
+    public int releaseUnsigned(Operation operation){return submissions.releaseUnsigned(operation);}
+    private com.surprising.wallet.model.mpc.MpcSignRequest reserve(Operation operation,ChainAddressRecord source) {
+        String recipient=null;
+        if(submissions.intent(operation).isEmpty()) {
+            recipient=submissions.recipient(operation);
+            var role=api.postInfo(json.createObjectNode().put("type","userRole").put("user",recipient));
+            if(role==null || !("user".equals(role.path("role").asText()) || "subAccount".equals(role.path("role").asText())))
+                throw new IllegalStateException("HyperCore recipient must be activated before payout; activation fees are not included in this payment");
         }
+        return submissions.reserve(operation,source,recipient);
     }
-
-    private String wireToken(AccountChainProfile profile, TokenDefinition token) {
-        return tokenMetadata.findName(profile.getNetwork(), token.getSymbol())
-                .orElse(token.getSymbol());
+    private String broadcast(Operation operation,HyperCoreSubmissionService.Prepared prepared) {
+        if(!actions.accepted(prepared.actionId())) {
+            if(reconcile(operation,prepared.actionId()))return prepared.actionId();
+            try {
+                var response=api.postExchange(json.readValue(prepared.body(),ObjectNode.class));
+                submissions.accepted(operation,prepared.actionId(),response);
+            } catch(RuntimeException unknown) {
+                try {if(reconcile(operation,prepared.actionId()))return prepared.actionId();}
+                catch(RuntimeException proofUnavailable){unknown.addSuppressed(proofUnavailable);}
+                submissions.unknown(operation,unknown.getClass().getSimpleName());throw unknown;
+            }
+        }
+        return prepared.actionId();
     }
-
-    private long nextNonce(ChainAddressRecord from) {
-        return accountSequenceRepository.reserve(CHAIN, normalizeAddress(from.getAddress()), System.currentTimeMillis());
+    private boolean reconcile(Operation operation,String id) {
+        var request=submissions.intent(operation).orElseThrow();var payload=submissions.payload(request);
+        var unsigned=payload.unsigned();var action=MpcHyperCoreActionCodec.restore(unsigned);
+        var records=api.postInfo(json.createObjectNode().put("type","userNonFundingLedgerUpdates").put("user",unsigned.owner())
+                .put("startTime",Math.max(0,action.path("time").asLong()-60_000)));
+        if(records==null || !records.isArray())throw new IllegalStateException("HyperCore ledger query returned no event list");
+        tools.jackson.databind.JsonNode found=null;
+        for(var record:records) {
+            var delta=record.path("delta");
+            if(!delta.path("nonce").isIntegralNumber() || !delta.path("nonce").canConvertToLong()
+                    || delta.path("nonce").asLong()!=action.path("time").asLong()
+                    || !unsigned.owner().equalsIgnoreCase(delta.path("user").asText()))continue;
+            HyperCoreExecutionReceipt.verify(unsigned,record);
+            if(found!=null && !found.equals(record))throw new IllegalStateException("HyperCore nonce has conflicting execution records");
+            found=record;
+        }
+        if(found!=null){submissions.proven(operation,id,found);return true;}
+        if(records.size()>=HyperCoreDepositService.LEDGER_PAGE_THRESHOLD)throw new IllegalStateException("HyperCore ledger query is truncated; original action remains pending");
+        return false;
     }
-
-    private static boolean isMainnet(AccountChainProfile profile) {
-        String network = profile.getNetwork() == null ? "" : profile.getNetwork().toLowerCase(Locale.ROOT);
-        return network.equals("mainnet") || network.equals("main");
+    private boolean confirm(Operation operation,String id) {
+        var action=actions.find(id).orElseThrow();
+        if(action.receipt()==null && !reconcile(operation,id))return false;
+        return submissions.settle(operation,id);
     }
-
-    private static String amountString(BigDecimal amount) {
-        return amount.stripTrailingZeros().toPlainString();
-    }
-
-    private static String normalizeAddress(String address) {
-        return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
-    }
+    public boolean confirmWithdrawal(UUID tenant,String reference,String id) {return confirm(new Operation(tenant,reference,Kind.WITHDRAWAL),id);}
+    public boolean confirmCollection(UUID tenant,String reference,String id) {return confirm(new Operation(tenant,reference,Kind.COLLECTION),id);}
 }

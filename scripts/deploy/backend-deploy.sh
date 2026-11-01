@@ -8,7 +8,7 @@ DEPLOY_ROOT=/opt/surprising-wallet-backend
 RELEASE_DIR="$DEPLOY_ROOT/releases/$DEPLOY_SHA"
 CURRENT_DIR="$DEPLOY_ROOT/current"
 ENV_FILE=/etc/surprising-wallet/wallet.env
-UNIT=surprising-wallet-all.service
+UNIT=surprising-wallet.service
 UNIT_FILE="/etc/systemd/system/$UNIT"
 HEALTH_URL=http://127.0.0.1:8002/actuator/health
 [[ -s "$STAGING/wallet-server.jar" && -f "$ENV_FILE" ]]
@@ -18,11 +18,18 @@ systemctl is-active --quiet postgresql.service
 set -a
 source "$ENV_FILE"
 set +a
-[[ ${SW_WALLET_MODE:-all} == all ]]
+[[ -n ${SW_MPC_CA_FILE:-} && -n ${SW_MPC_CLIENT_CERTIFICATE_FILE:-} && -n ${SW_MPC_CLIENT_PRIVATE_KEY_FILE:-} ]]
 PGUSER=${SW_DB_USERNAME:?} PGPASSWORD=${SW_DB_PASSWORD:?} \
   psql "${SW_DB_URL#jdbc:}" --set=ON_ERROR_STOP=1 --no-psqlrc >/dev/null <<'SQL'
 DO $$ BEGIN
-  IF to_regclass('public.wallet_task_lease') IS NULL
+  IF to_regclass('public.wallet_mpc_key') IS NULL
+     OR to_regclass('public.wallet_mpc_key_epoch') IS NULL
+     OR to_regclass('public.wallet_mpc_sign_request') IS NULL
+     OR to_regclass('public.wallet_mpc_sign_attempt') IS NULL
+     OR (SELECT count(*) FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='wallet_mpc_key_epoch'
+            AND column_name IN ('refresh_actor','refresh_reason')) <> 2
+     OR to_regclass('public.wallet_task_lease') IS NULL
      OR to_regclass('public.chain_fee_rate') IS NULL
      OR NOT EXISTS (SELECT 1 FROM information_schema.columns
                     WHERE table_schema='public' AND table_name='chain_signing_transaction'
@@ -73,7 +80,7 @@ rollback() {
   exit "$status"
 }
 trap rollback ERR
-install -o root -g root -m 0644 "$STAGING/surprising-wallet-all.service" "$UNIT_FILE"
+install -o root -g root -m 0644 "$STAGING/surprising-wallet.service" "$UNIT_FILE"
 systemctl daemon-reload
 ln -sfn "$RELEASE_DIR" "$CURRENT_DIR.next"
 mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
@@ -90,4 +97,4 @@ done
 [[ $healthy == true ]]
 trap - ERR
 rm -f "$PREVIOUS_UNIT"
-printf 'release %s healthy; all mode active\n' "$DEPLOY_SHA"
+printf 'release %s healthy; API with independent MPC active\n' "$DEPLOY_SHA"

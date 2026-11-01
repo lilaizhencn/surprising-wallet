@@ -18,6 +18,14 @@ public class EvmNonceRepository {
         this.jdbc = jdbc;
     }
 
+    /** One EIP-7702 batch per concrete network protects authority operations and relayer ordering across job kinds. */
+    public void lock7702Chain(String chain,String network) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("batch admission lock requires transaction");
+        jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",(rs,row)->true,
+                "wallet-eip7702:"+chain+":"+network);
+    }
+
     /** One statement allocates a nonce even when called without an enclosing transaction. */
     public BigInteger reserve(String chain, String address, BigInteger chainNonce) {
         if (chainNonce == null || chainNonce.signum() < 0 || chainNonce.bitLength() > 256) {

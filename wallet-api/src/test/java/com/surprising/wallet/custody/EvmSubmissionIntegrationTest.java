@@ -4,6 +4,11 @@ import com.sun.net.httpserver.HttpServer;
 import com.surprising.wallet.chain.evm.*;
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.signing.MpcClient;
+import com.surprising.wallet.chain.signing.MpcNodes;
+import com.surprising.wallet.model.CustodySecurityProperties;
+import com.surprising.wallet.model.mpc.*;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
 import java.math.BigDecimal;
@@ -27,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** Real PostgreSQL transactions and real EVM signatures; the isolated RPC simulates lost replies and canonical receipts. */
+/** Real PG18 business phases with a test-only signing substitute; actual MPC is verified by MpcSigningNativeProbe. */
 @EnabledIfEnvironmentVariable(named="SW_TEST_CUSTODY_DB_URL",matches=".+")
 class EvmSubmissionIntegrationTest {
     private static final UUID TENANT=UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -46,6 +51,11 @@ class EvmSubmissionIntegrationTest {
     private CustodyAssetRecoveryRepository recoveries;
     private WithdrawalSettlementService settlements;
     private HttpServer server;
+    private static final Object LOST_REPLY = new Object();
+    private MpcSigningService signing;
+    private MpcNodes mpcNodes;
+    private WalletMpcSignRequestRepository requests;
+    private ChainAddressRecord source;
     private EvmHttpServiceFactory http;
 
     private static Credentials newSigner() {
@@ -63,40 +73,90 @@ class EvmSubmissionIntegrationTest {
         orders=new WithdrawalOrderRepository(jdbc); transactions=new EvmTransactionRepository(jdbc);
         nonces=new EvmNonceRepository(jdbc); collections=new CollectionRecordRepository(jdbc);
         recoveries=new CustodyAssetRecoveryRepository(jdbc);
+        var mapper = new ObjectMapper();
+        var manager = new DataSourceTransactionManager(ds);
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(manager);
+        requests = new WalletMpcSignRequestRepository(jdbc);
+        var attempts = new WalletMpcSignAttemptRepository(jdbc, mapper);
+        var keys = new WalletMpcKeyRepository(jdbc);
+        var epochs = new WalletMpcKeyEpochRepository(jdbc, mapper);
+        int namespace = new CustodyTenantTableRepository(jdbc).findById(TENANT).orElseThrow().derivationNamespace();
+        var parties = com.surprising.wallet.testutil.MpcSigningTestSupport.PARTIES;
+        var metadata = keys.reserve(UUID.randomUUID(), TENANT, "EVM", 42, namespace, 0, "ECDSA_SECP256K1");
+        epochs.create(new MpcClient.Request(UUID.randomUUID(), TENANT, metadata.id(), 1,
+                MpcClient.Operation.CREATE_KEY, MpcClient.Algorithm.ECDSA_SECP256K1, parties, ""));
+        var fixture = org.bitcoinj.crypto.ECKey.fromPrivate(key.getEcKeyPair().getPrivateKey());
+        String publicKey = HexFormat.of().formatHex(fixture.getPubKey());
+        keys.activate(TENANT, metadata.id(), 1, publicKey);
+        epochs.observations(TENANT, metadata.id(), 1, MpcKeyEpoch.State.ACTIVE, Map.of());
+        source = ChainAddressRecord.builder().tenantId(TENANT).mpcKeyId(metadata.id()).chain("ETH").assetSymbol("ETH")
+                .address(sender).ownerAddress(sender).accountId(sender).userId(42L).biz(namespace).addressIndex(0L).build();
+        byte[] master = new byte[32]; new java.security.SecureRandom().nextBytes(master);
+        var security = new CustodySecurityProperties(); security.setSecretMasterKey(HexFormat.of().formatHex(master));
+        Arrays.fill(master, (byte)0);
+        var crypto = new CustodyCryptoService(security);
+        signing = spy(new MpcSigningService(new CustodyTenantTableRepository(jdbc), keys, epochs, requests, attempts, crypto, mapper, manager));
+        mpcNodes = mock(MpcNodes.class);
+        when(mpcNodes.online()).thenReturn(parties.subList(0,2));
+        doAnswer(call -> {
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive(), "MPC may not sign inside a business transaction");
+            UUID id = call.getArgument(1);
+            return transaction.execute(status -> {
+                var request = requests.lock(TENANT, id).orElseThrow();
+                if (request.state() != MpcSignRequest.State.COMPLETED) {
+                    signatures.incrementAndGet();
+                    byte[] signature = fixture.sign(org.bitcoinj.base.Sha256Hash.wrap(HexFormat.of().parseHex(request.command().preimageHex()))).encodeToDER();
+                    var bound = Map.of("tenantId", TENANT, "requestId", id, "attemptId", request.currentAttemptId(), "keyId", metadata.id(),
+                            "epoch", 1, "publicKeyHex", publicKey, "preimageHex", request.command().preimageHex(), "signatureHex", HexFormat.of().formatHex(signature),
+                            "authenticatedParties", List.of(attempts.find(TENANT, request.currentAttemptId()).orElseThrow().request().online().getFirst()));
+                    attempts.complete(TENANT, request.currentAttemptId(), crypto.encrypt(mapper.writeValueAsString(bound)), Map.of());
+                    requests.recordState(TENANT, id, request.currentAttemptId(), MpcSignRequest.State.COMPLETED);
+                }
+                return signing.signature(TENANT,id).orElseThrow();
+            });
+        }).when(signing).awaitSignature(eq(TENANT),any(),same(mpcNodes));
         context=new AnnotationConfigApplicationContext(); context.register(Transactions.class);
-        context.registerBean(PlatformTransactionManager.class,()->new DataSourceTransactionManager(ds));
+        context.registerBean(PlatformTransactionManager.class,()->manager);
         context.registerBean(WithdrawalOrderRepository.class,()->orders);
         context.registerBean(CollectionRecordRepository.class,()->collections);
         context.registerBean(EvmTransactionRepository.class,()->transactions);
         context.registerBean(EvmNonceRepository.class,()->nonces);
         context.registerBean(CustodyAssetRecoveryRepository.class,()->recoveries);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(WalletMpcSignRequestRepository.class,()->requests);
+        context.registerBean(MpcSigningService.class,()->signing);
+        context.registerBean(MpcNodes.class,()->mpcNodes);
+        context.registerBean(ObjectMapper.class,()->mapper);
+        context.registerBean(ChainProfileRepository.class,()->new ChainProfileRepository(jdbc));
         context.registerBean(EvmSubmissionService.class); context.registerBean(WithdrawalSettlementService.class);
         context.refresh(); submissions=context.getBean(EvmSubmissionService.class); settlements=context.getBean(WithdrawalSettlementService.class);
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,'ETH','ETH','principal',5,0,5)",TENANT);
         orders.createForTenant(TENANT,orderNo,42L,"ETH","ETH",sender,"principal",RECIPIENT,BigDecimal.ONE,BigDecimal.ZERO);
         assertTrue(new LedgerBalanceRepository(jdbc).freeze("ETH","ETH","principal",BigDecimal.ONE,TENANT));
         orders.updateStatus(TENANT,"ETH",orderNo,"FROZEN",sender,null,null);
-        assertEquals(1,orders.claimSigningEvm(TENANT,"ETH",orderNo,sender));
+        assertEquals(1,orders.claimSigningDurable(TENANT,"ETH",orderNo,sender));
         http=new EvmHttpServiceFactory();
     }
     @AfterEach void close() { if(server!=null)server.stop(0); if(http!=null)http.close(); if(context!=null)context.close(); }
     private EvmSubmissionService.Operation operation() { return new EvmSubmissionService.Operation(TENANT,orderNo,EvmSubmissionService.Kind.WITHDRAWAL); }
-    private EvmTransactionRecord sign(BigInteger nonce) {
-        signatures.incrementAndGet();
-        var raw=RawTransaction.createEtherTransaction(nonce,BigInteger.valueOf(1_000_000_000L),BigInteger.valueOf(21_000),RECIPIENT,BigInteger.TEN.pow(18));
-        String bytes=Numeric.toHexString(TransactionEncoder.signMessage(raw,11155111L,key));
-        return EvmTransactionRecord.builder().chain("ETH").txHash(Hash.sha3(bytes)).fromAddress(sender).toAddress(RECIPIENT)
-                .assetSymbol("ETH").amount(BigDecimal.ONE).fee(new BigDecimal("0.000021"))
-                .nonce(nonce.longValueExact()).confirmations(0).status("PREPARED").rawPayload(bytes).build();
+    private MpcSignRequest reserve() {
+        return submissions.reserve(operation(), "ETH", source, BigInteger.ZERO, nonce -> EvmSigningPayload.of(
+                RawTransaction.createEtherTransaction(nonce, BigInteger.valueOf(1_000_000_000L), BigInteger.valueOf(21_000), RECIPIENT, BigInteger.TEN.pow(18)),
+                11155111L, "ETH", null, BigDecimal.ONE, 18, 18));
     }
-    private EvmTransactionRecord prepare() throws Exception { return submissions.prepare(operation(),"ETH",sender,BigInteger.ZERO,this::sign); }
+    private EvmTransactionRecord prepare() {
+        var request = reserve();
+        submissions.sign(TENANT, request.id());
+        return submissions.commit(operation(), "ETH", request.id());
+    }
 
     @Test void committedBytesAndOwnedHashAreReplayedWithoutAllocatingAnotherNonce() throws Exception {
         var first=prepare();
         assertEquals(first.getTxHash(),orders.find("ETH",orderNo,TENANT).orElseThrow().getTxHash());
         assertTrue(transactions.findSigned("ETH",first.getTxHash()).isPresent());
-        var second=submissions.prepare(operation(),"ETH",sender,BigInteger.valueOf(99),nonce->{fail("replay must not sign again");return null;});
+        var duplicate=submissions.reserve(operation(),"ETH",source,BigInteger.valueOf(99),nonce->{fail("replay must not build another intent");return null;});
+        submissions.sign(TENANT,duplicate.id());
+        var second=submissions.commit(operation(),"ETH",duplicate.id());
         assertEquals(first.getRawPayload(),second.getRawPayload()); assertEquals(1,signatures.get());
         assertEquals(0,BigDecimal.ONE.compareTo(jdbc.queryForObject("select reserved_nonce from evm_nonce where chain='ETH' and address=?",BigDecimal.class,sender)));
     }
@@ -111,15 +171,138 @@ class EvmSubmissionIntegrationTest {
         } finally {pool.shutdownNow();}
     }
 
-    @Test void failureBindingTheBusinessHashRollsBackNonceAndSignedBytes() throws Exception {
+    @Test void failureBindingPreservesTheFixedNonceAndSignedMpcFactForRecovery() throws Exception {
         jdbc.execute("create function reject_evm_prepare() returns trigger language plpgsql as $$ begin raise exception 'injected prepare failure'; end $$");
         jdbc.execute("create trigger reject_evm_prepare before update of tx_hash on withdrawal_order for each row execute function reject_evm_prepare()");
         try { assertThrows(RuntimeException.class,this::prepare); }
         finally {jdbc.execute("drop trigger reject_evm_prepare on withdrawal_order");jdbc.execute("drop function reject_evm_prepare()");}
         assertEquals(0,jdbc.queryForObject("select count(*) from evm_tx",Integer.class));
-        assertEquals(0,jdbc.queryForObject("select count(*) from evm_nonce",Integer.class));
+        assertEquals(1,jdbc.queryForObject("select count(*) from evm_nonce",Integer.class));
+        assertEquals(1,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request where state='COMPLETED'",Integer.class));
         assertNull(orders.find("ETH",orderNo,TENANT).orElseThrow().getTxHash());
         assertEquals(0L,prepare().getNonce().longValue());
+    }
+
+    @Test void acceptedIntentWithoutHashCannotBeReleasedOrAllocatedAgain() {
+        var request=reserve();
+        assertEquals(0,signatures.get());
+        assertEquals(0,submissions.releaseUnsigned(operation(),"ETH"));
+        assertEquals("SIGNING",orders.find("ETH",orderNo,TENANT).orElseThrow().getStatus());
+        assertNull(orders.find("ETH",orderNo,TENANT).orElseThrow().getTxHash());
+        doThrow(new MpcPendingException(request.id(),"INDETERMINATE"))
+                .when(signing).awaitSignature(eq(TENANT),eq(request.id()),same(mpcNodes));
+        assertThrows(MpcPendingException.class,()->submissions.sign(TENANT,request.id()));
+        assertEquals(0,submissions.releaseUnsigned(operation(),"ETH"));
+        assertEquals(request.id(),submissions.reserve(operation(),"ETH",source,BigInteger.valueOf(99),nonce->{
+            fail("an accepted intent must retain its original nonce and envelope");return null;
+        }).id());
+        assertEquals(1,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        assertEquals(0,signatures.get());
+    }
+
+    @Test void lateSignatureCanBindAnUnknownBroadcastOwner() {
+        var request=reserve();
+        assertEquals(1,orders.markBroadcastUnknown(TENANT,"ETH",orderNo,sender,"native response was lost"));
+        submissions.sign(TENANT,request.id());
+        var prepared=submissions.commit(operation(),"ETH",request.id());
+        assertEquals(prepared.getTxHash(),orders.find("ETH",orderNo,TENANT).orElseThrow().getTxHash());
+        assertEquals(1,orders.recoverPreparedSent(TENANT,"ETH",orderNo,prepared.getTxHash()));
+    }
+
+    @Test void invalidEnvelopeRollsBackBothNonceAndIntentBeforeNativeAcceptance() {
+        for (int variation=0;variation<4;variation++) {
+            final int invalid=variation;
+            assertThrows(IllegalStateException.class,()->submissions.reserve(operation(),"ETH",source,BigInteger.ZERO,nonce->
+                    EvmSigningPayload.of(RawTransaction.createEtherTransaction(invalid==0 ? nonce.add(BigInteger.ONE):nonce,
+                            BigInteger.valueOf(1_000_000_000L),BigInteger.valueOf(21000),invalid==1 ? sender:RECIPIENT,
+                            invalid==2 ? BigInteger.ONE:BigInteger.TEN.pow(18)),
+                            invalid==3 ? 1:11155111L,"ETH",null,BigDecimal.ONE,18,18)));
+        }
+        assertEquals(0,jdbc.queryForObject("select count(*) from evm_nonce",Integer.class));
+        assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request",Integer.class));
+        assertEquals(0,signatures.get());
+    }
+
+    @Test void knownBroadcastWithSpentBalanceRecoversBeforeAnyNewFeeOrBalanceCheck() throws Exception {
+        var prepared=prepare();
+        startRpc(request->{
+            assertEquals("eth_getTransactionByHash",request.get("method"));
+            return Map.of("hash",prepared.getTxHash());
+        });
+        assertTrue(service().recover(operation(),"ETH"));
+        assertEquals("SENT",orders.find("ETH",orderNo,TENANT).orElseThrow().getStatus());
+        assertEquals("SENT",transactions.findSigned("ETH",prepared.getTxHash()).orElseThrow().getStatus());
+        assertEquals(1,signatures.get());
+    }
+
+    @Test void signedTransactionIsCommittedBeforeItsBytesReachAnL2FeeOracle() throws Exception {
+        jdbc.update("update chain_profile set fee_model='op-stack' where chain='ETH' and enabled=true");
+        var prepared=prepare();
+        var calls=new AtomicInteger();
+        var committed=new java.util.concurrent.atomic.AtomicBoolean(true);
+        var signedBytesReachedOracle=new java.util.concurrent.atomic.AtomicBoolean();
+        startRpc(request->switch(String.valueOf(request.get("method"))) {
+            case "eth_getTransactionByHash" -> null;
+            case "eth_call" -> {
+                calls.incrementAndGet();
+                var owner=orders.find("ETH",orderNo,TENANT).orElseThrow();
+                committed.compareAndSet(true,prepared.getTxHash().equals(owner.getTxHash())
+                        && transactions.findSigned("ETH",owner.getTxHash()).isPresent());
+                var parameters=(List<?>)request.get("params");
+                String calldata=String.valueOf(((Map<?,?>)parameters.getFirst()).get("data"));
+                if(calldata.contains(Numeric.cleanHexPrefix(prepared.getRawPayload()))) signedBytesReachedOracle.set(true);
+                yield "0x"+Numeric.toHexStringNoPrefixZeroPadded(BigInteger.valueOf(7),64);
+            }
+            case "eth_getBalance" -> "0x56bc75e2d63100000";
+            case "eth_sendRawTransaction" -> prepared.getTxHash();
+            default -> throw new IllegalArgumentException("unexpected fee recovery RPC: "+request.get("method"));
+        });
+        assertTrue(service().recover(operation(),"ETH"));
+        assertEquals(2,calls.get());
+        assertTrue(committed.get());
+        assertTrue(signedBytesReachedOracle.get());
+        assertEquals(0,new BigDecimal("0.000021000000000014").compareTo(transactions.findSigned("ETH",prepared.getTxHash()).orElseThrow().getFee()));
+    }
+
+    @Test void recoveryErrorsRetainAcceptedIntentUntilTheOriginalSignatureIsBound() {
+        var operation=recovery();
+        UUID id=UUID.fromString(operation.reference());
+        var request=submissions.reserve(operation,"ETH",source,BigInteger.ZERO,nonce->EvmSigningPayload.of(
+                RawTransaction.createEtherTransaction(nonce,BigInteger.valueOf(1_000_000_000L),BigInteger.valueOf(21000),RECIPIENT,BigInteger.TEN.pow(18)),
+                11155111L,"ETH",null,BigDecimal.ONE,18,18));
+        submissions.recoveryError(operation,"ETH","result response unavailable");
+        assertEquals("EXECUTING",recoveries.require(id).status());
+        assertEquals("result response unavailable",recoveries.require(id).failureReason());
+        jdbc.update("update custody_asset_recovery set updated_at=now()-interval '1 hour' where id=?",id);
+        assertEquals(0,submissions.releaseUnsigned(operation,"ETH"));
+        recoveries.recoverExecutions();
+        assertEquals("EXECUTING",recoveries.require(id).status());
+        submissions.sign(TENANT,request.id());
+        var prepared=submissions.commit(operation,"ETH",request.id());
+        submissions.recoveryError(operation,"ETH","broadcast response lost");
+        assertEquals("BROADCAST",recoveries.require(id).status());
+        assertEquals(prepared.getTxHash(),recoveries.require(id).recoveryTxHash());
+        submissions.recoveryError(operation,"ETH","late duplicate failure");
+        assertEquals("BROADCAST",recoveries.require(id).status());
+    }
+
+    @Test void recoveryBeforeAnyAcceptedIntentMayReturnToApproval() {
+        var operation=recovery();
+        UUID id=UUID.fromString(operation.reference());
+        submissions.recoveryError(operation,"ETH","unsigned estimate rejected");
+        assertEquals("APPROVED",recoveries.require(id).status());
+        assertTrue(recoveries.claimExecution(id));
+        jdbc.update("update custody_asset_recovery set updated_at=now()-interval '1 hour' where id=?",id);
+        assertEquals(1,submissions.releaseUnsigned(operation,"ETH"));
+        assertEquals("APPROVED",recoveries.require(id).status());
+    }
+
+    private EvmSubmissionService.Operation recovery() {
+        UUID id=UUID.randomUUID();
+        recoveries.insert(id,TENANT,"ETH","ETH","ETH",null,"0x"+id.toString().replace("-","").repeat(2),
+                0L,null,sender,BigDecimal.ONE,UUID.randomUUID());
+        jdbc.update("update custody_asset_recovery set status='EXECUTING',durable_submission=true,recovery_address=?,verified_amount=1 where id=?",RECIPIENT,id);
+        return new EvmSubmissionService.Operation(TENANT,id.toString(),EvmSubmissionService.Kind.RECOVERY);
     }
 
     @Test void lostBroadcastReplyOnlyRebroadcastsTheCommittedBytes() throws Exception {
@@ -128,10 +311,11 @@ class EvmSubmissionIntegrationTest {
             String method=String.valueOf(request.get("method"));
             if(method.equals("eth_sendRawTransaction")) {
                 String raw=String.valueOf(((List<?>)request.get("params")).getFirst());unique.add(raw);
-                if(calls.incrementAndGet()==1) return null; // Node accepted, HTTP reply deliberately lost.
+                if(calls.incrementAndGet()==1) return LOST_REPLY; // Node accepted, HTTP reply deliberately lost.
                 return prepared.getTxHash();
             }
-            if(method.equals("eth_getTransactionByHash")) return Map.of("hash",prepared.getTxHash());
+            if(method.equals("eth_getTransactionByHash")) return calls.get() == 0 ? null : Map.of("hash",prepared.getTxHash());
+            if(method.equals("eth_getBalance")) return "0x56bc75e2d63100000";
             throw new AssertionError("Recovery must not requote or reserve a nonce: "+method);
         });
         var service=service();
@@ -198,7 +382,10 @@ class EvmSubmissionIntegrationTest {
         assertFalse(service().confirmWithdrawal(TENANT,"ETH",orderNo));
         BigInteger after=new BigInteger(String.valueOf(localRpc(url,"eth_getBalance",List.of(RECIPIENT,"latest")).get("result")).substring(2),16);
         assertEquals(BigInteger.TEN.pow(18),after.subtract(before));
-        assertEquals(1,rawTransactions.size());assertTrue(broadcasts.get()>=2);assertEquals(1,signatures.get());
+        assertEquals(1,rawTransactions.size(),"lost replies must retain the original signed bytes");
+        // HTTP may retry an abruptly closed POST; the chain must still consume only the original nonce.
+        assertTrue(broadcasts.get()>=1);assertEquals(1,signatures.get());
+        assertEquals("0x1",localRpc(url,"eth_getTransactionCount",List.of(sender,"latest")).get("result"));
         assertEquals("CONFIRMED",orders.find("ETH",orderNo,TENANT).orElseThrow().getStatus());
         assertEquals(1,jdbc.queryForObject("select count(*) from evm_tx",Integer.class));
         assertEquals(0,new BigDecimal("4").compareTo(jdbc.queryForObject("select available_balance from ledger_balance where account_id='principal'",BigDecimal.class)));
@@ -223,7 +410,7 @@ class EvmSubmissionIntegrationTest {
         when(nodes.withFailover(eq("ETH"),anyString(),any())).thenAnswer(call->((Function<ChainRpcNode,Object>)call.getArgument(2)).apply(node));
         when(nodes.authHeaders(node)).thenReturn(Map.of("Authorization","Bearer test-only-rpc"));
         return new EvmAccountTransactionService(orders,collections,transactions,new ChainProfileRepository(jdbc),new ChainAssetRepository(jdbc),
-                nodes,mock(AccountSecp256k1KeyService.class),new EvmTransactionBuilder(),http,settlements,submissions,recoveries);
+                nodes,new EvmTransactionBuilder(),http,settlements,submissions,recoveries);
     }
     private void receiptRpc(String hash,boolean success,boolean canonical) throws Exception {
         String blockHash="0x"+"aa".repeat(32);
@@ -241,8 +428,10 @@ class EvmSubmissionIntegrationTest {
             if(!"Bearer test-only-rpc".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {exchange.sendResponseHeaders(401,-1);exchange.close();return;}
             var request=(Map<String,Object>)mapper.readValue(exchange.getRequestBody().readAllBytes(),Map.class);
             Object result=response.apply(request);
-            if(result==null) {exchange.close();return;}
-            byte[] body=mapper.writeValueAsBytes(Map.of("jsonrpc","2.0","id",request.get("id"),"result",result));
+            if(result==LOST_REPLY) {exchange.close();return;}
+            var responseBody = new LinkedHashMap<String,Object>();
+            responseBody.put("jsonrpc", "2.0"); responseBody.put("id", request.get("id")); responseBody.put("result", result);
+            byte[] body=mapper.writeValueAsBytes(responseBody);
             exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,body.length);
             exchange.getResponseBody().write(body);exchange.close();
         });server.start();

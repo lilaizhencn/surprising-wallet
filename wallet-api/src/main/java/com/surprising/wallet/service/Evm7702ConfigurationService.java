@@ -26,6 +26,9 @@ public class Evm7702ConfigurationService {
         if (config.relayerAddress() == null || !config.relayerAddress().equalsIgnoreCase(relayer.getAddress())) {
             throw new IllegalStateException("configured relayer address does not match chain_address key path");
         }
+        if(relayer.getTenantId()==null || relayer.getMpcKeyId()==null || !chain.equals(relayer.getChain())) {
+            throw new IllegalStateException("configured EIP-7702 relayer requires an explicit tenant-owned MPC key");
+        }
         if (!Boolean.TRUE.equals(relayer.getEnabled())) {
             throw new IllegalStateException("configured EIP-7702 relayer chain_address is disabled");
         }

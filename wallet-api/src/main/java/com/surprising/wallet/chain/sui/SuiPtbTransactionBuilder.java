@@ -3,7 +3,6 @@ package com.surprising.wallet.chain.sui;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
-import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -20,11 +19,10 @@ import java.util.Objects;
  * <p>交易结构：TransactionData::V1 -> TransactionKind::ProgrammableTransaction
  * -> sender -> gas data -> TransactionExpiration::None。</p>
  *
- * @see SuiTransactionSigner
+ * @see MpcSuiTransactionCodec
  */
 @Component
-public
-class SuiPtbTransactionBuilder {
+public class SuiPtbTransactionBuilder {
 
     /** Base58 字符表 */
     private static final String BASE58_ALPHABET =
@@ -49,7 +47,7 @@ class SuiPtbTransactionBuilder {
 
     public String buildCoinTransfer(String sender, List<SuiRpcClient.SuiCoin> inputCoins,
                                     List<SuiRpcClient.SuiCoin> gasPayment, String recipient,
-                                    long amountAtomic, long gasPrice, long gasBudget) {
+                                    long amountAtomic, long gasPrice, long gasBudget, String coinType) {
         requirePositive(amountAtomic, "amountAtomic");
         validateGas(gasPayment, gasPrice, gasBudget);
         if (inputCoins == null || inputCoins.isEmpty()) {
@@ -58,7 +56,7 @@ class SuiPtbTransactionBuilder {
         BcsWriter out = new BcsWriter();
         out.variant(0); // TransactionData::V1
         out.variant(0); // TransactionKind::ProgrammableTransaction
-        writeCoinTransferPtb(out, inputCoins, recipient, amountAtomic);
+        writeCoinTransferPtb(out, inputCoins, recipient, amountAtomic, coinType);
         out.address(sender);
         writeGasData(out, gasPayment, sender, gasPrice, gasBudget);
         out.variant(0); // TransactionExpiration::None
@@ -75,17 +73,14 @@ class SuiPtbTransactionBuilder {
     }
 
     private void writeCoinTransferPtb(BcsWriter out, List<SuiRpcClient.SuiCoin> inputCoins,
-                                      String recipient, long amountAtomic) {
-        boolean transferWholeInput = selectedTotal(inputCoins).compareTo(BigDecimal.valueOf(amountAtomic)) == 0;
-        int pureInputs = transferWholeInput ? 1 : 2;
+                                      String recipient, long amountAtomic, String coinType) {
+        int pureInputs = 2;
         int recipientInputIndex = inputCoins.size() + pureInputs - 1;
         out.vectorLength(inputCoins.size() + pureInputs);
         for (SuiRpcClient.SuiCoin coin : inputCoins) {
             writeObjectInput(out, coin);
         }
-        if (!transferWholeInput) {
-            writePure(out, u64Bytes(amountAtomic));
-        }
+        writePure(out, u64Bytes(amountAtomic));
         writePure(out, SuiHex.addressBytes(recipient));
 
         List<CommandWriter> commands = new ArrayList<>();
@@ -96,18 +91,24 @@ class SuiPtbTransactionBuilder {
             }
             commands.add(writer -> writeMergeCoins(writer, Argument.input(0), mergeSources));
         }
-        if (transferWholeInput) {
-            commands.add(writer -> writeTransferObjects(writer, List.of(Argument.input(0)),
-                    Argument.input(recipientInputIndex)));
-        } else {
-            int splitCommandIndex = commands.size();
-            commands.add(writer -> writeSplitCoins(writer, Argument.input(0), List.of(Argument.input(inputCoins.size()))));
-            commands.add(writer -> writeTransferObjects(writer, List.of(Argument.nestedResult(splitCommandIndex, 0)),
-                    Argument.input(recipientInputIndex)));
-        }
+        // Bind the configured Coin<T> in the PTB itself before any object can be transferred.
+        commands.add(writer -> writeCoinTypeCheck(writer, coinType));
+        // Always encode the exact principal, even when the RPC balance equals the requested amount.
+        int splitCommandIndex = commands.size();
+        commands.add(writer -> writeSplitCoins(writer, Argument.input(0), List.of(Argument.input(inputCoins.size()))));
+        commands.add(writer -> writeTransferObjects(writer, List.of(Argument.nestedResult(splitCommandIndex, 0)), Argument.input(recipientInputIndex)));
 
         out.vectorLength(commands.size());
         commands.forEach(command -> command.write(out));
+    }
+
+    private void writeCoinTypeCheck(BcsWriter out, String coinType) {
+        String[] type = MpcSuiTransactionCodec.canonicalCoinType(coinType).split("::");
+        out.variant(0); // Command::MoveCall
+        out.address("0x2"); out.string("coin"); out.string("value");
+        out.vectorLength(1); out.variant(7); // TypeTag::Struct
+        out.address(type[0]); out.string(type[1]); out.string(type[2]); out.vectorLength(0);
+        out.vectorLength(1); Argument.input(0).write(out);
     }
 
     private void writeGasData(BcsWriter out, List<SuiRpcClient.SuiCoin> gasPayment,
@@ -162,13 +163,6 @@ class SuiPtbTransactionBuilder {
         if (value <= 0) {
             throw new IllegalArgumentException(name + " must be positive");
         }
-    }
-    private BigDecimal selectedTotal(List<SuiRpcClient.SuiCoin> coins) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (SuiRpcClient.SuiCoin coin : coins) {
-            total = total.add(coin.balance());
-        }
-        return total;
     }
     private byte[] u64Bytes(long value) {
         BcsWriter writer = new BcsWriter();

@@ -173,15 +173,15 @@ class CustodyGasAccountingIntegrationTest {
     }
 
     @Test void nonrepresentableAmountsCannotBeRoundedIntoTheLedger() {
-        for (String amount : java.util.List.of("0.1000000000000000001", "0.100000000000000000000001",
-                "0.10000000000000000000000001", "1e54")) {
+        for (String amount : java.util.List.of("0.1000000000000000000000001", "0.100000000000000000000000001",
+                "0.10000000000000000000000000001", "1e54")) {
             assertThrows(IllegalArgumentException.class,
                     () -> accounting.reserve(TENANT, "WITHDRAWAL", operationId, new BigDecimal(amount)), amount);
         }
         assertBalance("1", "0", "1");
         assertEquals(0, count("custody_gas_usage"));
         reserve();
-        for (String amount : java.util.List.of("0.0400000000000000001", "0.04000000000000000000000001", "1e54")) {
+        for (String amount : java.util.List.of("0.0400000000000000000000001", "0.04000000000000000000000001", "1e54")) {
             assertThrows(IllegalArgumentException.class, () -> settle(amount), amount);
         }
         assertEquals("RESERVED", usageStatus());
@@ -194,6 +194,44 @@ class CustodyGasAccountingIntegrationTest {
         assertBalance("0.959999999999999999", "0", "0.959999999999999999");
         assertEquals(0, new BigDecimal("0.040000000000000001").compareTo(jdbc.queryForObject(
                 "select amount from custody_ledger_entry", BigDecimal.class)));
+    }
+
+    @Test void suiStorageRebateReleasesTheReserveAndCreditsTheExactNetAmountOnce() {
+        useSui();reserve();recordSuiFee(-1_914_600);
+        reconciliation.reconcileWithdrawal(TENANT,operationId);reconciliation.reconcileWithdrawal(TENANT,operationId);
+        assertEquals("SETTLED",usageStatus());assertBalance("1.0019146","0","1.0019146");
+        assertEquals("CREDIT",jdbc.queryForObject("select direction from custody_ledger_entry",String.class));
+        assertEquals(0,new BigDecimal("0.0019146").compareTo(jdbc.queryForObject("select amount from custody_ledger_entry",BigDecimal.class)));
+        assertEquals(0,new BigDecimal("-0.0019146").compareTo(jdbc.queryForObject("select actual_amount from custody_gas_usage",BigDecimal.class)));
+    }
+    @Test void knownZeroSuiFeeReleasesTheReserveWithoutFallingBackToTheEstimate() {
+        useSui();reserve();recordSuiFee(0);reconciliation.reconcileWithdrawal(TENANT,operationId);
+        assertEquals("SETTLED",usageStatus());assertBalance("1","0","1");assertEquals(0,count("custody_ledger_entry"));
+        assertEquals(0,jdbc.queryForObject("select actual_amount from custody_gas_usage",BigDecimal.class).signum());
+    }
+    @Test void anotherChainCannotCreateCreditByReportingNegativeGas() {
+        reserve();assertThrows(IllegalArgumentException.class,()->settle("-0.01"));
+        assertEquals("RESERVED",usageStatus());assertBalance("0.9","0.1","1");assertEquals(0,count("custody_ledger_entry"));
+    }
+    private void useSui() { useNative("SUI"); }
+    private void useNative(String chain) {
+        jdbc.update("update chain_address set chain=?,asset_symbol=? where tenant_id=?",chain,chain,TENANT);
+        jdbc.update("update custody_address set chain=?,network='testnet' where tenant_id=?",chain,TENANT);
+        jdbc.update("update custody_gas_account set chain=?,network='testnet',native_symbol=? where tenant_id=?",chain,chain,TENANT);
+        jdbc.update("update ledger_balance set chain=?,asset_symbol=? where tenant_id=?",chain,chain,TENANT);
+        jdbc.update("update withdrawal_order set chain=? where tenant_id=?",chain,TENANT);
+        jdbc.update("update custody_withdrawal set chain=? where tenant_id=?",chain,TENANT);
+    }
+    @Test void actualNearExpenseRetainsItsNonRefundableOneYoctoInAllMoneyReceipts() {
+        useNative("NEAR");reserve();
+        assertEquals("SETTLED",settle("0.001282350138824700000001").status());
+        assertBalance("0.998717649861175299999999","0","0.998717649861175299999999");
+        assertEquals(0,new BigDecimal("0.001282350138824700000001").compareTo(jdbc.queryForObject("select amount from custody_ledger_entry",BigDecimal.class)));
+        assertEquals(0,new BigDecimal("0.001282350138824700000001").compareTo(jdbc.queryForObject("select actual_amount from custody_gas_usage",BigDecimal.class)));
+    }
+    private void recordSuiFee(long fee) {
+        jdbc.update("update withdrawal_order set status='CONFIRMED' where tenant_id=? and order_no=?",TENANT,orderNo);
+        jdbc.update("insert into sui_transaction(chain,tx_digest,sender,receiver,asset_symbol,amount,fee_mist,status) values ('SUI','gas-test-hash','customer','destination','USDT',3,?,'CONFIRMED')",fee);
     }
 
     @Test void unchangedExpiredReservationsCannotHideLaterConfirmedFees() {

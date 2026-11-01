@@ -314,8 +314,6 @@
     <modules>
         <module>common</module>
         <module>chain-sdks</module>
-        <module>wallet-sig1</module>
-        <module>wallet-sig2</module>
         <module>wallet-api</module>
     </modules>
 </project>

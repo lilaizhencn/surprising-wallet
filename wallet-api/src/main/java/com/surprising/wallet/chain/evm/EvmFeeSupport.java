@@ -102,6 +102,15 @@ public final class EvmFeeSupport {
                 DefaultBlockParameterName.LATEST);
     }
 
+    /** Quote before the operator SIGN. OP accounts for the missing signature; Scroll needs its maximum byte cost. */
+    public static BigInteger estimateUnsignedSeparateL1Fee(Web3j web3j, AccountChainProfile profile,
+                                                          String from, byte[] unsignedPayload) {
+        com.surprising.wallet.sdk.signing.MpcEvmTransactionCodec.restore(unsignedPayload,profile.getChainId());
+        String encoded=Numeric.toHexString(unsignedPayload);
+        if(feeModel(profile)==EvmFeeModel.SCROLL)encoded += "ff".repeat(68);
+        return estimateSeparateL1Fee(web3j,profile,from,encoded);
+    }
+
     /**
      * 调用 OP Stack 运营方费用预言机，按预计 Gas 上限估算运营方费用。
      */

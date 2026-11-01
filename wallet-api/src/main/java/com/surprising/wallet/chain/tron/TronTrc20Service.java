@@ -13,6 +13,12 @@ import java.util.List;
 
 @Service
 public class TronTrc20Service {
+    public Chain.Transaction prepareTransfer(TronTridentClient client,String ownerAddress,String contractAddress,
+                                             String recipientAddress,BigDecimal amount,int decimals,long feeLimitSun) {
+        List<Type> inputs=List.of(new Address(TronAddressCodec.toAbiAddress(recipientAddress)),
+                new Uint256(Trc20AbiCodec.toRawAmount(amount,decimals)));
+        return client.createContractCall(ownerAddress,contractAddress,new Function("transfer",inputs,List.of()),feeLimitSun);
+    }
     public TronTransactionService.SignedTronTransaction signTransfer(TronTridentClient client,
                                                                     KeyPair keyPair,
                                                                     String contractAddress,
@@ -21,12 +27,7 @@ public class TronTrc20Service {
                                                                     int decimals,
                                                                     long feeLimitSun) {
         String ownerAddress = keyPair.toBase58CheckAddress();
-        List<Type> inputs = List.of(
-                new Address(TronAddressCodec.toAbiAddress(recipientAddress)),
-                new Uint256(Trc20AbiCodec.toRawAmount(amount, decimals))
-        );
-        Function transfer = new Function("transfer", inputs, List.of());
-        Chain.Transaction unsigned = client.createContractCall(ownerAddress, contractAddress, transfer, feeLimitSun);
+        Chain.Transaction unsigned = prepareTransfer(client,ownerAddress,contractAddress,recipientAddress,amount,decimals,feeLimitSun);
         Chain.Transaction signed = client.signTransaction(unsigned, keyPair);
         return new TronTransactionService.SignedTronTransaction(TronTransactionService.txId(signed), signed);
     }

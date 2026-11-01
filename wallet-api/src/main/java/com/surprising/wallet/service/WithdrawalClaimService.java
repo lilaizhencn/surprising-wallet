@@ -21,7 +21,7 @@ public class WithdrawalClaimService {
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public int claimEvm(UUID tenantId, String chain, String orderNo, String fromAddress) {
+    public int claimDurable(UUID tenantId, String chain, String orderNo, String fromAddress) {
         return claim(tenantId,chain,orderNo,fromAddress,true);
     }
 
@@ -29,6 +29,6 @@ public class WithdrawalClaimService {
         Objects.requireNonNull(tenantId, "withdrawal tenantId is required");
         var order = orders.find(chain, orderNo, tenantId).orElse(null);
         if (order == null || deficits.existsOpenAsset(tenantId,chain,order.getAssetSymbol())) return 0;
-        return durable ? orders.claimSigningEvm(tenantId,chain,orderNo,fromAddress) : orders.claimSigning(tenantId, chain, orderNo, fromAddress);
+        return durable ? orders.claimSigningDurable(tenantId,chain,orderNo,fromAddress) : orders.claimSigning(tenantId, chain, orderNo, fromAddress);
     }
 }

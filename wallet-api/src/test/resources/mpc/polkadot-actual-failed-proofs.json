@@ -1,0 +1,195 @@
+{
+  "provenance": "Original public proofs from actual independent three-node cb-mpc on official isolated Asset Hub; current custody business uses Asset Hub for DOT and tokens. Source native account/nonce retained; full token balances collected; no wallet key reconstructed.",
+  "payments": [
+    {
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+        "publicKeyHex": "a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7",
+        "recipient": "5HTzEPr3W2R93FhiZ4NRM2HWcdg2RY2wu7idwwp4Un8U9gKX",
+        "amountAtomic": 1,
+        "assetId": null,
+        "nonce": 9,
+        "eraPeriod": 64,
+        "blockHeight": 6112,
+        "blockHash": "0x4c0e05e888d0492c9c43013b61ec7e119e46e30ba695fa584278495277d7f8d1",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x0a03",
+          "allowDeath": "0x0a00"
+        },
+        "keepAlive": true
+      },
+      "selected": {
+        "extrinsicHex": "0x35028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda700537ea8ed22addb4dbd72cee6ad821436056af78e24a4043e5bfc1dea0f2d4216402219d6de08edfb03f1d378bc7dde9a8fe06b0fb6df9494978ec386c0c3b3010502240000000a0300eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee04",
+        "txHash": "0x310ba6fecb06ad137edb206afdc6ecdffe20b4805428465ab2271630dd52628b"
+      },
+      "proof": {
+        "found": true,
+        "events": [
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3350815353"
+            ],
+            "index": 2,
+            "method": "Withdraw",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5EYCAe5gKBMwLZyq5dw41Hw3V68nsCVTZQ2d4AYfbMb4kF29",
+              "3350815353"
+            ],
+            "index": 2,
+            "method": "Deposit",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3350815353",
+              "0"
+            ],
+            "index": 2,
+            "method": "TransactionFeePaid",
+            "section": "transactionPayment"
+          },
+          {
+            "data": [
+              "{\"token\":\"BelowMinimum\"}",
+              "{\"weight\":{\"refTime\":383866000,\"proofSize\":4013},\"class\":\"Normal\",\"paysFee\":\"Yes\"}"
+            ],
+            "index": 2,
+            "method": "ExtrinsicFailed",
+            "section": "system"
+          }
+        ],
+        "txHash": "0x310ba6fecb06ad137edb206afdc6ecdffe20b4805428465ab2271630dd52628b",
+        "blockHash": "0x2ddfc2a0e3ae3133b5bd4b996a805db12e849df8a728a83612beedb361cf72f8",
+        "eventsHex": "0x240208092660120000000000000000000265cd1d0002000000010000000000c2bfac2d551702000000020000000a08a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda77962b9c70000000000000000000000000000020000000a076d6f646c6461702f627566661c73746167696e670000000000000000000000007962b9c70000000000000000000000000000020000000b00a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda77962b9c700000000000000000000000000000000000000000000000000000000000002000000000107024252855bb53e000000010a026d6f646c6461702f627566661c73746167696e670000000000000000000000006d6f646c6461702f6275666600000000000000000000000000000000000000007962b9c7000000000000000000000000000164027962b9c700000000000000000000000000",
+        "headerHex": "0xc9813ac22167caa4cd7d1a8a8bcaa74e7852e2a3e936e96fb862552cc4d86226895fb32152dbc7f36dd65b9d64f84d9bdd5d0404b98940d0867fedd130e79a2cd7c2c61c18b7354e4985b8ba9778a38ead4fdf186118b7cc1fdc5eb6953b09180e6f080661757261200a527404000000000452505352905f9446d468eb10d5e606cdad0de1f50902063f7c0d9ef5de593e5dc1692339ada6204547",
+        "parentHash": "0xc9813ac22167caa4cd7d1a8a8bcaa74e7852e2a3e936e96fb862552cc4d86226",
+        "blockHeight": 6114,
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "extrinsicHex": "0x35028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda700537ea8ed22addb4dbd72cee6ad821436056af78e24a4043e5bfc1dea0f2d4216402219d6de08edfb03f1d378bc7dde9a8fe06b0fb6df9494978ec386c0c3b3010502240000000a0300eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee04",
+        "extrinsicIndex": 2,
+        "finalizedHeight": 6114,
+        "transactionVersion": 16
+      }
+    },
+    {
+      "unsigned": {
+        "network": "localnet",
+        "role": "ASSET_HUB",
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "transactionVersion": 16,
+        "sender": "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+        "publicKeyHex": "a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda7",
+        "recipient": "5GiYowJ1A5h6K97yVfx5Nxw6Gmdb1vYLc1LjnYwWsv3KiM4a",
+        "amountAtomic": 1000000,
+        "assetId": "10002",
+        "nonce": 10,
+        "eraPeriod": 64,
+        "blockHeight": 6117,
+        "blockHash": "0x92835c28db4aca9e6a8d6c8dc2bb8ddd9a0a8bff75243bbabf01319be1a59bfe",
+        "extensions": [
+          "AuthorizeCall",
+          "CheckNonZeroSender",
+          "CheckSpecVersion",
+          "CheckTxVersion",
+          "CheckGenesis",
+          "CheckMortality",
+          "CheckNonce",
+          "CheckWeight",
+          "ChargeAssetTxPayment",
+          "CheckMetadataHash",
+          "EthSetOrigin",
+          "StorageWeightReclaim"
+        ],
+        "callIndices": {
+          "keepAlive": "0x3209",
+          "allowDeath": "0x3208"
+        },
+        "keepAlive": false
+      },
+      "selected": {
+        "extrinsicHex": "0x49028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda70057b05015fbf79d9f6bfb8aaf450c908e433b1507753f028cf97302bdc5cef6ee76435d67b13078f84881177d2fc6ce77a2f3703c121a6687178c7176fb8b84055502280000003208499c00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd02093d00",
+        "txHash": "0xbdc89e9c53c9b86ae935d304d9521e0b7099bf57f469f2698e6626cca41236ca"
+      },
+      "proof": {
+        "found": true,
+        "events": [
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3756420191"
+            ],
+            "index": 2,
+            "method": "Withdraw",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5EYCAe5gKBMwLZyq5dw41Hw3V68nsCVTZQ2d4AYfbMb4kF29",
+              "3756420191"
+            ],
+            "index": 2,
+            "method": "Deposit",
+            "section": "balances"
+          },
+          {
+            "data": [
+              "5FiWt1fbRX3cgqrGpkLeMGre9cmhWPcP4taVXSfFEzWKStVq",
+              "3756420191",
+              "0"
+            ],
+            "index": 2,
+            "method": "TransactionFeePaid",
+            "section": "transactionPayment"
+          },
+          {
+            "data": [
+              "{\"module\":{\"index\":50,\"error\":\"0x04000000\"}}",
+              "{\"weight\":{\"refTime\":922099000,\"proofSize\":4283},\"class\":\"Normal\",\"paysFee\":\"Yes\"}"
+            ],
+            "index": 2,
+            "method": "ExtrinsicFailed",
+            "section": "system"
+          }
+        ],
+        "txHash": "0xbdc89e9c53c9b86ae935d304d9521e0b7099bf57f469f2698e6626cca41236ca",
+        "blockHash": "0x2e5287d0265c4980173ea7db3d4885358e35d0e5770b7dd2484d91a7c3932ada",
+        "eventsHex": "0x24020809ff63120000000000000000000265cd1d0002000000010000000000c2bfac2d551702000000020000000a08a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda75f6ce6df0000000000000000000000000000020000000a076d6f646c6461702f627566661c73746167696e670000000000000000000000005f6ce6df0000000000000000000000000000020000000b00a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda75f6ce6df000000000000000000000000000000000000000000000000000000000000020000000001033204000000e274d8dbed42000000010a026d6f646c6461702f627566661c73746167696e670000000000000000000000006d6f646c6461702f6275666600000000000000000000000000000000000000005f6ce6df000000000000000000000000000164025f6ce6df00000000000000000000000000",
+        "headerHex": "0x170232626fd5a3d407d3d40e3a2621d956b7f956cad99dfc8a0da8a899ed72849d5fac9724fdca9ad4e081e9d80b76bdd4ab12bf120974736af44af701c787782ef0eed0f5c009e71bd3c6848df8e5dc7ad74e6f3a273cae8a276536e74593d42297080661757261200f527404000000000452505352900ced2fe918fa8d6ea58c0699c66101d8f64ae013d3a40121973781782c6b1bc2f6204547",
+        "parentHash": "0x170232626fd5a3d407d3d40e3a2621d956b7f956cad99dfc8a0da8a899ed7284",
+        "blockHeight": 6119,
+        "genesisHash": "0x2292ee3bb90bba989a6fa40aa10674e1a7a453077c187f31245193a430ea86dc",
+        "specVersion": 1025002,
+        "extrinsicHex": "0x49028400a18b130c079c891118520424006c9870728c5547bf17ad2a5fc943499644dda70057b05015fbf79d9f6bfb8aaf450c908e433b1507753f028cf97302bdc5cef6ee76435d67b13078f84881177d2fc6ce77a2f3703c121a6687178c7176fb8b84055502280000003208499c00cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd02093d00",
+        "extrinsicIndex": 2,
+        "finalizedHeight": 6119,
+        "transactionVersion": 16
+      }
+    }
+  ]
+}

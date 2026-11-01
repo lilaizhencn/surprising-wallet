@@ -301,7 +301,6 @@ class CustodyOperationsIntegrationTest {
             assertFalse(account.lowBalance());
             assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.tenantQueries(jdbc).onboarding(com.surprising.wallet.testutil.CustodyTestSupport.tenantAdmin(tenantId)).gasAccountFunded());
             assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
-                   Mockito.mock(BlockchainRuntimeService.class),
                     Mockito.mock(CustodyTenantChainService.class)).list(
                     new CustodyPrincipal(CustodyPrincipal.ActorType.API_KEY, UUID.randomUUID(), tenantId,
                             "gas-address-test", "API_KEY", Set.of("addresses:read")), "", "", "", "", 10, 0).isEmpty());
@@ -351,7 +350,7 @@ class CustodyOperationsIntegrationTest {
                     historyPrincipal(tenantId), "ETH", "USDT", "CONFIRMED", "payout-alpha", 20, 0);
             assertEquals(1, withdrawals.size());
             assertEquals(destination, withdrawals.getFirst().toAddress());
-            assertEquals("customer-alpha", withdrawals.getFirst().subject());
+            assertEquals("user:42", withdrawals.getFirst().subject());
             assertTrue(history.withdrawals(
                     historyPrincipal(tenantId), "ETH", "BTC", "CONFIRMED", destination, 20, 0).isEmpty());
             status.setRollbackOnly();
@@ -417,7 +416,7 @@ class CustodyOperationsIntegrationTest {
                 var page = history.withdrawalPage(principal, "eth", "usdt", "sent", search, 20, 0);
                 assertEquals(1, page.total(), search);
                 assertEquals("transaction%_own", page.items().getFirst().txHash());
-                assertEquals("customer%_one", page.items().getFirst().subject());
+                assertEquals("user:42", page.items().getFirst().subject());
             }
             assertEquals(0, history.withdrawalPage(principal, "", "", "", "transaction%_foreign", 20, 0).total());
             var empty = history.withdrawalPage(principal, "", "", "", "", 1000, 1000);
@@ -888,135 +887,129 @@ class CustodyOperationsIntegrationTest {
      */
     @Test
     void userAddressCreationIsIdempotentAndSharedAcrossEvmChains() {
-        transactions.executeWithoutResult(status -> {
-            CustodyTenantChainTableRepository tenantChainRepository =
-                    new CustodyTenantChainTableRepository(jdbc);
-            UUID tenantId = createTenant();
-            UUID administratorId = UUID.randomUUID();
-            String slug = jdbc.queryForObject(
-                    "select slug from custody_tenant where id = ?", String.class, tenantId);
-            jdbc.update("""
-                    insert into custody_tenant_user(
-                        id, tenant_id, email, display_name, password_hash, role, status)
-                    values (?, ?, ?, 'Address administrator', 'test-only-hash',
-                            'TENANT_ADMIN', 'ACTIVE')
-                    """, administratorId, tenantId, slug + "@example.test");
-            tenantChainRepository.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
-            tenantChainRepository.setStatus(tenantId, "BNB", "ACTIVE", administratorId);
+        jdbc.update("update chain_profile set enabled=false where chain='BNB'");
+        jdbc.update("update chain_profile set enabled=true where chain='BNB' and network='testnet'");
+        CustodyTenantChainTableRepository tenantChainRepository =
+                new CustodyTenantChainTableRepository(jdbc);
+        UUID tenantId = createTenant();
+        UUID administratorId = UUID.randomUUID();
+        String slug = jdbc.queryForObject(
+                "select slug from custody_tenant where id = ?", String.class, tenantId);
+        jdbc.update("""
+                insert into custody_tenant_user(
+                    id, tenant_id, email, display_name, password_hash, role, status)
+                values (?, ?, ?, 'Address administrator', 'test-only-hash',
+                        'TENANT_ADMIN', 'ACTIVE')
+                """, administratorId, tenantId, slug + "@example.test");
+        tenantChainRepository.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
+        tenantChainRepository.setStatus(tenantId, "BNB", "ACTIVE", administratorId);
 
-            CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
+        CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
 
-                   new StableEvmRuntime(jdbc),
-                    com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
-            CustodyPrincipal principal = new CustodyPrincipal(
-                    CustodyPrincipal.ActorType.TENANT_USER,
-                    administratorId, tenantId, slug, "TENANT_ADMIN",
-                    Set.of("addresses:read", "addresses:write"));
+                com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
+        CustodyPrincipal principal = new CustodyPrincipal(
+                CustodyPrincipal.ActorType.TENANT_USER,
+                administratorId, tenantId, slug, "TENANT_ADMIN",
+                Set.of("addresses:read", "addresses:write"));
 
-            var ethFirst = service.create(
-                    principal,
-                    new CustodyAddressService.CreateAddressCommand(
-                            "ETH", "user_10086", null, null, null),
-                    "API", "127.0.0.1");
-            var ethRepeated = service.create(
-                    principal,
-                    new CustodyAddressService.CreateAddressCommand(
-                            "ETH", "user_10086", 0L, null, null),
-                    "API", "127.0.0.1");
-            var bnbFirst = service.create(
-                    principal,
-                    new CustodyAddressService.CreateAddressCommand(
-                            "BNB", "user_10086", 0L, null, null),
-                    "API", "127.0.0.1");
-            var ethRotated = service.create(
-                    principal,
-                    new CustodyAddressService.CreateAddressCommand(
-                            "ETH", "user_10086", 1L, null, null),
-                    "API", "127.0.0.1");
-            var bnbRotated = service.create(
-                    principal,
-                    new CustodyAddressService.CreateAddressCommand(
-                            "BNB", "user_10086", 1L, null, null),
-                    "API", "127.0.0.1");
+        var ethFirst = service.create(
+                principal,
+                new CustodyAddressService.CreateAddressCommand(
+                        "ETH", "user_10086", null, null, null),
+                "API", "127.0.0.1");
+        var ethRepeated = service.create(
+                principal,
+                new CustodyAddressService.CreateAddressCommand(
+                        "ETH", "user_10086", 0L, null, null),
+                "API", "127.0.0.1");
+        var bnbFirst = service.create(
+                principal,
+                new CustodyAddressService.CreateAddressCommand(
+                        "BNB", "user_10086", 0L, null, null),
+                "API", "127.0.0.1");
+        var ethRotated = service.create(
+                principal,
+                new CustodyAddressService.CreateAddressCommand(
+                        "ETH", "user_10086", 1L, null, null),
+                "API", "127.0.0.1");
+        var bnbRotated = service.create(
+                principal,
+                new CustodyAddressService.CreateAddressCommand(
+                        "BNB", "user_10086", 1L, null, null),
+                "API", "127.0.0.1");
 
-            assertEquals(ethFirst.id(), ethRepeated.id());
-            assertEquals(0L, ethFirst.addressVersion());
-            assertEquals(0L, bnbFirst.addressVersion());
-            assertEquals(ethFirst.address(), bnbFirst.address());
-            assertEquals(1L, ethRotated.addressVersion());
-            assertEquals(1L, bnbRotated.addressVersion());
-            assertEquals(ethRotated.address(), bnbRotated.address());
-            assertNotEquals(ethFirst.address(), ethRotated.address());
-            assertEquals(4, jdbc.queryForObject("""
-                    select count(*) from custody_address
-                     where tenant_id = ? and subject = 'user_10086'
-                    """, Integer.class, tenantId));
-            assertEquals(2, jdbc.queryForObject("""
-                    select count(distinct address_version) from custody_address
-                     where tenant_id = ? and subject = 'user_10086'
-                    """, Integer.class, tenantId));
-            assertEquals(1, jdbc.queryForObject("""
-                    select count(distinct derivation_subject) from custody_address
-                     where tenant_id = ? and subject = 'user_10086'
-                    """, Integer.class, tenantId));
-            var addressPage = service.page(principal, "", "", "", "", 50, 0);
-            assertEquals(4L, addressPage.total());
-            assertEquals(4, addressPage.items().size());
-            assertEquals(1, jdbc.queryForObject("""
-                    select count(*) from custody_audit_log where tenant_id = ? and action = 'ADDRESS.CREATE'
-                       and resource_id = ? and details->>'addressVersion' = '1' and details->>'childIndex' = '1'
-                    """, Integer.class, tenantId, ethRotated.id().toString()));
-            status.setRollbackOnly();
-        });
+        assertEquals(ethFirst.id(), ethRepeated.id());
+        assertEquals(0L, ethFirst.addressVersion());
+        assertEquals(0L, bnbFirst.addressVersion());
+        assertEquals(ethFirst.address(), bnbFirst.address());
+        assertEquals(1L, ethRotated.addressVersion());
+        assertEquals(1L, bnbRotated.addressVersion());
+        assertEquals(ethRotated.address(), bnbRotated.address());
+        assertNotEquals(ethFirst.address(), ethRotated.address());
+        assertEquals(4, jdbc.queryForObject("""
+                select count(*) from custody_address
+                 where tenant_id = ? and subject = 'user_10086'
+                """, Integer.class, tenantId));
+        assertEquals(2, jdbc.queryForObject("""
+                select count(distinct address_version) from custody_address
+                 where tenant_id = ? and subject = 'user_10086'
+                """, Integer.class, tenantId));
+        assertEquals(1, jdbc.queryForObject("""
+                select count(distinct derivation_subject) from custody_address
+                 where tenant_id = ? and subject = 'user_10086'
+                """, Integer.class, tenantId));
+        var addressPage = service.page(principal, "", "", "", "", 50, 0);
+        assertEquals(4L, addressPage.total());
+        assertEquals(4, addressPage.items().size());
+        assertEquals(1, jdbc.queryForObject("""
+                select count(*) from custody_audit_log where tenant_id = ? and action = 'ADDRESS.CREATE'
+                   and resource_id = ? and details->>'addressVersion' = '1' and details->>'childIndex' = '1'
+                """, Integer.class, tenantId, ethRotated.id().toString()));
     }
 
     @Test
     void fundedWithdrawalAddressLookupChoosesOlderAddressWithAssetBalance() {
-        transactions.executeWithoutResult(status -> {
-            CustodyTenantChainTableRepository tenantChains = new CustodyTenantChainTableRepository(jdbc);
-            UUID tenantId = createTenant();
-            UUID administratorId = UUID.randomUUID();
-            String slug = jdbc.queryForObject(
-                    "select slug from custody_tenant where id = ?", String.class, tenantId);
-            jdbc.update("""
-                    insert into custody_tenant_user(
-                        id, tenant_id, email, display_name, password_hash, role, status)
-                    values (?, ?, ?, 'Balance administrator', 'test-only-hash', 'TENANT_ADMIN', 'ACTIVE')
-                    """, administratorId, tenantId, slug + "@example.test");
-            tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
-            CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
-            new StableEvmRuntime(jdbc),
-                    com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
-            CustodyPrincipal principal = new CustodyPrincipal(
-                    CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
-                    "TENANT_ADMIN", Set.of("addresses:read", "addresses:write"));
-            var v1 = service.create(principal,
-                    new CustodyAddressService.CreateAddressCommand("ETH", "user_10086", 1L, null, null),
-                    "API", "127.0.0.1");
-            var v2 = service.create(principal,
-                    new CustodyAddressService.CreateAddressCommand("ETH", "user_10086", 2L, null, null),
-                    "API", "127.0.0.1");
-            String v1Account = jdbc.queryForObject("""
-                    select cha.account_id from chain_address cha
-                    join custody_address ca on ca.chain_address_id = cha.id
-                    where ca.tenant_id = ? and ca.id = ?
-                    """, String.class, tenantId, v1.id());
-            new LedgerBalanceRepository(jdbc).increment(
-                    tenantId, "ETH", "ETH", v1Account, new BigDecimal("0.005"));
+        CustodyTenantChainTableRepository tenantChains = new CustodyTenantChainTableRepository(jdbc);
+        UUID tenantId = createTenant();
+        UUID administratorId = UUID.randomUUID();
+        String slug = jdbc.queryForObject(
+                "select slug from custody_tenant where id = ?", String.class, tenantId);
+        jdbc.update("""
+                insert into custody_tenant_user(
+                    id, tenant_id, email, display_name, password_hash, role, status)
+                values (?, ?, ?, 'Balance administrator', 'test-only-hash', 'TENANT_ADMIN', 'ACTIVE')
+                """, administratorId, tenantId, slug + "@example.test");
+        tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
+        CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
+                com.surprising.wallet.testutil.CustodyTestSupport.tenantChains(jdbc, new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc), new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
+        CustodyPrincipal principal = new CustodyPrincipal(
+                CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
+                "TENANT_ADMIN", Set.of("addresses:read", "addresses:write"));
+        var v1 = service.create(principal,
+                new CustodyAddressService.CreateAddressCommand("ETH", "user_10086", 1L, null, null),
+                "API", "127.0.0.1");
+        var v2 = service.create(principal,
+                new CustodyAddressService.CreateAddressCommand("ETH", "user_10086", 2L, null, null),
+                "API", "127.0.0.1");
+        String v1Account = jdbc.queryForObject("""
+                select cha.account_id from chain_address cha
+                join custody_address ca on ca.chain_address_id = cha.id
+                where ca.tenant_id = ? and ca.id = ?
+                """, String.class, tenantId, v1.id());
+        new LedgerBalanceRepository(jdbc).increment(
+                tenantId, "ETH", "ETH", v1Account, new BigDecimal("0.005"));
 
-            List<Map<String, Object>> funded = service.fundedAddresses(
-                    principal, "ETH", "ETH", "user_10086", "0.0005");
+        List<Map<String, Object>> funded = service.fundedAddresses(
+                principal, "ETH", "ETH", "user_10086", "0.0005");
 
-            assertEquals(1, funded.size());
-            assertEquals(v1.id(), funded.getFirst().get("custodyAddressId"));
-            assertNotEquals(v2.id(), funded.getFirst().get("custodyAddressId"));
-            CustodyPrincipal noAddressRead = new CustodyPrincipal(
-                    CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
-                    "TENANT_ADMIN", Set.of("addresses:write"));
-            assertThrows(CustodyForbiddenException.class, () -> service.fundedAddresses(
-                    noAddressRead, "ETH", "ETH", "user_10086", "0.0005"));
-            status.setRollbackOnly();
-        });
+        assertEquals(1, funded.size());
+        assertEquals(v1.id(), funded.getFirst().get("custodyAddressId"));
+        assertNotEquals(v2.id(), funded.getFirst().get("custodyAddressId"));
+        CustodyPrincipal noAddressRead = new CustodyPrincipal(
+                CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
+                "TENANT_ADMIN", Set.of("addresses:write"));
+        assertThrows(CustodyForbiddenException.class, () -> service.fundedAddresses(
+                noAddressRead, "ETH", "ETH", "user_10086", "0.0005"));
     }
 
     /**
@@ -1286,61 +1279,4 @@ class CustodyOperationsIntegrationTest {
                 """);
     }
 
-    /**
-     * 测试替身 {@code StableEvmRuntime}，用于隔离外部依赖并验证调用参数和状态变化。
-     */
-    private static final class StableEvmRuntime extends BlockchainRuntimeService {
-        /**
-         * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
-         */
-        private final JdbcTemplate jdbc;
-
-        /**
-         * 验证 {@code StableEvmRuntime} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        private StableEvmRuntime(JdbcTemplate jdbc) {
-            super(null, null, null, null);
-            this.jdbc = jdbc;
-        }
-
-        /**
-         * 验证 {@code requireRuntime} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public RuntimeChain requireRuntime(String chain) {
-            ChainType chainType = ChainType.valueOf(chain);
-            String nativeSymbol = chainType == ChainType.BNB ? "BNB" : "ETH";
-            return new RuntimeChain(
-                    chainType, chain, "qa", "evm", nativeSymbol, 1);
-        }
-
-        /**
-         * 验证 {@code generateDepositAddressAtIndex} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public com.surprising.wallet.common.chain.AccountChainProfile requireProfile(String chain) {
-            RuntimeChain runtime = requireRuntime(chain);
-            return com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(chain)
-                    .network(runtime.network()).family(runtime.family()).nativeSymbol(runtime.nativeSymbol())
-                    .enabled(true).build();
-        }
-
-        @Override
-        public com.surprising.wallet.common.chain.ChainAddressRecord generateDepositAddressAtIndex(
-                com.surprising.wallet.common.chain.AccountChainProfile profile, long userId, int biz, long childIndex) {
-            String chain = profile.getChain();
-            RuntimeChain runtime = requireRuntime(chain);
-            String address = "0x" + String.format("%032x%08x", userId, childIndex);
-            String path = "m/44/60/" + biz + "/" + userId + "/" + childIndex;
-            jdbc.update("""
-                    insert into chain_address(
-                        chain, asset_symbol, account_id, user_id, biz, address_index,
-                        address, owner_address, derivation_path, wallet_role, enabled)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DEPOSIT', true)
-                    """, chain, runtime.nativeSymbol(), address, userId, biz, childIndex,
-                    address, address, path);
-            return new com.surprising.wallet.repository.ChainAddressRepository(jdbc)
-                    .find(chain, runtime.nativeSymbol(), userId, biz, childIndex, "DEPOSIT").orElseThrow();
-        }
-    }
 }

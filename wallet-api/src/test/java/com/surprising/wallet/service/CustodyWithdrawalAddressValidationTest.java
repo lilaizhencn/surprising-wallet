@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CustodyWithdrawalAddressValidationTest {
     @org.junit.jupiter.api.Test
     void validClassicAndFriendlyAddressesRemainAccepted() {
-        var runtime = new ChainAddressRuntime(Mockito.mock(ChainAddressRepository.class), Mockito.mock(ChainProfileRepository.class), null);
+        var runtime = new ChainAddressRuntime();
         assertTrue(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.TRON,
                 "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"));
         assertTrue(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.XRP,
@@ -40,7 +40,6 @@ class CustodyWithdrawalAddressValidationTest {
         var bitcoin = new com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime(
                 metadata.chainProfileRepository,
                 metadata.chainAssetRepository,
-                mock(com.surprising.wallet.config.PubKeyConfig.class),
                 mock(com.surprising.wallet.chain.rpc.BtcCommand.class),
                 mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
                 mock(com.surprising.wallet.chain.rpc.DogeCommand.class),
@@ -50,7 +49,7 @@ class CustodyWithdrawalAddressValidationTest {
         var enabledProfile = metadata.chainProfileRepository.findAccountByChain(chain);
         when(runtimeProfiles.findAccountByChain(chain)).thenReturn(enabledProfile);
         var runtime = new BlockchainRuntimeService(runtimeProfiles, mock(ChainAssetRepository.class),
-                new ChainAddressRuntime(metadata.chainAddressRepository, metadata.chainProfileRepository, null), bitcoin);
+                new ChainAddressRuntime(), bitcoin);
         var assets = mock(ChainAssetRepository.class);
         var profiles = mock(ChainProfileRepository.class);
         when(assets.findActive(chain, chain)).thenReturn(Optional.of(com.surprising.wallet.chain.model.ChainAsset.builder().nativeAsset(true).decimals(18).build()));
@@ -76,7 +75,7 @@ class CustodyWithdrawalAddressValidationTest {
     @ParameterizedTest
     @ValueSource(strings = {"TRON", "XRP"})
     void matchingTheOldAddressRegexDoesNotBypassChecksumValidation(String chain) {
-        var runtime = new ChainAddressRuntime(Mockito.mock(ChainAddressRepository.class), Mockito.mock(ChainProfileRepository.class), null);
+        var runtime = new ChainAddressRuntime();
         String invalid = chain.equals("TRON") ? "T" + "1".repeat(33) : "r" + "1".repeat(30);
         assertFalse(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.valueOf(chain), invalid));
     }

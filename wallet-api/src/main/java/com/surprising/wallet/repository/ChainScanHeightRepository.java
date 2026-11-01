@@ -42,6 +42,34 @@ public class ChainScanHeightRepository {
         return rows.stream().findFirst();
     }
 
+    /** Native cursor admission joins the address-publication transaction before an address can receive funds. */
+    public int initializeNative(String chain, String scannerName, String genesisHash, long anchorHeight) {
+        return jdbc.update("""
+                insert into chain_scan_height(chain,scanner_name,genesis_hash,best_height,safe_height,status)
+                values (?,?,?,?,?,'ACTIVE') on conflict(chain,scanner_name) do nothing
+                """, chain, scannerName, genesisHash, anchorHeight, anchorHeight);
+    }
+
+    public Optional<NativeScanState> nativeState(String chain, String scannerName, boolean lock) {
+        return jdbc.query("""
+                select genesis_hash,best_height,safe_height from chain_scan_height
+                 where chain=? and scanner_name=? and genesis_hash is not null
+                """ + (lock ? " for update" : ""), (row, index) -> new NativeScanState(row.getString("genesis_hash"),
+                row.getLong("best_height"), row.getLong("safe_height")), chain, scannerName).stream().findFirst();
+    }
+
+    /** An explicit comparison also permits the scanner's audited reorg transaction to rewind its cursor. */
+    public int advanceNative(String chain, String scannerName, String genesisHash,
+                             long bestHeight, long expectedSafeHeight, long nextSafeHeight) {
+        if (nextSafeHeight < 0 || bestHeight < nextSafeHeight) throw new IllegalArgumentException("invalid native scan heights");
+        return jdbc.update("""
+                update chain_scan_height set best_height=?,safe_height=?,status='ACTIVE',updated_at=now()
+                 where chain=? and scanner_name=? and genesis_hash=? and safe_height=?
+                """, bestHeight, nextSafeHeight, chain, scannerName, genesisHash, expectedSafeHeight);
+    }
+
+    public record NativeScanState(String genesisHash, long bestHeight, long safeHeight) { }
+
     /** 查询所有启用的扫描高度。 */
     public List<ChainScanHeightRecord> listActive() {
         return jdbc.query("""

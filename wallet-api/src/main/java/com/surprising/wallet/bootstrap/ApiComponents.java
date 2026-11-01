@@ -4,7 +4,6 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@WalletModeEnabled({WalletMode.api, WalletMode.all})
 @ComponentScan(basePackages = {
         "com.surprising.wallet.chain",
         "com.surprising.wallet.config",

@@ -1,74 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-XRP_FLOW_ROOT=$(git rev-parse --show-toplevel)
-source "$XRP_FLOW_ROOT/scripts/regtest/local-postgres.sh"
-XRP_FLOW_DB="surprising_wallet_test_xrp_$$"
-
-cleanup() {
-  local status=$?
-  trap - EXIT INT TERM
-  local_pg_drop "$XRP_FLOW_DB" >/dev/null 2>&1 || true
-  exit "$status"
-}
-trap cleanup EXIT INT TERM
-
-for command in git mvn; do
-  command -v "$command" >/dev/null || {
-    printf 'missing required command: %s\n' "$command" >&2
-    exit 1
-  }
-done
-
+umask 077
+XRP_FLOW_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+: "${MPC_SIGNER_BIN:?set MPC_SIGNER_BIN to the independent native signer}"
+: "${MPC_XRP_TEST_RPC_URL:?set MPC_XRP_TEST_RPC_URL to the isolated xrpld standalone RPC}"
+command -v anvil >/dev/null || { printf 'Anvil is required by the native wallet probe\n' >&2; exit 1; }
+source "$XRP_FLOW_ROOT/resources/scripts/regtest/local-postgres.sh"
 local_pg_require
+XRP_FLOW_DB="surprising_wallet_test_xrp_mpc_$$"
 local_pg_create "$XRP_FLOW_DB"
-XRP_FLOW_DB_URL=$(local_pg_jdbc_url "$XRP_FLOW_DB")
-
-local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -q \
-  -f "$XRP_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
-local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -q <<'SQL'
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-SQL
-
-mvn -f "$XRP_FLOW_ROOT/pom.xml" \
-  -pl wallet-api -am \
-  -Dtest=XrpAddressGenerationTest,XrpIssuedCurrencyTest,XrpTestnetFullFlowIntegrationTest \
-  -Dsurefire.failIfNoSpecifiedTests=false \
-  -Dxrp.live.flow.enabled=true \
-  -Dxrp.db.url="$XRP_FLOW_DB_URL" \
-  -Dxrp.db.user="$REGTEST_PG_USER" \
-  -Dxrp.db.password="$REGTEST_PG_PASSWORD" \
-  test
-
-local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
-do \$\$
-begin
-  if (select count(*) from deposit_record where chain='XRP' and status='CREDITED'
-      and asset_symbol in ('XRP','USDC','USDT')) <> 3 then
-    raise exception 'expected credited XRP, USDC, and USDT deposits';
-  end if;
-  if (select count(*) from withdrawal_order where chain='XRP' and status='CONFIRMED'
-      and asset_symbol in ('XRP','USDC','USDT')) <> 3 then
-    raise exception 'expected confirmed XRP, USDC, and USDT withdrawals';
-  end if;
-  if (select count(*) from collection_record where chain='XRP' and status='CONFIRMED'
-      and asset_symbol in ('XRP','USDC','USDT')) <> 3 then
-    raise exception 'expected confirmed XRP, USDC, and USDT collections';
-  end if;
-  if exists (select 1 from ledger_balance where chain='XRP'
-      and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
-    raise exception 'negative XRP ledger balance detected';
-  end if;
-  if exists (select 1 from ledger_balance where chain='XRP' and locked_balance <> 0) then
-    raise exception 'non-zero locked XRP balance remains';
-  end if;
-  if exists (select 1 from withdrawal_order where chain='XRP' and status <> 'CONFIRMED') then
-    raise exception 'unresolved XRP withdrawal remains';
-  end if;
-  if exists (select 1 from collection_record where chain='XRP' and status <> 'CONFIRMED') then
-    raise exception 'unresolved XRP collection remains';
-  end if;
-end
-\$\$;"
-
-printf 'XRP PASS Testnet XRP/USDC/USDT deposit, replay, withdrawal, collection, trustline, and ledger audit\n'
+trap 'local_pg_drop "$XRP_FLOW_DB" >/dev/null 2>&1 || true' EXIT
+export SW_TEST_CUSTODY_DB_URL="$(local_pg_jdbc_url "$XRP_FLOW_DB")"
+export SW_TEST_CUSTODY_DB_USERNAME="$REGTEST_PG_USER"
+export SW_TEST_CUSTODY_DB_PASSWORD="$REGTEST_PG_PASSWORD"
+mvn -B -ntp -f "$XRP_FLOW_ROOT/pom.xml" -pl wallet-api -am \
+  -Dtest=XrpAddressGenerationTest,XrpIssuedCurrencyTest,MpcXrpTransactionCodecTest,XrpExecutionReceiptTest,XrpSubmissionIntegrationTest,ArchitectureBoundaryTest,MpcPublicAddressCodecTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+python3 - "$XRP_FLOW_ROOT" "$MPC_SIGNER_BIN" <<'VERIFY'
+import os,pathlib,subprocess,sys,xml.etree.ElementTree as ET
+root=pathlib.Path(sys.argv[1])
+suite=ET.parse(root/'wallet-api/target/surefire-reports/TEST-com.surprising.wallet.custody.XrpSubmissionIntegrationTest.xml').getroot()
+assert int(suite.get('tests','0'))>0 and all(int(suite.get(k,'0'))==0 for k in ('failures','errors','skipped'))
+classpath=next(p.get('value') for p in suite.findall('./properties/property') if p.get('name')=='java.class.path')
+env=os.environ.copy();env['MPC_WALLET_TEST_CLASSPATH']=classpath
+raise SystemExit(subprocess.run(['python3',str(root/'resources/infra/mpc-signer/tests/node_test.py'),sys.argv[2]],cwd=root,env=env).returncode)
+VERIFY

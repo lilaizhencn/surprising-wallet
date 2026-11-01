@@ -10,7 +10,7 @@ import java.util.List;
  *
  * <p>提供 Aptos 交易的 BCS 二进制编码，包括 EntryFunction payload、
  * ULEB128 变长整数编码和 U64/U8 序列化。用于本地构造交易字节后通过
- * {@link AptosTransactionSigner} 签名。
+ * {@link MpcAptosTransactionCodec} 签名。
  *
  * <p>所有方法均为静态工具方法，不可实例化。
  */

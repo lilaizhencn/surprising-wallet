@@ -5,8 +5,6 @@ import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
@@ -32,20 +30,9 @@ public class BlockchainRuntimeService {
                 profile.getRuntimeCurrencyId());
     }
 
-    public Address generateDepositAddress(String chain, long userId, int biz) {
-        ChainType type = requireRuntime(chain).chainType();
-        return isBitcoinLike(type)
-                ? bitcoinLikeRuntime.generateDepositAddress(type, userId, biz)
-                : addressRuntime.generateDepositAddress(type, userId, biz);
-    }
 
-    public ChainAddressRecord generateDepositAddressAtIndex(AccountChainProfile profile, long userId, int biz, long childIndex) {
-        if (!Boolean.TRUE.equals(profile.getEnabled())) throw new IllegalStateException("chain profile is disabled");
-        ChainType type = ChainType.valueOf(profile.getChain());
-        return isBitcoinLike(type)
-                ? bitcoinLikeRuntime.generateDepositAddressAtIndex(profile, userId, biz, childIndex)
-                : addressRuntime.generateDepositAddressAtIndex(profile, userId, biz, childIndex);
-    }
+
+
 
     public boolean checkAddress(String chain, String address) {
         ChainType type = requireRuntime(chain).chainType();

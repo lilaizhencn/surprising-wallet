@@ -5,7 +5,7 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 cd "$ROOT_DIR"
 
 DB_TESTS=(
-  "com.surprising.wallet.chain.solana.SolanaDatabaseFlowIntegrationTest"
+  "com.surprising.wallet.custody.SolanaSubmissionIntegrationTest"
   "com.surprising.wallet.chain.ton.TonDatabaseFlowIntegrationTest"
   "com.surprising.wallet.chain.aptos.AptosDatabaseFlowIntegrationTest"
   "com.surprising.wallet.chain.sui.SuiDatabaseFlowIntegrationTest"
@@ -21,9 +21,7 @@ LIVE_CONNECTIVITY_TESTS=(
   "com.surprising.wallet.chain.polkadot.PolkadotRuntimeConnectivityIntegrationTest"
 )
 LIVE_SPENDING_TESTS=(
-  "com.surprising.wallet.chain.solana.SolanaDevnetLiveFlowIntegrationTest"
   "com.surprising.wallet.chain.ton.TonLiveMockJettonFlowIntegrationTest"
-  "com.surprising.wallet.chain.aptos.AptosLiveNativeFlowIntegrationTest"
   "com.surprising.wallet.chain.sui.SuiLiveNativeFlowIntegrationTest"
 )
 
@@ -40,7 +38,7 @@ commands:
   test-utxo     Run BTC/LTC/DOGE/BCH local regtest flow/concurrency/broadcast tests
   test-xmr      Run XMR local regtest deposit/withdraw/collection integration test
   test-sui      Run isolated local Sui gRPC SUI/USDC full-flow and reconciliation test
-  test-solana   Run isolated local Solana SOL/USDT/USDC full-flow and reconciliation test
+  test-solana   Run actual MPC SOL/USDT/USDC against an existing isolated loopback Agave
   test-ton      Run TON/USDT/USDC full flow against an isolated MyLocalTon v2 RPC
   test-xrp      Run isolated XRPL Testnet XRP/USDC/USDT full flow with automatic faucet funding
   test-hypercore Run HyperCore testnet metadata plus local USDC/HYPE full flow and concurrency audit
@@ -48,7 +46,7 @@ commands:
   test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
   test-dot      Run isolated Polkadot + Asset Hub DOT/USDC/USDT full flow and reconciliation test
   test-tron     Run isolated TRON TRE TRX/USDT/USDC full flow and reconciliation test
-  test-aptos    Run isolated Aptos localnet APT/FA USDC/USDT full flow and reconciliation test
+  test-aptos    Run real MPC APT/USDC/USDT against an existing isolated Aptos localnet and FA fixture
   test-load     Run 1000-user ETH/TRON/SOLANA/SUI ledger and webhook concurrency load
   test-system   Run TRON/NEAR/Cardano flows and the 1000-user load simultaneously
   dot-runtime-up    Start the local Polkadot runtime companion service
