@@ -19,6 +19,79 @@ tags:
   - name: Console Webhooks
   - name: Platform
 paths:
+  /custody/console/v1/users:
+    get:
+      tags: [Console security]
+      summary: List current tenant administrator and subaccounts
+      description: Active TENANT_ADMIN console identity required; API keys cannot manage personnel.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Tenant-scoped members without password material
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ConsoleMember' } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Console security]
+      summary: Create a tenant subaccount
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateConsoleMember' }
+      responses:
+        '201':
+          description: Subaccount created with mandatory audit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsoleMember' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/users/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Console security]
+      summary: Change a subaccount profile, role or enabled state and revoke its sessions
+      description: Cannot modify tenant administrators or another tenant's user.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateConsoleMember' }
+      responses:
+        '200':
+          description: Updated member
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsoleMember' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/users/{id}/reset-password:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Console security]
+      summary: Reset a subaccount password and revoke all of its sessions
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: { type: string, minLength: 12, maxLength: 256, writeOnly: true }
+      responses:
+        '200':
+          description: Password reset and sessions revoked in the same audited transaction
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+        default: { $ref: '#/components/responses/Error' }
   /custody/api/v1/addresses:
     get:
       tags: [Public API]
@@ -1236,6 +1309,37 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    ConsoleMember:
+      type: object
+      required: [id, email, displayName, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role: { type: string, enum: [TENANT_ADMIN, OPERATOR, APPROVER, VIEWER] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        failedLoginCount: { type: integer }
+        lockedUntil: { type: [string, 'null'], format: date-time }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateConsoleMember:
+      type: object
+      additionalProperties: false
+      required: [email, displayName, password, role]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        password: { type: string, minLength: 12, maxLength: 256, writeOnly: true }
+        role: { type: string, enum: [OPERATOR, APPROVER, VIEWER] }
+    UpdateConsoleMember:
+      type: object
+      additionalProperties: false
+      required: [displayName, role, status]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        role: { type: string, enum: [OPERATOR, APPROVER, VIEWER] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
     Error:
       type: object
       required: [error]
@@ -1602,6 +1706,7 @@ components:
           const: true
           description: Explicit irreversible-action confirmation.
     Withdrawal:
+      description: Accepted requests waiting for internal authorization retain normal FROZEN status. No review state or waiting reason is exposed.
       type: object
       properties:
         fundingSource: { type: string, enum: [ADDRESS, TENANT_POOL] }

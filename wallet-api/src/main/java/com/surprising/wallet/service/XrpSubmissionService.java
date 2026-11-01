@@ -4,14 +4,14 @@ import com.google.common.primitives.UnsignedInteger;
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.model.XrpTransactionRecord;
 import com.surprising.wallet.chain.signing.MpcNodes;
-import com.surprising.wallet.chain.xrp.MpcXrpTransactionCodec;
+import com.surprising.wallet.sdk.signing.xrp.MpcXrpTransactionCodec;
 import com.surprising.wallet.chain.xrp.XrpExecutionReceipt;
 import com.surprising.wallet.chain.xrp.XrpIssuedCurrency;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
-import com.surprising.wallet.model.mpc.XrpSigningPayload;
+import com.surprising.wallet.common.signing.XrpSigningPayload;
 import com.surprising.wallet.repository.*;
 import java.math.BigDecimal;
 import java.util.HexFormat;
@@ -48,7 +48,7 @@ public class XrpSubmissionService {
     private final WithdrawalSettlementService settlements;
     private final CustodyGasAccountingService accounting;
 
-    public enum Kind { WITHDRAWAL, COLLECTION, FUNDING }
+    public enum Kind { WITHDRAWAL, COLLECTION, ADDRESS_PREPARATION }
     public record Operation(UUID tenantId,String reference,Kind kind) {
         public Operation {
             Objects.requireNonNull(tenantId,"XRPL tenant is required");
@@ -84,7 +84,7 @@ public class XrpSubmissionService {
         }
         require(owner==null || (owner.hash()==null && "SIGNING".equals(owner.state())),"XRPL business is not available for signing");
         require(draft.account().value().equals(source.getAddress()),"XRPL draft owner differs");
-        long sequence=sequences.reserve("XRP",source.getAddress(),draft.sequence().longValue());
+        long sequence=sequences.reserve("XRP",source.getAddress(),draft.sequence().longValue(),MpcSignCommand.reservationOwner(operation.tenantId(),MpcSignCommand.BusinessType.valueOf(operation.kind().name()),operation.reference()));
         var pub=PublicKey.fromBase16EncodedPublicKey(key.publicKeyHex());
         Transaction fixed=switch(draft) {
             case Payment payment -> Payment.builder().from(payment).sequence(UnsignedInteger.valueOf(sequence)).signingPublicKey(pub).build();
@@ -101,7 +101,7 @@ public class XrpSubmissionService {
         var request=signing.reserveSignature(new MpcSignCommand(operation.tenantId(),key.id(),key.activeEpoch(),ChainType.XRP,
                 MpcSignCommand.BusinessType.valueOf(operation.kind().name()),operation.reference(),SLOT,MpcSignCommand.Purpose.TRANSACTION,
                 ENCODING,HEX.formatHex(json.writeValueAsBytes(payload)),HEX.formatHex(MpcXrpTransactionCodec.digest(payload.unsigned()))),nodes.online());
-        if(operation.kind()==Kind.FUNDING) {
+        if(operation.kind()==Kind.ADDRESS_PREPARATION) {
             BigDecimal cost=BigDecimal.valueOf(fixed.fee().value().longValue()).movePointLeft(6);
             if(fixed instanceof Payment)cost=cost.add(payload.amount());
             boolean reserved=accounting.reservePreparation(operation.tenantId(),request.id(),source.getAddress(),cost);
@@ -195,7 +195,7 @@ public class XrpSubmissionService {
                 signing.signature(operation.tenantId(),request.id()).orElseThrow());
     }
     private Owner lockOwner(Operation operation) {
-        if(operation.kind()==Kind.FUNDING)return null; // The tenant-owned immutable request is the system operation receipt.
+        if(operation.kind()==Kind.ADDRESS_PREPARATION)return null; // The tenant-owned immutable request is the system operation receipt.
         if(operation.kind()==Kind.WITHDRAWAL) {
             var row=orders.lockForSettlement(operation.tenantId(),"XRP",operation.reference()).orElseThrow();
             return new Owner(row.getStatus(),row.getFromAddress(),row.getToAddress(),row.getAssetSymbol(),row.getAmount(),row.getFee(),row.getTxHash());
@@ -233,7 +233,7 @@ public class XrpSubmissionService {
         var tx=MpcXrpTransactionCodec.restore(payload.unsigned());
         var amount=tx instanceof Payment payment?payment.amount():((TrustSet)tx).limitAmount();
         if(amount instanceof XrpCurrencyAmount) {
-            if(operation.kind()==Kind.FUNDING) tokens.findDefinition("XRP",profiles.findAccountByChain("XRP").orElseThrow().getNetwork(),payload.symbol()).orElseThrow();
+            if(operation.kind()==Kind.ADDRESS_PREPARATION) tokens.findDefinition("XRP",profiles.findAccountByChain("XRP").orElseThrow().getNetwork(),payload.symbol()).orElseThrow();
             else require("XRP".equals(payload.symbol()),"XRPL native asset differs");
         }
         else {

@@ -14,7 +14,7 @@ from aptos_sdk.authenticator import Authenticator,Ed25519Authenticator
 
 if importlib.metadata.version('aptos-sdk') != '0.11.0':
     raise SystemExit('Golden vectors require official aptos-sdk==0.11.0')
-source=pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else pathlib.Path(__file__).resolve().parents[4]/'wallet-api/src/test/resources/mpc/aptos-codec-reference.json'
+source=pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else pathlib.Path(__file__).resolve().parents[4]/'resources/test-fixtures/mpc/aptos-codec-reference.json'
 fixture=json.loads(source.read_text())
 vectors=[]
 for v in fixture['vectors']:

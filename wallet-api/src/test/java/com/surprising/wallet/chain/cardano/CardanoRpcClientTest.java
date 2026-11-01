@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
+
 import com.google.protobuf.ByteString;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;

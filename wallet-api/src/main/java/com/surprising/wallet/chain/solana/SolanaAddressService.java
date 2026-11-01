@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.sdk.signing.solana.MpcSolanaTransactionCodec;
+
 import org.springframework.stereotype.Service;
 
 /** Public-only SPL ATA derivation. CustodyAddressService owns all joint-key address publication. */

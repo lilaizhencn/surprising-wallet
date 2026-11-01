@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+
 import java.util.*;
 import org.bitcoinj.base.Base58;
 import org.junit.jupiter.api.Test;

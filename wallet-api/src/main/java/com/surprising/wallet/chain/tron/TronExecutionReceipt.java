@@ -1,5 +1,8 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.sdk.signing.tron.MpcTronTransactionCodec;
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.HexFormat;

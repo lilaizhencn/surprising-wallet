@@ -31,8 +31,8 @@ public record UtxoSigningRequest(
         public Asset {
             Objects.requireNonNull(chain, "signing chain is required");
             Objects.requireNonNull(network, "signing network is required");
-            if (!ChainType.valueOf(chain).isUtxo()) throw new IllegalArgumentException("not a native UTXO chain");
-            if (decimals < 0) throw new IllegalArgumentException("asset decimals cannot be negative");
+            if (!ChainType.valueOf(chain).isBitcoinLike()) throw new IllegalArgumentException("not a native UTXO chain");
+            if (decimals != 8) throw new IllegalArgumentException("native UTXO precision must be eight decimal places");
         }
         public BigDecimal decimal() { return BigDecimal.TEN.pow(decimals); }
         public long atomic(BigDecimal amount) { return amount.multiply(decimal()).longValueExact(); }

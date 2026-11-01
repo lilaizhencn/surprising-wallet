@@ -1,0 +1,11 @@
+# Install on the Wallet host, independently from the authority's issuer configuration.
+# Replace both public pins. This profile never contains the approval signing private key.
+sw:
+  approval:
+    origin: https://approval.example
+    server-spki: "0000000000000000000000000000000000000000000000000000000000000000"
+    verification-key-hex: "0000000000000000000000000000000000000000000000000000000000000000"
+    ca-file: /etc/surprising-wallet/approval/ca.pem
+    certificate-file: /etc/surprising-wallet/approval/wallet-client.pem
+    private-key-file: /etc/surprising-wallet/approval/wallet-client.key
+    timeout: 5s

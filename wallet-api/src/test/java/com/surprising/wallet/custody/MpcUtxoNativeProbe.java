@@ -28,7 +28,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.WalletMpcKeyRepository;

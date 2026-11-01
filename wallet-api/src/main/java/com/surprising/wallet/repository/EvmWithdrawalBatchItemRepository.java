@@ -29,6 +29,9 @@ public class EvmWithdrawalBatchItemRepository {
                  where tenant_id = ? and withdrawal_order_id = ? and status = 'SUBMITTED'
                 """, UUID.class, tenantId, withdrawalOrderId);
     }
+    public List<UUID> withdrawalMembers(UUID tenant,long order) {
+        return jdbc.queryForList("select distinct batch_id from evm_withdrawal_batch_item where tenant_id=? and withdrawal_order_id=? order by batch_id",UUID.class,tenant,order);
+    }
 
     /** 创建提现批次项。 */
     public int insert(UUID id, UUID tenantId, UUID batchId, int itemIndex, long withdrawalOrderId,

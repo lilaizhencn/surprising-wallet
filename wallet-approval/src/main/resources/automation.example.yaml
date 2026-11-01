@@ -1,0 +1,40 @@
+# Explicit host-installed permissions; nothing is enabled unless the independent operator installs it.
+# Implementation is in progress and has not undergone final unified verification.
+approval:
+  automation:
+    rules:
+      - id: 00000000-0000-4000-8000-000000001001
+        tenant-id: 00000000-0000-4000-8000-000000000001
+        chain: ETH
+        network: sepolia
+        symbol: ETH
+        business-type: COLLECTION
+        # Empty for COLLECTION: any independently enrolled source EXCEPT installed
+        # treasury/Gas/faucet roles. RECOVERY/FUNDING/DEV_FAUCET need explicit sources.
+        source-key-ids: []
+        destination-key-id: 00000000-0000-4000-8000-000000000020
+        minimum-amount: '0.01'
+        maximum-amount: '10'
+        maximum24h-amount: '50'
+        maximum-lifetime-amount: '100'
+        maximum-network-fee: '0.001'
+        maximum-lifetime-network-fee: '0.01'
+        maximum24h-operations: 50
+        minimum-interval-seconds: 600
+        maximum-native-fee-share-bps: 1000
+# Replace the public example UUIDs with independently verified tenant/key identities.
+# These are admission exposure quotas, not a claim about settled on-chain spending.
+# Unknown/unconfirmed transactions do not release quotas. Changing a rule UUID does
+# not reset accumulated exposure. Amount/count quotas are per business type; native
+# fee exposure is shared across this tenant's whole chain/network.
+# Funding additionally requires its original independently admitted parent and an
+# explicit chain-specific balance/deficit/registration verifier. Ownership alone is insufficient.
+
+# XRP ADDRESS_PREPARATION is a separate zero-principal permission for an installed IOU.
+# Use minimum-amount/maximum-amount/maximum24h-amount/maximum-lifetime-amount: '0',
+# independently bound gasAddress.<tenant>/trustLimit.<tenant>, and bounded count/interval.
+# maximum-network-fee includes activation XRP PLUS its fee, or only the TrustSet fee.
+# Activation principal is counted as permanent native EXPENDITURE, never as IOU principal.
+# No rule is created by Wallet and ordinary automatic payments still require amount > 0.
+# Pre-admitted collection reserves its installed maximum network expense once. Gas
+# funding can refer only to that fixed, unsigned parent and a real independently read deficit.

@@ -1,7 +1,11 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.polkadot.*;
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec.Role;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.CustodyPrincipal;

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.common.chain.ChainType;

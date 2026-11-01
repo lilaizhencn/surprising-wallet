@@ -1,6 +1,6 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.chain.monero.*;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.common.signing.MpcClient;

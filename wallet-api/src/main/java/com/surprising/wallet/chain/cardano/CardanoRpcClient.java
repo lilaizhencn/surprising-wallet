@@ -158,8 +158,8 @@ public class CardanoRpcClient {
     }
 
     /** Native chain sync selects an exact stored intersection, including after a rollback. */
-    public com.surprising.wallet.chain.model.ChainScanPoint commonPoint(
-            List<com.surprising.wallet.chain.model.ChainScanPoint> candidates) {
+    public com.surprising.wallet.common.chain.ChainScanPoint commonPoint(
+            List<com.surprising.wallet.common.chain.ChainScanPoint> candidates) {
         if (candidates.isEmpty() || candidates.size() > 1_000)
             throw new IllegalArgumentException("invalid Cardano intersection candidates");
         return call(channel -> {
@@ -239,12 +239,12 @@ public class CardanoRpcClient {
                 .setHeight(block.getHeader().getHeight()).setTimestamp(block.getTimestamp()).build();
     }
 
-    public static com.surprising.wallet.chain.model.ChainScanPoint point(Sync.BlockRef reference) {
-        return new com.surprising.wallet.chain.model.ChainScanPoint(reference.getHeight(), reference.getSlot(),
+    public static com.surprising.wallet.common.chain.ChainScanPoint point(Sync.BlockRef reference) {
+        return new com.surprising.wallet.common.chain.ChainScanPoint(reference.getHeight(), reference.getSlot(),
                 HexFormat.of().formatHex(reference.getHash().toByteArray()));
     }
 
-    public static Sync.BlockRef reference(com.surprising.wallet.chain.model.ChainScanPoint point) {
+    public static Sync.BlockRef reference(com.surprising.wallet.common.chain.ChainScanPoint point) {
         return Sync.BlockRef.newBuilder().setHeight(point.height()).setSlot(point.slot())
                 .setHash(ByteString.copyFrom(HexFormat.of().parseHex(point.hash()))).build();
     }
@@ -258,15 +258,7 @@ public class CardanoRpcClient {
         };
     }
 
-    public static byte[] addressBytes(String address) {
-        String prefix = address != null && address.startsWith("addr_test1") ? "addr_test" : "addr";
-        byte[] bytes = Bech32.decodeBytes(address, prefix, Bech32.Encoding.BECH32);
-        int type = bytes.length == 0 ? -1 : (bytes[0] & 0xff) >>> 4;
-        if (!((type >= 0 && type <= 3 && bytes.length == 57) || ((type == 6 || type == 7) && bytes.length == 29))
-                || (bytes[0] & 15) != (prefix.equals("addr") ? 1 : 0))
-            throw new IllegalArgumentException("unsupported Cardano payment address");
-        return bytes;
-    }
+    public static byte[] addressBytes(String address) { return com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec.addressBytes(address); }
 
     private <T> T call(Function<Channel, T> action) {
         String network = profiles.findAccountByChain(CHAIN).orElseThrow().getNetwork();

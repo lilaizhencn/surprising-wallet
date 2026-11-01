@@ -52,7 +52,7 @@ public final class CustodyTestSupport {
             org.junit.jupiter.api.Assertions.assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
             var profile = call.getArgument(0, com.surprising.wallet.common.chain.AccountChainProfile.class);
             return new com.surprising.wallet.service.CardanoScanAnchorService.Anchor(profile.getNetwork(), "11".repeat(32),
-                    new com.surprising.wallet.chain.model.ChainScanPoint(100, 200, "22".repeat(32)), "00".repeat(32));
+                    new com.surprising.wallet.common.chain.ChainScanPoint(100, 200, "22".repeat(32)), "00".repeat(32));
         }).when(service).prepare(org.mockito.ArgumentMatchers.any());
         return service;
     }

@@ -7,15 +7,44 @@
   "encryptionKeyFile": "/etc/surprising-wallet-mpc/storage.key",
   "storeDirectory": "/var/lib/surprising-wallet-mpc/store",
   "sessionTimeoutSeconds": 30,
+  "authorizationPublicKeys": [
+    "REPLACE_WITH_INDEPENDENT_APPROVAL_ED25519_PUBLIC_KEY_HEX"
+  ],
   "peers": [
-    {"identity": "REPLACE_WITH_NODE_1_SHA256_SPKI", "host": "node1.internal.example", "port": 8443},
-    {"identity": "REPLACE_WITH_NODE_2_SHA256_SPKI", "host": "node2.internal.example", "port": 8443},
-    {"identity": "REPLACE_WITH_NODE_3_SHA256_SPKI", "host": "node3.internal.example", "port": 8443}
+    {
+      "identity": "REPLACE_WITH_NODE_1_SHA256_SPKI",
+      "host": "node1.internal.example",
+      "port": 8443
+    },
+    {
+      "identity": "REPLACE_WITH_NODE_2_SHA256_SPKI",
+      "host": "node2.internal.example",
+      "port": 8443
+    },
+    {
+      "identity": "REPLACE_WITH_NODE_3_SHA256_SPKI",
+      "host": "node3.internal.example",
+      "port": 8443
+    }
   ],
   "clients": {
     "REPLACE_WITH_JAVA_CLIENT_SHA256_SPKI": {
-      "tenants": ["REPLACE_WITH_AUTHORIZED_TENANT_UUID"],
-      "operations": ["CREATE_KEY", "SIGN", "READ_RESULT"]
+      "tenants": [
+        "REPLACE_WITH_AUTHORIZED_TENANT_UUID"
+      ],
+      "operations": [
+        "CREATE_KEY",
+        "SIGN",
+        "READ_RESULT"
+      ]
+    },
+    "REPLACE_WITH_APPROVAL_READ_CLIENT_SHA256_SPKI": {
+      "tenants": [
+        "REPLACE_WITH_AUTHORIZED_TENANT_UUID"
+      ],
+      "operations": [
+        "READ_RESULT"
+      ]
     }
   }
 }

@@ -1,0 +1,27 @@
+# Public approval site. This proxy owns NO enrolled service/native client certificate.
+# Replace all example paths/hosts with public TLS and independent backend trust material.
+server {
+    listen 443 ssl;
+    server_name approval.example.invalid;
+    ssl_certificate /etc/nginx/approval-public/fullchain.pem;
+    ssl_certificate_key /etc/nginx/approval-public/server.key;
+    ssl_protocols TLSv1.3;
+    root /var/www/surprising-approval;
+    add_header Cache-Control "no-store" always;
+
+    location ^~ /approval/service/ { return 404; }
+    location ^~ /approval/v1/ {
+        proxy_pass https://approval-service.private.example.invalid:9095;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/nginx/approval-public/backend-ca.pem;
+        proxy_ssl_server_name on;
+        proxy_ssl_name approval-service.private.example.invalid;
+        proxy_set_header Host approval.example.invalid;
+        proxy_set_header X-Forwarded-Client-Cert "";
+        proxy_set_header X-SSL-Client-Cert "";
+        proxy_set_header SSL_CLIENT_CERT "";
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+    location / { try_files $uri /index.html; }
+}

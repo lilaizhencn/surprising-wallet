@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1580" viewBox="0 0 1200 1580">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="4272" viewBox="0 0 1200 4272">
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#475569"/></marker></defs>
 <style>text{font-family:Arial,"Noto Sans SC",sans-serif;fill:#0f172a}.title{font-size:24px;font-weight:bold}.label{font-size:17px;font-weight:bold}.body{font-size:14px}.arrow{stroke:#475569;stroke-width:2;marker-end:url(#arrow)}</style>
 <rect width="1200" height="100%" fill="#f8fafc"/>
@@ -35,7 +35,7 @@
 </g>
 <path d="M600,773 V798" class="arrow"/>
 <g id="evm7702-formal"><rect x="35" y="805" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
-<text x="55" y="834" class="label">EIP-7702：原批次准备 → 内层 AUTH/OP → 原平台中继 MPC → 原 type-4/type-2</text>
+<text x="55" y="834" class="label">EIP-7702：原批次准备 → 内层 AUTH/OP → 同租户中继 MPC → 原 type-4/type-2</text>
 <text x="55" y="862" class="body">原批次 / relayer nonce / 内层意图先提交；中继意图与原租户 Gas 先提交</text>
 <text x="55" y="888" class="body">链网络领取锁共享；回复丢失 / 新业务停用时恢复原快照，不重新领取和扣费</text>
 </g>
@@ -63,6 +63,67 @@
 <text x="55" y="1424" class="label">恢复、重组与事件：原事实保留 → 流水可对账 → 异步 Webhook</text>
 <text x="55" y="1452" class="body">重组撤销或记录赤字；恢复赤字前拒绝新提现领取；费用和本金只结算一次</text>
 <text x="55" y="1478" class="body">CustodyEventService 随业务持久化；API 来源有投递记录，Console 来源仍有事件</text>
-<text x="55" y="1504" class="body">清理后 121 项检查与两轮真实 JVM 启动通过；全链终验与完整备份恢复待完成</text>
+<text x="55" y="1504" class="body">此前 MPC 验收与本轮审批证据分开；策略 / 原生 / 实际广播分别验证</text>
 </g>
+<text x="40" y="1595" class="body">子账号变更：租户管理员 → 同租户子账号锁 → 更新权限 / 密码 → 撤销会话 + 审计 → 原子提交</text>
+<g id="independent-approval-progress">
+<rect x="35" y="1625" width="1130" height="145" rx="12" fill="#eef2ff" stroke="#94a3b8"/>
+<text x="55" y="1650" class="body">可信主机 0600 登记 → 独立租户与审核员 → 独立策略 → 固定意图 → 租户锁评估</text>
+<text x="55" y="1680" class="body">单笔 / 24h累计（含待审批） / 新收款人 / 控制台 → PENDING 或自动 APPROVED</text>
+<text x="55" y="1710" class="body">独立审核身份 → 请求锁 + 意图哈希 → 防自审 / 决策幂等 → 决策与审计原子提交</text>
+<text x="55" y="1740" class="body">节点入口：独立证明验签 → 原会话绑定 → MPC；全部已支持族显式校验；实测边界见审批验收记录</text>
+</g>
+<text x="55" y="1820" class="body">独立过期调度池：ApprovalExpiryJob → ExpiryService → Workflow.status；已开始签名不取消</text>
+<text x="55" y="1855" class="body">EVM wire：SDK 解码 → 实际收款/金额/网络/费用；独立登记、签发与 Wallet 原生消费已接入</text>
+<text x="55" y="1895" class="body">公开投影：核心 PENDING_REVIEW → FROZEN；响应 / 幂等 / 查询 / 事件一致，资金仍冻结</text>
+<text x="55" y="1935" class="body">默认全部提币人工审核；独立管理员显式配置免审场景；退出清除旧租户与迟到响应</text>
+<text x="55" y="1975" class="body">独立只读 mTLS → 三持有者完成一致 → RegistryService → approval.key + audit；网络不持数据库锁</text>
+<text x="55" y="2015" class="body">节点锁内实时验期 → admission → grant/session/request → MPC；崩溃不把已受理证据报成 ABSENT</text>
+<text x="55" y="2055" class="body">独立资产配置 → 冻结 asset_snapshot（网络 / 合约 / 精度 / 费限）→ 审核哈希绑定；Wallet 不可改写</text>
+<text x="55" y="2095" class="body">规则与累计按 tenant / chain / network / asset 隔离；主网不能借用测试网免审规则</text>
+<text x="55" y="2135" class="body">两应用 → common 不可变意图 / 资产快照 / 签名命令；独立 issuer 私钥仅在审批域；全部已支持族显式校验；独立证据按策略 / 原生 / 广播记录</text>
+<text x="55" y="2175" class="body">实际 wire → 永久审批绑定 + 账户/nonce + 原槽/session + 同单位费用预算 + 审计 → COMMIT → 原证明</text>
+<text x="55" y="2215" class="body">Wallet 原申请 + 本金/Gas 冻结同事务 → 事务外独立 mTLS → 审批收据 → 准备放行 / 未签名失败原子退款</text>
+<text x="55" y="2255" class="body">独立原证明 + 审计 COMMIT → dispatch fence COMMIT → SIGN(Request,Proof) → 每个持有者验签/首次验期</text>
+<text x="55" y="2295" class="body">Wallet DKG/REFRESH 完成 → 独立三持有者观察 → epoch 登记回执 + 审计 → 发布/签名；已有回执无需三台在线</text>
+<text x="55" y="2335" class="body">EVM 显式恢复：原 command / nonce / 版本 / 槽 + actor/reason → 新 session 独立证明；原交易与费用仅一份</text>
+<text x="55" y="2375" class="body">Aptos：SDK 规范 BCS + common 载荷 → 独立逐字节校验 / sequence 互斥恢复 / 费用上限 → 原生证明；两持有者实测通过，未广播</text>
+<text x="55" y="2435" class="body">独立管理员 → 邀请/重置单次激活 → 审核员自设密码；停用/重置 → 撤销会话 + 审计；决策锁身份；HTTPS / 58 项前端检查通过</text>
+<text x="55" y="2495" class="body">UTXO 独立配置 → 事务外只读 RPC：genesis / 网络 / 原输出金额与脚本 / 同 tip；首次事务外链事实 → 批次授权校验（验收中）</text>
+<text x="55" y="2555" class="body">UTXO common 固定载荷 + 找零 key → SDK 重建实际交易 → 独立输入事实 / 全付款 / 摘要 / 总费核对；完整批次签发；验证范围见审批验收记录</text>
+<text x="55" y="2615" class="body">UTXO 原生精度先固定8位再算金额；输入+找零 key 统一排序锁定 → 原输入顺序槽，避免反向锁环</text>
+<text x="55" y="2675" class="body">UTXO 全审批 V2 哈希 + 原链事实 → 单交易/版本/费用 + 逐 outpoint 永久占用 → 多 input 槽独立证明（验收中）</text>
+<g id="all-chain-authorization-in-progress">
+<text x="55" y="2750" class="body">全链显式授权；缺失独立资产 / 节点 / 策略即拒绝；实网须核验部署配置</text>
+<text x="55" y="2798" class="body">SDK 统一公开 wire / native protobuf；common 固定 payload → 两应用分别核对同一交易</text>
+<text x="55" y="2846" class="body">独立主机 HTTP/gRPC 配置 → 事务外真实事实 → 原版本 chain_evidence + 输入/nonce 占用；TRON/TON/NEAR memo 绑定原业务</text>
+<text x="55" y="2894" class="body">Solana source/payer 与 EIP-7702 AUTH/OP/relayer 多槽共用原交易/审批集合及一次费用</text>
+<text x="55" y="2942" class="body">XMR 原完成 artifact READ_RESULT → 独立 relay proof → Wallet 原描述/证明/审计 COMMIT → 原持有者</text>
+<text x="55" y="2990" class="body">自动归集/Gas/注册、RBF、撤销及部署边界已接入；实际全链验收进行中</text>
+</g>
+<g id="independent-automatic-operation-in-progress">
+<text x="55" y="3105" class="body">自动用途规则（默认拒绝）：独立主机安装来源/treasury、金额/次数/间隔/永久费用额度</text>
+<text x="55" y="3149" class="body">SYSTEM automatic_operation → 同族 wire / 链事实 → 一次原交易与费用 → Wallet 原证明+用途收据+审计</text>
+<text x="55" y="3193" class="body">人工提现仍必须真实人工审批 ID；SYSTEM 不能由公开人工申请接口提交</text>
+<text x="55" y="3237" class="body">EIP-7702 归集：全来源 AUTH/OP + collector/delegate code + 最终 ABI / 有效签名 / tuples</text>
+<text x="55" y="3281" class="body">NEP-145：原父 Token / 收款人 → 独立最低押金、未注册、实际父余额 → 固定 Borsh + 原生总支出</text>
+<text x="55" y="3325" class="body">父预登记/余额缺口/XRP 准备/EVM 额外费用：已接入，统一回归进行中</text>
+</g>
+<text x="55" y="3369" class="body">归集父计划 → 独立真实余额 → 预留最大费用/金额/次数 → 固定计划与证据 → 一次交易绑定</text>
+<text x="55" y="3413" class="body">Gas：批准父业务 + 实际本金 + 原目标 native reserve deficit；XMR 只读原观察 + daemon 锚点</text>
+<text x="55" y="3457" class="body">XRPL ADDRESS_PREPARATION：零 IOU 本金；固定目标/issuer/NoRipple/reserve → XRP 总支出</text>
+<text x="55" y="3501" class="body">EVM：独立 feeModel/block/size + L1/operator 预留；7702 全批一次费用，最后校验外层上限</text>
+<text x="55" y="3545" class="body">Bitcoin 类分流 isBitcoinLike；ADA 保留 CBOR/UTxORPC。RBF 新增实现；终止/撤销传播仍待完成</text>
+<text x="55" y="3589" class="body">BTC 显式 RBF：根审核/相同 inputs + change + 固定提现输出；归集仅扣新增费 → 原永久费预留</text>
+<text x="55" y="3633" class="body">稳定 utxo:batch → 每版本独立 hash / slot / proof + 替换审计；≤5 版本；原批次 / 替换广播分开验收</text>
+<text x="55" y="3677" class="body">Wallet 停用/移除 APPROVER → custody_tenant_user 撤销代次/审计同事务 → custody 独立调度</text>
+<text x="55" y="3721" class="body">mTLS 单向通知 → approval.member_revocation 永久 fence → 停用凭证/激活/会话 + 审计</text>
+<text x="55" y="3765" class="body">独立管理员确认当前 fence → 重新邀请 → 本人独立激活；旧通知不能再次停用已确认恢复者</text>
+<text x="55" y="3809" class="body">runtime 启动 → PG18 非管理/非 owner/无跨域权限检查；NOLOGIN owner、独立 OS/PKI</text>
+<text x="55" y="3853" class="body">传播未完成暂停新授权，原证明保留恢复；独立管理员确认当前撤销代次后才可恢复；实测范围见验收记录</text>
+<text x="55" y="3897" class="body">原命令 + business_references → 全槽/原批次归属；无授权终态必须重新读独立服务，不能信 Wallet 状态</text>
+<text x="55" y="3941" class="body">独立终态且 never granted → 锁请求/批次/订单 → CANCELLED 原收据 → 停批次/释放输入/重排其他成员</text>
+<text x="55" y="3985" class="body">条件退款 + Gas 投影 + 普通事件 + 审计 + terminal_cleanup_complete 同事务；未知/已授权继续冻结</text>
+<text x="55" y="4029" class="body">owner 事务锁 + UPSERT → 排他预留 → 真证明与 nonce 受理同事务 → 开放下一业务</text>
+<text x="55" y="4073" class="body">无授权取消仅交回自己的末端预留；7702 属整批。原证明/签名/广播未知不得借此退款或换 nonce</text>
 </svg>

@@ -378,3 +378,12 @@ Maven 当前为 chain-sdks、common、wallet-api；Java 只运行 API 与业务�
 XRP 和 TRON 的旧私钥验收入口已改为真实 MPC：`resources/scripts/regtest/run-xrp-flow.sh` 要求 `MPC_SIGNER_BIN` 与 `MPC_XRP_TEST_RPC_URL`；`run-tron-flow.sh` 要求 `MPC_SIGNER_BIN` 及 `MPC_TRON_TEST_HTTP_URL`、`MPC_TRON_TEST_FULL_NODE`、`MPC_TRON_TEST_SOLIDITY_NODE`、`MPC_TRON_TEST_TOKEN_ARTIFACT`。两者复用已有隔离链节点，只在本机 PG18 创建/清理自己的测试库，先运行相邻回归，再强制执行已配置链的原生业务探针；不自动重置链数据或生成替代资金身份。本轮只改变验收脚本和说明，不改变生产模块、核心数据流或数据库基线。
 
 HyperCore 的当前正式入口为 `resources/scripts/regtest/run-hypercore-flow.sh`，必填 `MPC_SIGNER_BIN`、原 `MPC_HYPERCORE_ACCEPTANCE_ROOT`、已激活的 `MPC_HYPERCORE_RECIPIENT`、稳定的 `MPC_HYPERCORE_FUNDED_RUN_ID`、`MPC_HYPERCORE_FUNDED_PAYER_ROLE=source|collector` 与 `MPC_HYPERCORE_FUNDED_PHASE`。编译/单测仅使用独立的 `surprising_wallet_test_hypercore_build_*`，随后恢复或复用原已充值账本；原节点、密钥、已选会话和账本不重置。付款角色只允许原 source/collector，两者的内部转账可用于验收余额调配。相同批次、角色和阶段保持原业务引用，不能为未知付款临时换批次。退出时备份最新账本并清理编译库；保留资金验收库，全部阶段完成并核对快照后再清理。资金快照必须符合当前目标 schema；入口不自动执行兼容迁移。此改动仅涉及验收脚本和探针，不改变生产数据流或数据库基线。
+
+
+## Independent approval authorization (integration in progress)
+
+Every node now requires `authorizationPublicKeys` (one to three independently managed raw Ed25519 public keys, lowercase hex). The authority private key must never be deployed with Wallet Java or any MPC holder. `SIGN` and `MONERO_RELAY` require an `authorization` object alongside the eight existing request fields; lifecycle/read-only operations do not use a payment authorization.
+
+The proof has `payloadHex` and `signatureHex`. Signed bytes are ASCII `SW-MPC-AUTHORIZATION-V1\n` followed by canonical JSON payload bytes. Claims bind version, authorization/request IDs, tenant, key, epoch, session, operation, algorithm, ordered online parties, SHA-256 of raw message bytes, chain, network, immutable business hash and purpose. Issued/expiry times are integer Unix seconds with at most 300 seconds validity. Each holder verifies independently, then persists authorization ID and original-session binding before creating the cryptographic request. Repeating the original admitted session recovers with its exact original proof, including after expiry; a fresh session needs a fresh independently validated grant. Capacity rejection consumes no grant.
+
+This native admission check is only one boundary. Independent final transaction parsing, approval identity enrollment, Wallet workflow integration and complete end-to-end acceptance are still in progress. The fixture authority private key used by Python tests is exclusively a local test oracle and must not be used as a production authorization service.

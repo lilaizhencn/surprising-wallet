@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.AptosSigningPayload;
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.chain.aptos.*;
 import com.surprising.wallet.common.chain.*;
@@ -118,11 +120,16 @@ class AptosSubmissionIntegrationTest {
         var signed=prepared(op(),"APT");service.restoreSent(op(),signed.txId());try(var pool=Executors.newVirtualThreadPerTaskExecutor()){var futures=new ArrayList<Future<Boolean>>();for(int i=0;i<12;i++)futures.add(pool.submit(()->service.settle(op(),receipt(op(),signed,false,0),123,1)));int changes=0;for(var f:futures)if(f.get(20,TimeUnit.SECONDS))changes++;assertEquals(1,changes);}
     }
     @Test void lostReplyRecoversSelectedRawWithoutNewGasSequenceOrTaskApproval(){
-        var rpc=mock(AptosRpcClient.class);when(rpc.estimateGasPrice()).thenReturn(100L);when(rpc.ledgerInfo()).thenReturn(json.createObjectNode().put("chain_id",4).put("ledger_timestamp","1793400000000000"));when(rpc.sequenceNumber(source.getAddress())).thenReturn(7L);
+        var rpc=mock(AptosRpcClient.class);when(rpc.estimateGasPrice()).thenReturn(333L);when(rpc.ledgerInfo()).thenReturn(json.createObjectNode().put("chain_id",4).put("ledger_timestamp","1793400000000000"));when(rpc.sequenceNumber(source.getAddress())).thenReturn(7L);
         var runtime=mock(WalletRuntimeConfigService.class);var profiles=new ChainProfileRepository(jdbc);var transfers=new AptosTransactionService(rpc,service,profiles,new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),runtime);var accepted=new java.util.concurrent.atomic.AtomicBoolean();
         when(rpc.transactionByHash(anyString())).thenAnswer(call->accepted.get()?json.createObjectNode().put("type","pending_transaction"):null);
         when(rpc.submitTransaction(any())).thenAnswer(call->{String hash=orders.findTxHash("APTOS",REFERENCE,TENANT).orElseThrow();assertEquals(call.getArgument(0).toString(),transactions.findSigned(hash).orElseThrow().getRawPayload());accepted.set(true);throw new IllegalStateException("lost reply");});
-        assertThrows(IllegalStateException.class,()->transfers.send(op(),source));service.unknown(op(),"lost reply");doThrow(new IllegalStateException("disabled")).when(runtime).requireTaskEnabled(anyString(),anyString(),anyString());
+        assertThrows(IllegalStateException.class,()->transfers.send(op(),source));
+        var fixed=service.payload(service.intent(op()).orElseThrow()).unsigned();
+        assertEquals(profiles.findAccountByChain("APTOS").orElseThrow().getDefaultFee()/333,fixed.maxGasAmount());
+        assertTrue(java.math.BigInteger.valueOf(fixed.maxGasAmount()).multiply(java.math.BigInteger.valueOf(fixed.gasUnitPrice()))
+                .compareTo(java.math.BigInteger.valueOf(profiles.findAccountByChain("APTOS").orElseThrow().getDefaultFee()))<=0);
+        service.unknown(op(),"lost reply");doThrow(new IllegalStateException("disabled")).when(runtime).requireTaskEnabled(anyString(),anyString(),anyString());
         assertTrue(transfers.recover(op()));verify(rpc,times(1)).submitTransaction(any());verify(rpc,times(1)).sequenceNumber(anyString());assertEquals("SENT",orders.find("APTOS",REFERENCE,TENANT).orElseThrow().getStatus());
     }
 }

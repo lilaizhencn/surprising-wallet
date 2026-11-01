@@ -1,15 +1,13 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.model.mpc.TonSigningPayload;
+import com.surprising.wallet.common.signing.TonSigningPayload;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
 import com.surprising.wallet.service.TonSubmissionService.Operation;
 import com.surprising.wallet.service.TonSubmissionService.Kind;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -56,8 +54,8 @@ public class TonTransactionService {
                 if (!"TON".equals(source.getAssetSymbol()) && !sourceWallet.equals(MpcTonTransactionCodec.canonicalAddress(source.getAddress())))
                     throw new IllegalStateException("TON materialized source differs from configured master getter");
             }
-            byte[] identity = identity(op); long queryId = master == null ? 0 : Math.max(1, ByteBuffer.wrap(identity).getLong() & Long.MAX_VALUE);
-            String memo = op.kind().name().toLowerCase(Locale.ROOT) + ":" + HexFormat.of().formatHex(identity);
+            long queryId = MpcTonTransactionCodec.businessQueryId(op.tenantId(),op.kind().name(),op.reference(),master!=null);
+            String memo = MpcTonTransactionCodec.businessMemo(op.tenantId(),op.kind().name(),op.reference());
             var unsigned = new MpcTonTransactionCodec.Unsigned(profile.getNetwork(), owner, payment.recipient(),
                     payment.amount().movePointRight(decimals).toBigIntegerExact(), master, sourceWallet, recipientWallet,
                     rpc.seqno(owner), Instant.now().plusSeconds(600).getEpochSecond(), queryId, memo, submissions.publicKey(source));
@@ -123,8 +121,5 @@ public class TonTransactionService {
         long value = rpc.masterchainInfo().path("last").path("seqno").asLong();
         if (value <= 0) throw new IllegalStateException("TON masterchain sequence is absent"); return value;
     }
-    private static byte[] identity(Operation op) {
-        try { return MessageDigest.getInstance("SHA-256").digest((op.tenantId() + ":" + op.kind() + ":" + op.reference()).getBytes(StandardCharsets.UTF_8)); }
-        catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
-    }
+
 }

@@ -1,6 +1,8 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec.Role;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.DepositService;

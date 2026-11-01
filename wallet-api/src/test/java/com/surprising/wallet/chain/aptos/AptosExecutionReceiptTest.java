@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
 import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.*;

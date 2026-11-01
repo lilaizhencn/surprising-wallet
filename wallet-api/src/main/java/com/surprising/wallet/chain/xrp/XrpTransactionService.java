@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.xrp;
 
+import com.surprising.wallet.sdk.signing.xrp.MpcXrpTransactionCodec;
+
 import com.google.common.primitives.UnsignedInteger;
 import com.google.common.primitives.UnsignedLong;
 import com.surprising.wallet.common.chain.AccountChainProfile;
@@ -99,7 +101,7 @@ public class XrpTransactionService {
         submissions.sign(operation,request.get().id());
         var signed=submissions.commit(operation,request.get().id());
         broadcast(operation,signed,submissions.payload(request.get()).unsigned());
-        if(operation.kind()!=Kind.FUNDING)submissions.restoreSent(operation,signed.txId());
+        if(operation.kind()!=Kind.ADDRESS_PREPARATION)submissions.restoreSent(operation,signed.txId());
         return true;
     }
     public int releaseUnsigned(Operation operation) {return submissions.releaseUnsigned(operation);}
@@ -181,8 +183,8 @@ public class XrpTransactionService {
         boolean activatedBefore=rpc.accountInfo(target.getAddress()).isPresent();
         boolean trustBefore=activatedBefore && hasTrustLine(target.getAddress(),issued);
         BigDecimal topUp=BigDecimal.ZERO;String activationHash=null,trustHash=null;
-        var funding=new Operation(target.getTenantId(),XrpSubmissionService.preparationReference(target,symbol,false),Kind.FUNDING);
-        var trust=new Operation(target.getTenantId(),XrpSubmissionService.preparationReference(target,symbol,true),Kind.FUNDING);
+        var funding=new Operation(target.getTenantId(),XrpSubmissionService.preparationReference(target,symbol,false),Kind.ADDRESS_PREPARATION);
+        var trust=new Operation(target.getTenantId(),XrpSubmissionService.preparationReference(target,symbol,true),Kind.ADDRESS_PREPARATION);
         if(submissions.intent(funding).isPresent())activationHash=finishPreparation(funding);
         if(submissions.intent(trust).isPresent())trustHash=finishPreparation(trust);
         if(!hasTrustLine(target.getAddress(),issued)) {
@@ -202,7 +204,7 @@ public class XrpTransactionService {
             }
             if(!hasTrustLine(target.getAddress(),issued)) {
                 if(trustHash!=null)throw new IllegalStateException("XRPL fixed TrustSet completed but trust line is unavailable; reconcile the preparation");
-                var draft=TrustSet.builder().account(Address.of(target.getAddress())).limitAmount(IssuedCurrencyAmount.builder()
+                var draft=TrustSet.builder().flags(org.xrpl.xrpl4j.model.flags.TrustSetFlags.builder().tfSetNoRipple().build()).account(Address.of(target.getAddress())).limitAmount(IssuedCurrencyAmount.builder()
                         .issuer(Address.of(issued.issuer())).currency(issued.currencyCode()).value("1000000000").build())
                         .fee(XrpCurrencyAmount.of(UnsignedLong.valueOf(feeDrops()))).sequence(UnsignedInteger.valueOf(rpc.accountSequence(target.getAddress())))
                         .lastLedgerSequence(UnsignedInteger.valueOf(rpc.latestLedgerIndex()+20)).build();

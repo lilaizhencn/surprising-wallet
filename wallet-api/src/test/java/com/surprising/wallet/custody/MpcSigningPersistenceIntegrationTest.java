@@ -6,7 +6,7 @@ import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.model.mpc.MpcKey;
 import com.surprising.wallet.model.mpc.MpcKeyEpoch;
 import com.surprising.wallet.model.mpc.MpcSignAttempt;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
 import com.surprising.wallet.repository.CustodyTenantTableRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
@@ -81,7 +81,7 @@ class MpcSigningPersistenceIntegrationTest {
         Arrays.fill(master, (byte) 0);
         crypto = new CustodyCryptoService(config);
         crypto.validateConfiguration();
-        service = new MpcSigningService(tenants, keys, epochs, requests, attempts, crypto, json, manager);
+        service = new MpcSigningService(tenants, keys, epochs, requests, attempts, crypto, json, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.forBoundaryTests(jdbc,json,manager));
         tenant = UUID.randomUUID();
         foreign = UUID.randomUUID();
         tenants.insert(tenant, "mpc-test-owner", "MPC test owner");
@@ -278,6 +278,7 @@ class MpcSigningPersistenceIntegrationTest {
         assertEquals(childRequest, epochs.create(childRequest).request());
         assertEquals(1, epochs.observations(tenant, child.id(), 1, MpcKeyEpoch.State.ACTIVE, Map.of()));
         assertEquals(1, keys.activate(tenant, child.id(), 1, publicKey));
+        com.surprising.wallet.testutil.MpcAuthorizationTestSupport.registerFixture(jdbc,json,tenant,child.id());
         String policy = HexFormat.of().formatHex(json.writeValueAsBytes(Map.of("kind", "PAYMENT", "network", "regtest", "genesisHash", genesis)));
         var command = new MpcSignCommand(tenant, child.id(), 1, ChainType.XMR, MpcSignCommand.BusinessType.WITHDRAWAL,
                 "native-original-inputs", "native-payment", MpcSignCommand.Purpose.TRANSACTION, "MONERO_NATIVE_POLICY_JSON", policy, policy);
@@ -300,6 +301,7 @@ class MpcSigningPersistenceIntegrationTest {
             assertEquals(1, epochs.observations(tenant, key.id(), 1, MpcKeyEpoch.State.ACTIVE, Map.of()));
             assertEquals(1, keys.activate(tenant, key.id(), 1, publicKey));
         });
+        com.surprising.wallet.testutil.MpcAuthorizationTestSupport.registerFixture(jdbc,json,tenant,key.id());
         return keys.find(tenant, key.id()).orElseThrow();
     }
 

@@ -1,7 +1,9 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
-import com.surprising.wallet.chain.solana.MpcSolanaTransactionCodec;
+import com.surprising.wallet.sdk.signing.solana.MpcSolanaTransactionCodec;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;

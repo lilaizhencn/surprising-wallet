@@ -1,12 +1,20 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.signing.NearRegistrationPayload;
+
+import com.surprising.wallet.common.signing.NearOperation;
+
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.chain.near.*;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;
 import com.surprising.wallet.repository.*;
-import com.surprising.wallet.service.NearSubmissionService.Operation;
+
 import java.math.*;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +45,9 @@ public class NearRegistrationService {
     private final LedgerBalanceRepository balances;
     private final ObjectMapper json;
 
-    public Optional<MpcSignRequest> intent(Operation op){return payments.registration(op);}
-    public NearRegistrationPayload payload(Operation op){return payload(op,intent(op).orElseThrow(),json);}
-    static NearRegistrationPayload payload(Operation op,MpcSignRequest request,ObjectMapper json) {
+    public Optional<MpcSignRequest> intent(NearOperation op){return payments.registration(op);}
+    public NearRegistrationPayload payload(NearOperation op){return payload(op,intent(op).orElseThrow(),json);}
+    static NearRegistrationPayload payload(NearOperation op,MpcSignRequest request,ObjectMapper json) {
         var c=request.command();
         require(c.tenantId().equals(op.tenantId()) && c.chain()==ChainType.NEAR && c.businessType()==MpcSignCommand.BusinessType.FUNDING
                 && c.businessReference().equals(NearSubmissionService.registrationReference(op)) && c.signingSlot().equals(SLOT)
@@ -48,7 +56,7 @@ public class NearRegistrationService {
         require(op.equals(p.parent()) && HEX.formatHex(MpcNearTransactionCodec.signingBytes(p.unsigned())).equals(c.preimageHex())
                 && p.payment().recipient().equals(p.unsigned().beneficiary()) && !"NEAR".equals(p.payment().symbol()),"NEP-145 original parent or preimage differs");return p;
     }
-    public ChainAddressRecord source(Operation op) {
+    public ChainAddressRecord source(NearOperation op) {
         var p=payload(op);var source=addresses.findOwned(op.tenantId(),p.parentAddressId()).orElseThrow();
         require(p.parentSender().equals(source.getAddress()) && source.getMpcKeyId()!=null,"NEP-145 original parent source differs");return source;
     }
@@ -61,7 +69,7 @@ public class NearRegistrationService {
     public String publicKey(ChainAddressRecord sender){return signing.requireKey(sender.getTenantId(),sender.getMpcKeyId()).publicKeyHex();}
 
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public MpcSignRequest reserve(Operation op,ChainAddressRecord parent,NearRegistrationPayload draft) {
+    public MpcSignRequest reserve(NearOperation op,ChainAddressRecord parent,NearRegistrationPayload draft) {
         var previous=intent(op);var p=previous.map(r->payload(op,r,json)).orElseGet(()->Objects.requireNonNull(draft));
         payments.lockRegistrationOwner(op,parent.getAddress(),p.payment());
         require(op.equals(p.parent()) && parent.getId()==p.parentAddressId() && parent.getAddress().equals(p.parentSender())
@@ -75,12 +83,12 @@ public class NearRegistrationService {
                 && "NEAR_STORAGE_DEPOSIT".equals(token.gasStrategy()),"NEP-145 contract/asset policy differs");
         require(p.payment().recipient().equals(u.beneficiary()) && p.maximumFeeYocto().signum()>0
                 && p.maximumFeeYocto().compareTo(BigInteger.TEN.pow(23))<=0,"NEP-145 beneficiary or Gas budget differs");
-        if(op.kind()==NearSubmissionService.Kind.COLLECTION)require(addresses.findEnabledByTenantAndAddress(op.tenantId(),"NEAR",u.beneficiary()).orElseThrow().getMpcKeyId()!=null,"NEP-145 collector has no owned joint key");
+        if(op.kind()==NearOperation.Kind.COLLECTION)require(addresses.findEnabledByTenantAndAddress(op.tenantId(),"NEAR",u.beneficiary()).orElseThrow().getMpcKeyId()!=null,"NEP-145 collector has no owned joint key");
         var key=signing.lockActiveKey(op.tenantId(),sender.getMpcKeyId(),ChainType.NEAR);
         require(key.publicKeyHex().equals(u.publicKeyHex()) && key.userId()==sender.getUserId() && key.biz()==sender.getBiz()
                 && key.addressIndex()==sender.getAddressIndex(),"NEP-145 Gas joint key differs");
         require(!transactions.hasPendingSender(u.sender()),"NEAR Gas sender has another unresolved transaction");
-        long nonce=sequences.reserve("NEAR",u.sender(),u.nonce());
+        long nonce=sequences.reserve("NEAR",u.sender(),u.nonce(),MpcSignCommand.reservationOwner(op.tenantId(),MpcSignCommand.BusinessType.FUNDING,NearSubmissionService.registrationReference(op)));
         var fixed=new NearRegistrationPayload(op,p.payment(),p.parentAddressId(),p.parentSender(),p.tokenDecimals(),p.maximumFeeYocto(),
                 new MpcNearTransactionCodec.Registration(u.network(),u.genesisHash(),u.sender(),nonce,u.beneficiary(),u.contract(),u.depositAtomic(),u.gas(),u.blockHeight(),u.validUntilHeight(),u.blockHash(),u.publicKeyHex()));
         var request=signing.reserveSignature(new MpcSignCommand(op.tenantId(),key.id(),key.activeEpoch(),ChainType.NEAR,MpcSignCommand.BusinessType.FUNDING,
@@ -90,7 +98,7 @@ public class NearRegistrationService {
         require(accounting.reservePreparation(op.tenantId(),request.id(),u.sender(),near(u.depositAtomic().add(p.maximumFeeYocto()))),"NEP-145 requires a funded tenant Gas account");
         return request;
     }
-    public void sign(Operation op) {
+    public void sign(NearOperation op) {
         var request=intent(op).orElseThrow();var p=payload(op,request,json);
         var usage=usages.find(op.tenantId(),"ADDRESS_PREPARATION",request.id()).orElseThrow();
         require(usage.reservedAmount().compareTo(near(p.unsigned().depositAtomic().add(p.maximumFeeYocto())))==0
@@ -98,7 +106,7 @@ public class NearRegistrationService {
         signing.awaitSignature(op.tenantId(),request.id(),nodes);
     }
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public MpcNearTransactionCodec.Signed commit(Operation op) {
+    public MpcNearTransactionCodec.Signed commit(NearOperation op) {
         var request=intent(op).orElseThrow();requests.lock(op.tenantId(),request.id()).orElseThrow();var p=payload(op,request,json);
         payments.lockRegistrationOwner(op,p.parentSender(),p.payment());var signed=selected(op,request,p);var row=transactions.find(signed.txHash()).orElseThrow();
         String raw=json.writeValueAsString(signed);
@@ -106,7 +114,7 @@ public class NearRegistrationService {
         else require(transactions.bindSigned(signed.txHash(),raw)==1,"NEP-145 raw/hash binding raced");return signed;
     }
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public boolean settle(Operation op,NearStorageReceipt.Proof observed,long latest,int confirmations) {
+    public boolean settle(NearOperation op,NearStorageReceipt.Proof observed,long latest,int confirmations) {
         var request=intent(op).orElseThrow();requests.lock(op.tenantId(),request.id()).orElseThrow();var p=payload(op,request,json);
         var signed=selected(op,request,p);var row=transactions.find(signed.txHash()).orElseThrow();
         require(json.writeValueAsString(signed).equals(row.getRawPayload()),"NEP-145 receipt has no original durable selection");
@@ -125,17 +133,17 @@ public class NearRegistrationService {
         if(!outcome.registered())failParent(op);
         return outcome.registered();
     }
-    public Optional<NearStorageReceipt.Proof> proof(Operation op) {
+    public Optional<NearStorageReceipt.Proof> proof(NearOperation op) {
         return intent(op).map(r->MpcNearTransactionCodec.transactionHash(payload(op,r,json).unsigned())).flatMap(transactions::find)
                 .map(NearTransactionRecord::getExecutionReceipt).map(raw->json.readValue(raw,NearStorageReceipt.Proof.class));
     }
-    private MpcNearTransactionCodec.Signed selected(Operation op,MpcSignRequest request,NearRegistrationPayload p) {
+    private MpcNearTransactionCodec.Signed selected(NearOperation op,MpcSignRequest request,NearRegistrationPayload p) {
         require(request.state()==MpcSignRequest.State.COMPLETED && signing.requireKey(op.tenantId(),request.command().keyId()).publicKeyHex().equals(p.unsigned().publicKeyHex()),"NEP-145 original joint result differs");
         return MpcNearTransactionCodec.assemble(p.unsigned(),signing.signature(op.tenantId(),request.id()).orElseThrow());
     }
-    private void failParent(Operation op) {
+    private void failParent(NearOperation op) {
         require(payments.intent(op).isEmpty(),"NEAR payment already has an accepted signature");String reason="final NEP-145 registration failure; attached deposit refunded; network fee charged to tenant Gas";
-        if(op.kind()==NearSubmissionService.Kind.WITHDRAWAL) {
+        if(op.kind()==NearOperation.Kind.WITHDRAWAL) {
             var order=orders.lockForSettlement(op.tenantId(),"NEAR",op.reference()).orElseThrow();
             require(order.getTxHash()==null && balances.release("NEAR",order.getAssetSymbol(),order.getDebitAccountId(),order.getAmount().add(order.getFee()),op.tenantId()),"NEP-145 failed parent principal is inconsistent");
             require(orders.failUnsignedPreparation(op.tenantId(),"NEAR",op.reference(),reason)==1,"NEP-145 failed parent transition raced");

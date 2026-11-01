@@ -1,6 +1,8 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.model.mpc.SolanaSigningPayload;
+import com.surprising.wallet.sdk.signing.solana.MpcSolanaTransactionCodec;
+
+import com.surprising.wallet.common.signing.SolanaSigningPayload;
 import java.math.BigInteger;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;

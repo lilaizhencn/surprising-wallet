@@ -64,7 +64,7 @@ public class Evm7702WithdrawalCoordinator {
 
     public static com.surprising.wallet.service.Evm7702SigningService.Operation operation(Batch batch) {
         return new com.surprising.wallet.service.Evm7702SigningService.Operation(batch.tenantId(),batch.id(),batch.chain(),
-                com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL);
+                com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.WITHDRAWAL);
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -101,7 +101,7 @@ public class Evm7702WithdrawalCoordinator {
         var selected=mpc.outerPayload(operation(batch));
         var raw=selected.raw();
         var dynamic=(org.web3j.crypto.transaction.type.Transaction1559)raw.getTransaction();
-        var prepared=mpc.preparation(operation(batch),com.surprising.wallet.model.mpc.Evm7702PayoutPayload.class);
+        var prepared=mpc.preparation(operation(batch),com.surprising.wallet.common.signing.Evm7702PayoutPayload.class);
         var attempt=new PreparedAttempt(batch.tenantId(),batch.id(),selected.estimatedGas(),raw.getGasLimit().longValueExact(),
                 dynamic.getMaxFeePerGas(),dynamic.getMaxPriorityFeePerGas(),raw.getNonce(),signed.transactionHash(),
                 Hash.sha3(Numeric.prependHexPrefix(raw.getData())),crypto.encrypt(signed.rawTransaction()),"custody-v1", prepared.authorization()!=null, prepared.authorization()==null?null:prepared.authorization().nonce(),
@@ -301,7 +301,7 @@ public class Evm7702WithdrawalCoordinator {
     @Transactional(rollbackFor = Throwable.class)
     public void failUnbroadcast(UnbroadcastBatch batch) {
         var operation=new com.surprising.wallet.service.Evm7702SigningService.Operation(batch.tenantId(),batch.batchId(),batch.chain(),
-                com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL);
+                com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.WITHDRAWAL);
         if(mpc.plan(operation).isPresent())throw new IllegalStateException("admitted MPC payout cannot refund as unsigned");
 
         List<BatchItemIdentity> items = listBatchItems(batch.tenantId(), batch.batchId());

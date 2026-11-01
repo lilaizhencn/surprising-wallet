@@ -1,0 +1,5 @@
+# Independent authority host only. Never mount this private key into Wallet or any MPC holder.
+approval:
+  signing:
+    private-key-file: /etc/surprising-wallet-approval/authorization.der
+    public-key-hex: REPLACE_WITH_RAW_ED25519_PUBLIC_KEY_HEX

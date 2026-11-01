@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Test;
 import org.tron.trident.utils.Numeric;

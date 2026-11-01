@@ -1,7 +1,8 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.model.mpc.AptosSigningPayload;
+import com.surprising.wallet.common.signing.AptosSigningPayload;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
 import com.surprising.wallet.service.AptosSubmissionService.Operation;
@@ -37,7 +38,10 @@ public class AptosTransactionService {
             var payment=submissions.payment(op);var profile=profiles.findAccountByChain("APTOS").orElseThrow();int decimals=8;String metadata=null;
             if(!"APT".equals(payment.symbol())){var token=tokens.findDefinition("APTOS",profile.getNetwork(),payment.symbol()).orElseThrow();metadata=AptosFungibleAsset.requireMetadata(token);decimals=token.getDecimals();}
             long price=rpc.estimateGasPrice();if(price<=0)throw new IllegalStateException("Aptos gas price is invalid");
-            long maxGas=Math.max(50_000L,BigInteger.valueOf(Math.max(1L,profile.getDefaultFee())).add(BigInteger.valueOf(price-1)).divide(BigInteger.valueOf(price)).longValueExact());
+            // defaultFee is the native atomic fee budget, not a floor of 50k gas units at any unit price.
+            long budget=profile.getDefaultFee();
+            if(budget<=0 || price>budget)throw new IllegalStateException("Aptos gas unit price exceeds the positive native fee budget");
+            long maxGas=BigInteger.valueOf(budget).divide(BigInteger.valueOf(price)).longValueExact();
             var ledger=rpc.ledgerInfo();long seconds=ledger.path("ledger_timestamp").asLong()/1_000_000;if(seconds<=0)throw new IllegalStateException("Aptos ledger timestamp is absent");
             var unsigned=new MpcAptosTransactionCodec.Unsigned(source.getAddress(),rpc.sequenceNumber(source.getAddress()),payment.recipient(),payment.amount().movePointRight(decimals).longValueExact(),metadata,maxGas,price,Math.addExact(seconds,600),ledger.path("chain_id").asInt(),submissions.publicKey(source));
             draft=new AptosSigningPayload(payment.symbol(),payment.amount(),payment.customerFee(),decimals,unsigned);

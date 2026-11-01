@@ -2,7 +2,7 @@ package com.surprising.wallet.service;
 
 import com.surprising.wallet.chain.cardano.CardanoExecutionReceipt;
 import com.surprising.wallet.chain.cardano.CardanoRpcClient;
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.repository.ChainScanBlockRepository;
 import com.surprising.wallet.repository.ChainScanHeightRepository;

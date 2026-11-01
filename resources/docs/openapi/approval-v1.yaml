@@ -1,0 +1,496 @@
+openapi: 3.1.0
+info:
+  title: Independent Wallet Approval API
+  version: 1.0.0-development
+  description: >-
+    Separate approval origin, credentials and database role. Wallet sessions and roles are not accepted.
+    Explicit all-chain final-wire and automatic operating-rule verifiers are being integrated. New code has not undergone final unified compilation or validation; All-chain verifier, revocation, deployment-isolation and no-grant unsigned cleanup code remains unverified. Admitted transaction recovery and final unified verification remain incomplete.
+servers:
+  - url: https://approval.example
+components:
+  securitySchemes:
+    approvalSession:
+      type: apiKey
+      in: cookie
+      name: __Host-sw_approval
+    csrf:
+      type: apiKey
+      in: header
+      name: X-Approval-CSRF
+    serviceMtls:
+      type: mutualTLS
+      description: Actual TLS certificate SPKI must be enrolled with an explicit tenant UUID allowlist.
+  schemas:
+    Principal:
+      type: object
+      properties:
+        tenantId: {type: string, format: uuid}
+        memberId: {type: string, format: uuid}
+        role: {type: string, enum: [TENANT_ADMIN, APPROVER]}
+        email: {type: string, format: email}
+        displayName: {type: string}
+        csrfToken: {type: string}
+    Intent:
+      type: object
+      required: [id, tenantId, businessReference, chain, network, assetSymbol, recipient, amount, maximumNetworkFee, source, initiatorId, fundingSource]
+      properties:
+        id: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid}
+        businessReference: {type: string, maxLength: 192}
+        chain: {type: string}
+        network: {type: string}
+        assetSymbol: {type: string}
+        recipient: {type: string, maxLength: 256}
+        amount: {type: string, description: Positive exact decimal, at most 24 decimal places.}
+        maximumNetworkFee: {type: string, description: Nonnegative exact decimal in the chain native asset.}
+        source: {type: string, enum: [API, CONSOLE]}
+        initiatorId: {type: string, format: uuid}
+        subject: {type: string}
+        externalReference: {type: string, maxLength: 192, description: Original tenant-business reference; optional empty string.}
+        fundingSource: {type: string, enum: [ADDRESS, TENANT_POOL]}
+    Request:
+      type: object
+      properties:
+        intent: {$ref: '#/components/schemas/Intent'}
+        assetSnapshot:
+          type: object
+          description: Frozen independent asset/network/contract/precision/fee facts, included in the reviewed hash.
+          properties:
+            chain: {type: string}
+            network: {type: string}
+            symbol: {type: string}
+            nativeSymbol: {type: string}
+            networkIdentity: {type: string}
+            tokenIdentifier: {type: [string, 'null']}
+            decimals: {type: integer}
+            nativeDecimals: {type: integer}
+            networkFeeLimit: {type: string}
+        intentHash: {type: string, pattern: '^[0-9a-f]{64}$'}
+        policyId: {type: string, format: uuid}
+        policyVersion: {type: integer}
+        reasons: {type: array, items: {type: string, enum: [ALL_WITHDRAWALS, SINGLE_AMOUNT, ROLLING_24H_AMOUNT, NEW_RECIPIENT, CONSOLE_WITHDRAWAL]}}
+        requiredReviewers: {type: integer, minimum: 0, maximum: 2}
+        status: {type: string, enum: [PENDING, APPROVED, REJECTED, EXPIRED]}
+        signingStarted: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+    PolicySettings:
+      type: object
+      required: [chain, network, assetSymbol, expectedVersion, allWithdrawals, newRecipient, consoleWithdrawal, requiredReviewers, expirySeconds]
+      properties:
+        chain: {type: string}
+        network: {type: string}
+        assetSymbol: {type: string}
+        expectedVersion: {type: integer, minimum: 0, description: Zero creates; existing policies require the last returned version.}
+        singleAmount: {type: [string, 'null'], description: Inclusive positive decimal threshold; null disables this scenario.}
+        rolling24hAmount: {type: [string, 'null'], description: Inclusive cumulative threshold, including pending requests.}
+        allWithdrawals: {type: boolean, default: true, description: Conservative initial preset; all requests require human approval.}
+        newRecipient: {type: boolean}
+        consoleWithdrawal: {type: boolean}
+        requiredReviewers: {type: integer, minimum: 1, maximum: 2}
+        expirySeconds: {type: integer, minimum: 900, maximum: 86400}
+  parameters:
+    Origin:
+      in: header
+      name: Origin
+      required: true
+      schema: {type: string}
+      description: Must match the configured independent HTTPS origin exactly.
+paths:
+  /approval/v1/auth/login:
+    post:
+      summary: Sign in with independent approval credentials
+      parameters: [{$ref: '#/components/parameters/Origin'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, maxLength: 256, writeOnly: true}
+      responses:
+        '200':
+          description: Independent host-only Secure HttpOnly SameSite=Strict session cookie and CSRF-bearing principal.
+          content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}
+        '401': {description: Invalid, disabled or temporarily locked credentials.}
+  /approval/v1/auth/session:
+    get:
+      summary: Resolve the current independent session
+      security: [{approvalSession: []}]
+      responses:
+        '200':
+          description: Active independent member and tenant only.
+          content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}
+        '401': {description: Independent login required.}
+  /approval/v1/auth/logout:
+    post:
+      summary: Revoke the current independent session
+      security: [{approvalSession: [], csrf: []}]
+      parameters: [{$ref: '#/components/parameters/Origin'}]
+      responses:
+        '200': {description: Session revoked and cookie expired.}
+  /approval/v1/requests:
+    get:
+      summary: Poll tenant approval requests without caching
+      security: [{approvalSession: []}]
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [PENDING, APPROVED, REJECTED, EXPIRED, ''], default: PENDING}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {in: query, name: offset, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200':
+          description: Tenant-fenced page. Approval states appear only in this independent administrator API.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Request'}}
+                  total: {type: integer}
+                  limit: {type: integer}
+                  offset: {type: integer}
+  /approval/v1/requests/{id}/decisions:
+    post:
+      summary: Record an immutable decision on the exact displayed intent
+      security: [{approvalSession: [], csrf: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Origin'}
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason, intentHash]
+              properties:
+                decision: {type: string, enum: [APPROVE, REJECT]}
+                reason: {type: string, minLength: 1, maxLength: 1000}
+                intentHash: {type: string, pattern: '^[0-9a-f]{64}$'}
+      responses:
+        '200':
+          description: Current request; expiry can win without accepting the decision. Identical decision retries are idempotent.
+          content: {application/json: {schema: {$ref: '#/components/schemas/Request'}}}
+        '400': {description: Wrong intent, self-approval, conflicting or no-longer-pending decision.}
+  /approval/v1/policies:
+    get:
+      summary: List this tenant's independent policies
+      security: [{approvalSession: []}]
+      responses:
+        '200': {description: Policies including their current version.}
+    put:
+      summary: Create or replace a policy as the independent tenant administrator
+      security: [{approvalSession: [], csrf: []}]
+      parameters: [{$ref: '#/components/parameters/Origin'}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/PolicySettings'}}}
+      responses:
+        '200': {description: Stored policy with incremented version. Existing requests retain their original policy snapshot.}
+        '400': {description: Invalid rule or stale expected version; reload before editing.}
+  /approval/service/v1/intents:
+    post:
+      summary: Admit an immutable withdrawal intent through an enrolled service certificate
+      security: [{serviceMtls: []}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Intent'}}}
+      responses:
+        '200':
+          description: Current immutable request. An APPROVED business intent is not an arbitrary signing authorization.
+          content: {application/json: {schema: {$ref: '#/components/schemas/Request'}}}
+        '400': {description: Independent tenant/policy missing or immutable intent conflicts.}
+  /approval/service/v1/intents/{id}:
+    get:
+      summary: Reconcile the original immutable intent's decision
+      security: [{serviceMtls: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+        - {in: query, name: tenantId, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Current request under the enrolled certificate's allowed tenant.
+          content: {application/json: {schema: {$ref: '#/components/schemas/Request'}}}
+  /approval/service/v1/keys:
+    post:
+      summary: Register a public key only after direct authenticated three-holder observation
+      description: >-
+        Submitted ceremony descriptors are looked up at all three independently configured holders.
+        Wallet-provided public-key/result JSON is never evidence. Initial epoch must be one;
+        refresh must advance exactly one epoch while preserving the registered public identity.
+      security: [{serviceMtls: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keyGroup, ceremony]
+              properties:
+                keyGroup: {type: string, description: EVM or a non-EVM chain key group; XMR roots use XMR_ROOT.}
+                ceremony:
+                  type: object
+                  required: [sessionId, tenantId, keyId, epoch, operation, algorithm, online, messageHex]
+                  properties:
+                    sessionId: {type: string, format: uuid}
+                    tenantId: {type: string, format: uuid}
+                    keyId: {type: string, format: uuid}
+                    epoch: {type: integer, minimum: 1, maximum: 1000000}
+                    operation: {type: string, enum: [CREATE_KEY, REFRESH]}
+                    algorithm: {type: string, enum: [ECDSA_SECP256K1, ED25519, SCHNORR_BIP340, MONERO_NATIVE_2_OF_3]}
+                    online: {type: array, minItems: 3, maxItems: 3, uniqueItems: true, items: {type: string}}
+                    messageHex: {type: string, description: Original immutable ceremony message; empty for curve-key creation/refresh.}
+      responses:
+        '200': {description: Independently registered tenant/key/group/public identity and active epoch.}
+        '400': {description: Incomplete or mismatched ceremony, disabled key, reversed/skipped epoch or unconfigured native registry.}
+        '401': {description: Service certificate not enrolled for this tenant.}
+  /approval/service/v1/signing-grants:
+    post:
+      summary: Independently verify and durably authorize one exact original payment or operating signature slot
+      description: >-
+        Proofs leave the service only after transaction, version, slot, grant, reviewed-request binding,
+        native fee reservation and audit commit. An existing slot returns the original unchanged proof,
+        including after its expiry, solely for original-session recovery at already-admitted holders.
+        An explicitly audited fresh native session is allowed only where an explicit verifier proves original nonce/input mutual exclusion; identical bytes alone are insufficient on unordered chains. It retains the original transaction/version/slot and fee reservation.
+        UTXO inputs share one original transaction/version/fee reservation and immutable independently fetched previous-output evidence. Each input has one Wallet slot ID; overlapping outpoints cannot be bound to another transaction. Caller evidence is not accepted. Payload/nonce replacements remain rejected. Automatic non-withdrawal operations require an independently installed operating rule, fixed source/treasury roles, quotas and full wire verification; they use an empty approvalRequestIds array and return a separate SYSTEM operating receipt, never a human approval decision. Preparation families without a complete independent verifier remain rejected.
+      security: [{serviceMtls: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [signingRequestId, approvalRequestIds, command, execution]
+              properties:
+                signingRequestId: {type: string, format: uuid, description: Original durable Wallet signature-slot ID.}
+                approvalRequestIds: {type: array, minItems: 0, maxItems: 100, uniqueItems: true, description: WITHDRAWAL requires 1..100 real review IDs; automatic business types require an empty array., items: {type: string, format: uuid}}
+                command:
+                  type: object
+                  description: Exact shared MpcSignCommand. Fixed UTXO uses input/index; Solana has source/payer slots; EIP7702_SIGNING_JSON shares a whole original Plan across AUTH/OP/relayer slots. Bitcoin-like routing excludes Cardano. ADDRESS_PREPARATION is an explicit XRP-only zero-IOU-principal operation with activation XRP counted as native expenditure. BTC same-input RBF needs installed bounded policy, original fee reservation and exact root payment ownership; automatic receipt reference is stable utxo:transactionId. Automatic operations cannot consume human approval IDs.
+                  required: [tenantId, keyId, keyEpoch, chain, businessType, businessReference, signingSlot, purpose, payloadEncoding, payloadHex, preimageHex]
+                execution:
+                  type: object
+                  description: Exact original native SIGN descriptor; messageHex equals command.preimageHex.
+                  required: [sessionId, tenantId, keyId, epoch, operation, algorithm, online, messageHex]
+                replayActor: {type: [string, 'null'], maxLength: 192, description: Required with replayReason for a fresh recovery session on an existing supported slot; absent for first authorization.}
+                replayReason: {type: [string, 'null'], minLength: 5, maxLength: 512, description: Immutable operator audit for this exact native session.}
+      responses:
+        '200':
+          description: Current approval state, or committed AUTHORIZED grant. Pending/rejected/expired states have no grant.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, enum: [PENDING, REJECTED, EXPIRED, AUTHORIZED]}
+                  grant:
+                    type: [object, 'null']
+                    description: Original id, tenantId, slotId, sessionId, issuedAt, expiresAt and Ed25519 proof(payloadHex, signatureHex).
+                  automaticOperation:
+                    type: [object, 'null']
+                    description: Separate host-rule receipt for automatic operations only; null for human withdrawals. Contains immutable rule ID/fingerprint, business type/reference, parent operation, admitted time and SYSTEM payment snapshots with zero human reviewers. The fingerprint is bound into the signed business hash. Wallet persists this receipt with the original proof and admits its exact pending nonce owner atomically before native dispatch.
+        '400': {description: Unsupported transaction family, changed wire/key/scope, replay conflict or exceeded independent fee budget.}
+        '401': {description: Actual mTLS service identity missing or tenant is outside its allowlist.}
+
+  /approval/service/v1/member-revocations:
+    post:
+      summary: One-way durable Wallet subaccount revocation; never enrollment or enablement
+      description: >-
+        New monotonic generations atomically disable existing APPROVER credentials, sessions and
+        activation capabilities and record audit. Fences survive unknown/not-yet-enrolled members.
+        Equal generations require an identical descriptor; older generations are harmless and return
+        the current fence. An independent administrator must explicitly acknowledge the current
+        fence before re-enrollment. Already issued proofs and historical approvals are not revoked.
+        Delivery is eventually retried; Wallet pauses new grant requests while its tenant has pending
+        notifications. This new path and deployment guards remain unverified.
+      security: [{serviceMtls: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenantId, memberId, sequence, actorId, revokedAt]
+              properties:
+                tenantId: {type: string, format: uuid}
+                memberId: {type: string, format: uuid}
+                sequence: {type: integer, minimum: 1, maximum: 1000000000000000}
+                actorId: {type: string, format: uuid, description: Original Wallet actor for audit only; cannot authorize a review.}
+                revokedAt: {type: string, format: date-time}
+      responses:
+        '200': {description: Tenant/member/current sequence/descriptorHash acknowledgement; no credential or activation token.}
+        '400': {description: Invalid generation or changed original descriptor.}
+        '401': {description: Actual service mTLS and tenant allowlist required.}
+
+  /approval/service/v1/automatic-plans:
+    post:
+      summary: Reserve one fixed collection parent before Gas or storage preparation
+      description: >-
+        Does not issue any native signing permission. The independent host selects its installed
+        COLLECTION rule, verifies enrolled source and treasury roles, directly observes the source
+        principal, then atomically reserves count/principal/maximum native exposure, plan/evidence
+        and audit. A later final-wire grant binds that original plan exactly once without charging
+        the quota twice. Wallet cannot provide balances, RPC endpoints, node credentials or rule edits.
+        Monero accepts only a public original MONERO_OBSERVE descriptor and directly reads both
+        actual holder results plus independently anchored daemon facts. All new code is unverified.
+      security: [{serviceMtls: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenantId, sourceKeyId, chain, network, assetSymbol, businessReference, recipient, amount]
+              properties:
+                tenantId: {type: string, format: uuid}
+                sourceKeyId: {type: string, format: uuid}
+                chain: {type: string}
+                network: {type: string}
+                assetSymbol: {type: string}
+                businessReference: {type: string, maxLength: 192}
+                recipient: {type: string, maxLength: 256}
+                amount: {type: string, pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$', description: Exact positive decimal principal.}
+                moneroObservation:
+                  type: [object, 'null']
+                  description: Original registered-source MONERO_OBSERVE descriptor only; no result, balance, share or transaction-set data.
+      responses:
+        '200': {description: Original immutable AutomaticOperation receipt, with SYSTEM payments and zero human reviewers; no signing grant.}
+        '400': {description: Missing or changed plan/rule/owner/network, stale or insufficient principal evidence, or exceeded quota.}
+        '401': {description: Actual service mTLS and tenant allowlist required.}
+
+  /approval/service/v1/signing-grants/monero-relay:
+    post:
+      summary: Authorize relay of the original completed native Monero transaction only
+      description: >-
+        Reads the original completed artifact directly from its surviving original holder with
+        the independent READ_RESULT identity. The relay descriptor must preserve the original
+        SIGN session, intent hash, network, sender and transaction hash. The proof and audit
+        commit before returning; Wallet durably stores the original relay descriptor/proof before
+        MONERO_RELAY execution. This neither signs a new payment nor reserves a second fee.
+      security: [{serviceMtls: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [signingRequestId, signSessionId, execution]
+              properties:
+                signingRequestId: {type: string, format: uuid}
+                signSessionId: {type: string, format: uuid}
+                execution:
+                  type: object
+                  description: Exact original MONERO_RELAY descriptor, native Monero protocol and one surviving original holder.
+                  required: [sessionId, tenantId, keyId, epoch, operation, algorithm, online, messageHex]
+      responses:
+        '200': {description: Original committed AUTHORIZED relay grant, or HOLDER_UNAVAILABLE with no grant when the original holder cannot be read; Wallet may try the other original holder. No new payment or fee reservation.}
+        '400': {description: Changed/missing original payment, holder, key, artifact or relay scope.}
+        '401': {description: Actual service mTLS and tenant allowlist required.}
+
+  /approval/v1/members:
+    get:
+      summary: List this independent tenant's members (TENANT_ADMIN only)
+      security: [{approvalSession: []}]
+      parameters:
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {in: query, name: offset, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200': {description: Paginated public member id/email/displayName/role/status/createdAt/updatedAt/walletRevocationSequence; no credentials or token hashes.}
+        '401': {description: Independent administrator required.}
+    post:
+      summary: Independently invite an APPROVER; never a Wallet or mTLS enrollment route
+      security: [{approvalSession: [], csrf: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [memberId, email, displayName, reason]
+              properties:
+                memberId: {type: string, format: uuid, description: Verified person's public Wallet subaccount ID.}
+                acknowledgedWalletRevocation: {type: integer, minimum: 0, maximum: 1000000000000000, default: 0, description: Independent administrator explicitly acknowledges the currently observed revocation generation; zero only when no revocation exists.}
+                email: {type: string, format: email, maxLength: 254}
+                displayName: {type: string, minLength: 1, maxLength: 120}
+                reason: {type: string, minLength: 5, maxLength: 512}
+      responses:
+        '200': {description: memberId/token/expiresAt. Random capability returned once, valid 24h; share privately in URL fragment.}
+        '400': {description: Invalid or unavailable identity.}
+        '401': {description: Independent administrator / Origin / CSRF required.}
+  /approval/v1/members/{id}/wallet-revocation:
+    get:
+      summary: Read the current same-tenant Wallet revocation generation before independent re-enrollment
+      security: [{approvalSession: []}]
+      parameters: [{in: path, name: id, required: true, schema: {type: string, format: uuid}}]
+      responses:
+        '200': {description: Sequence integer; zero means no delivered fence. Does not grant restoration permission.}
+        '401': {description: Independent TENANT_ADMIN required.}
+
+  /approval/v1/members/{id}/activation:
+    post:
+      summary: Reset an APPROVER by issuing a new capability and immediately revoking old credentials/sessions
+      security: [{approvalSession: [], csrf: []}]
+      parameters: [{in: path, name: id, required: true, schema: {type: string, format: uuid}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, required: [reason], properties: {reason: {type: string, minLength: 5, maxLength: 512}, acknowledgedWalletRevocation: {type: integer, minimum: 0, maximum: 1000000000000000, default: 0, description: Explicitly acknowledged current Wallet revocation fence.}}}
+      responses:
+        '200': {description: memberId/token/expiresAt; earlier capabilities invalidated.}
+        '400': {description: Missing reviewer or protected administrator.}
+        '401': {description: Independent administrator / Origin / CSRF required.}
+  /approval/v1/members/{id}/disable:
+    post:
+      summary: Atomically disable an APPROVER, clear activation and revoke sessions with audit
+      security: [{approvalSession: [], csrf: []}]
+      parameters: [{in: path, name: id, required: true, schema: {type: string, format: uuid}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, required: [reason], properties: {reason: {type: string, minLength: 5, maxLength: 512}}}
+      responses:
+        '200': {description: Disabled; identical already-disabled retry is harmless.}
+        '400': {description: Missing reviewer or protected administrator.}
+        '401': {description: Independent administrator / Origin / CSRF required.}
+  /approval/v1/auth/activate:
+    post:
+      summary: Redeem a single-use capability and set a separate approval password; no automatic login
+      description: HTTPS and exact independent Origin required. Does not accept Wallet identity as activation authority.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, password]
+              properties:
+                token: {type: string, pattern: '^[0-9a-f]{64}$'}
+                password: {type: string, format: password, minLength: 12, maxLength: 256}
+      responses:
+        '200': {description: Capability consumed, password set, sessions revoked, audit committed; caller must log in.}
+        '400': {description: Invalid/expired/consumed capability or invalid password.}
+        '401': {description: Independent Origin or HTTPS required.}
+  /approval/v1/audits:
+    get:
+      summary: Paginated same-tenant independent audit records (TENANT_ADMIN only)
+      security: [{approvalSession: []}]
+      parameters:
+        - {in: query, name: action, schema: {type: string, pattern: '^[A-Z_.]{0,64}$'}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {in: query, name: offset, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200': {description: items/total/limit/offset with immutable decision/policy/member audit facts; no passwords or raw activation capabilities.}
+        '400': {description: Invalid action filter.}
+        '401': {description: Independent administrator required.}

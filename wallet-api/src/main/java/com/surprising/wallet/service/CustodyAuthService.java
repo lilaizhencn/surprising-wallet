@@ -166,6 +166,8 @@ public class CustodyAuthService {
             case "OPERATOR" -> Set.of(
                     "addresses:read", "addresses:write", "assets:read", "deposits:read",
                     "withdrawals:read", "withdrawals:write", "webhooks:read", "chains:read");
+            case "APPROVER" -> Set.of("addresses:read", "assets:read", "withdrawals:read",
+                    "approvals:read", "approvals:review", "audit:read", "chains:read");
             default -> Set.of(
                     "addresses:read", "assets:read", "deposits:read",
                     "withdrawals:read", "webhooks:read", "audit:read", "chains:read");

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.hypercore;
 
+import com.surprising.wallet.sdk.signing.hypercore.MpcHyperCoreActionCodec;
+
 import java.math.BigDecimal;
 import java.util.HexFormat;
 import org.bitcoinj.base.Sha256Hash;

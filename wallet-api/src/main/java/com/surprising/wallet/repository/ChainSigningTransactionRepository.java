@@ -65,6 +65,12 @@ public class ChainSigningTransactionRepository {
         return jdbc.query("select " + COLUMNS + " from chain_signing_transaction where chain = ? and id = ? for update",
                 (rs, rowNum) -> map(rs), chain, id).stream().findFirst();
     }
+    public List<Integer> withdrawalMembers(UUID tenant,String chain,String reference) {
+        return jdbc.queryForList("""
+                select id from chain_signing_transaction where tenant_id=? and chain=? and business_type='WITHDRAWAL'
+                    and request->'payments' @> jsonb_build_array(jsonb_build_object('reference',?::text)) order by id
+                """,Integer.class,tenant,chain,reference);
+    }
 
     public int recordEnqueued(String chain, int id, UUID requestId) {
         return jdbc.update("""

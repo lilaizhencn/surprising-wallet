@@ -1,6 +1,10 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.signing.MoneroSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.chain.monero.MoneroDaemonClient;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.ChainType;
@@ -38,7 +42,7 @@ public final class MpcMoneroPaymentNativeProbe {
         try(var support=new MpcNativeTestSupport(jdbc);var nodes=new MpcNodes(properties)) {
             var requests=new WalletMpcSignRequestRepository(jdbc);var attempts=new WalletMpcSignAttemptRepository(jdbc,json);
             var signing=new MpcSigningService(new CustodyTenantTableRepository(jdbc),new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,json),
-                    requests,attempts,new CustodyCryptoService(security),json,support.manager);
+                    requests,attempts,new CustodyCryptoService(security),json,support.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
             var source=new ChainAddressRepository(jdbc).findEnabledByTenantAndAddress(tenant,"XMR",test.path("source").asText()).orElseThrow();
             String reference=test.path("reference").asText("monero-payment-bridge-v1-"+pair);var selectedFile=root.resolve("selected-payment-"+pair+"-public.json");
             var intent=requests.findBusiness(tenant,ChainType.XMR,MpcSignCommand.BusinessType.DEV_FAUCET,reference,"transaction");

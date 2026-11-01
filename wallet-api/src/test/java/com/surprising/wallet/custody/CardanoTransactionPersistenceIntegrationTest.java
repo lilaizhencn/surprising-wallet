@@ -1,10 +1,10 @@
 package com.surprising.wallet.custody;
 
 import com.surprising.wallet.chain.model.CardanoOwnedOutput;
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
 import com.surprising.wallet.repository.CardanoOwnedOutputRepository;
 import com.surprising.wallet.repository.CardanoTransactionRepository;

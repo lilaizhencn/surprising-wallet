@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
 import java.math.BigInteger;
 import java.util.HexFormat;
 import tools.jackson.databind.JsonNode;

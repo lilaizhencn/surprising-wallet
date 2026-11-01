@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.sdk.signing.sui.MpcSuiTransactionCodec;
+
 import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.repository.*;

@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.google.common.primitives.UnsignedInteger;
 import com.surprising.wallet.chain.xrp.*;
 import com.surprising.wallet.chain.signing.MpcNodes;

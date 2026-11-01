@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.evm;
 
+import com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec;
+
 import com.sun.net.httpserver.HttpServer;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.sdk.signing.MpcEvmTransactionCodec;

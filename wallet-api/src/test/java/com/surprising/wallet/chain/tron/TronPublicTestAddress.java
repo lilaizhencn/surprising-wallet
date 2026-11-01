@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import org.bitcoinj.crypto.ECKey;
 
 /** Public-key conversion for ABI/address fixtures; no private-key import or signing support. */

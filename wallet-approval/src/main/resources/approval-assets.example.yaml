@@ -1,0 +1,36 @@
+# Independent host profile; not editable through Wallet service clients.
+# Public examples only. Use the exact network label retained by Wallet custody addresses.
+approval:
+  assets:
+    entries:
+      - chain: ETH
+        network: sepolia
+        symbol: ETH
+        native-symbol: ETH
+        network-identity: eip155:11155111
+        token-identifier: null
+        decimals: 18
+        native-decimals: 18
+        network-fee-limit: "0.01"
+      # Add token profiles only after independently verifying their contract, precision and network.
+      # The placeholder intentionally fails validation until replaced.
+      - chain: ETH
+        network: sepolia
+        symbol: USDC
+        native-symbol: ETH
+        network-identity: eip155:11155111
+        token-identifier: REPLACE_WITH_VERIFIED_TOKEN_CONTRACT
+        decimals: 6
+        native-decimals: 18
+        network-fee-limit: "0.01"
+
+      # Classic sequence-number Aptos native transfers only; no orderless or sponsored calls.
+      - chain: APTOS
+        network: testnet
+        symbol: APT
+        native-symbol: APT
+        network-identity: aptos:2
+        token-identifier: null
+        decimals: 8
+        native-decimals: 8
+        network-fee-limit: "0.05"

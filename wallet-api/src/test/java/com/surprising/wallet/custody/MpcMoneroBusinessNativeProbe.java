@@ -1,6 +1,8 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.chain.monero.*;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
@@ -42,14 +44,14 @@ public final class MpcMoneroBusinessNativeProbe {
             var deposits=DepositTestSupport.context(jdbc,CustodyTestSupport.events(jdbc),json)) {
             var requests=new WalletMpcSignRequestRepository(jdbc);var addresses=new ChainAddressRepository(jdbc);var profiles=new ChainProfileRepository(jdbc);
             var original=new MpcSigningService(new CustodyTenantTableRepository(jdbc),new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,json),requests,
-                    new WalletMpcSignAttemptRepository(jdbc,json),new CustodyCryptoService(security),json,support.manager);
+                    new WalletMpcSignAttemptRepository(jdbc,json),new CustodyCryptoService(security),json,support.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
             var signing=spy(original);var orders=new WithdrawalOrderRepository(jdbc);var collections=new CollectionRecordRepository(jdbc);
             var transactions=new MoneroTransactionRepository(jdbc);var balances=new LedgerBalanceRepository(jdbc);
             var submissions=new MoneroSubmissionService(orders,collections,transactions,requests,new WalletMpcKeyEpochRepository(jdbc,json),signing,nodes,profiles,addresses,
                     new ChainScanHeightRepository(jdbc),new ChainAssetRepository(jdbc),new WithdrawalSettlementService(orders,balances),CustodyTestSupport.gasAccounting(jdbc),json,support.manager);
             var daemon=new MoneroDaemonClient(new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc),"mpc-test",2),json);
             var runtime=new WalletRuntimeConfigService(profiles,new WalletSystemConfigRepository(jdbc));
-            var service=new MoneroTransactionService(daemon,submissions,signing,nodes,profiles,addresses,collections,CustodyTestSupport.gas(jdbc),runtime);
+            var service=new MoneroTransactionService(daemon,submissions,signing,nodes,profiles,addresses,collections,CustodyTestSupport.gas(jdbc),runtime,com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
             var scanner=new MoneroDepositScanner(daemon,signing,submissions,nodes,profiles,new WalletMpcKeyEpochRepository(jdbc,json),addresses,
                     new ChainScanHeightRepository(jdbc),new ChainScanBlockRepository(jdbc),new DepositRecordRepository(jdbc),deposits.getBean(DepositService.class),support.manager,json,runtime);
             var source=addresses.listMpcAddresses("XMR").stream().filter(row->row.getTenantId().equals(tenant) && row.getAddress().equals(test.path("source").asText())).findFirst().orElseThrow();

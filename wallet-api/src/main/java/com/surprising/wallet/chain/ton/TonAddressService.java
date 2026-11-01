@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+
 import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.repository.ChainAddressRepository;

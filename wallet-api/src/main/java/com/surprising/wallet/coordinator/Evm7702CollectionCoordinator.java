@@ -56,7 +56,7 @@ public class Evm7702CollectionCoordinator {
 
     public static com.surprising.wallet.service.Evm7702SigningService.Operation operation(Batch batch) {
         return new com.surprising.wallet.service.Evm7702SigningService.Operation(batch.tenantId(),batch.id(),batch.chain(),
-                com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.COLLECTION);
+                com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.COLLECTION);
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -89,7 +89,7 @@ public class Evm7702CollectionCoordinator {
         var selected=mpc.outerPayload(operation(batch));
         var raw=selected.raw();
         var dynamic=(org.web3j.crypto.transaction.type.Transaction1559)raw.getTransaction();
-        var prepared=mpc.preparation(operation(batch),com.surprising.wallet.model.mpc.Evm7702CollectionPayload.class);
+        var prepared=mpc.preparation(operation(batch),com.surprising.wallet.common.signing.Evm7702CollectionPayload.class);
         var metadata=prepared.items().stream().map(item -> new PreparedItem(item.request().itemIndex().intValueExact(),
                 item.request().authority(),item.authorization()!=null,item.authorization()==null?null:item.authorization().nonce(),
                 item.request().operationNonce(),Instant.ofEpochSecond(item.request().deadline().longValueExact()),

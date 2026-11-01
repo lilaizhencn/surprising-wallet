@@ -1,5 +1,8 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.sdk.signing.tron.MpcTronTransactionCodec;
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import java.math.BigInteger;

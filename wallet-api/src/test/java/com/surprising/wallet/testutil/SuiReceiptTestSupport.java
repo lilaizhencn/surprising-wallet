@@ -1,5 +1,7 @@
 package com.surprising.wallet.testutil;
 
+import com.surprising.wallet.sdk.signing.sui.MpcSuiTransactionCodec;
+
 import com.google.protobuf.ByteString;
 import com.surprising.wallet.chain.sui.*;
 import java.math.BigInteger;

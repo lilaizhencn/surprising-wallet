@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import org.tron.trident.abi.datatypes.Address;
 import org.tron.trident.abi.datatypes.Function;
 import org.tron.trident.abi.datatypes.Type;

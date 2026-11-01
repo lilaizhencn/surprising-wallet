@@ -1,6 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.chain.monero.MoneroDaemonClient;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.repository.ChainScanBlockRepository;

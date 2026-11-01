@@ -1,8 +1,10 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.TronSigningPayload;
+
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.surprising.wallet.chain.tron.MpcTronTransactionCodec;
+import com.surprising.wallet.sdk.signing.tron.MpcTronTransactionCodec;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;
@@ -88,7 +90,7 @@ class TronSubmissionIntegrationTest {
                         .setToAddress(ApiWrapper.parseAddress(recipient)).setAmount(atomic.longValueExact()).build()));
         else {
             contract=new TokenConfigRepository(jdbc).findDefinition("TRON","nile",symbol).orElseThrow().getContractAddress();fee=30_000_000;
-            String data="a9059cbb"+"0".repeat(24)+com.surprising.wallet.chain.tron.TronAddressCodec.base58ToHex(recipient).substring(2)+Numeric.toHexStringNoPrefixZeroPadded(atomic,64);
+            String data="a9059cbb"+"0".repeat(24)+com.surprising.wallet.sdk.signing.tron.TronAddressCodec.base58ToHex(recipient).substring(2)+Numeric.toHexStringNoPrefixZeroPadded(atomic,64);
             action.setType(Chain.Transaction.Contract.ContractType.TriggerSmartContract).setParameter(Any.pack(Contract.TriggerSmartContract.newBuilder()
                     .setOwnerAddress(ApiWrapper.parseAddress(source.getAddress())).setContractAddress(ApiWrapper.parseAddress(contract))
                     .setData(ByteString.copyFrom(HexFormat.of().parseHex(data))).build()));

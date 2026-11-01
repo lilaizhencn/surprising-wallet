@@ -1,8 +1,10 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.sdk.signing.cardano.CardanoAssetUnit;
+
 import com.bloxbean.cardano.client.transaction.spec.TransactionInput;
 import com.surprising.wallet.chain.model.CardanoOwnedOutput;
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;

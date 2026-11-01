@@ -1,12 +1,18 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.common.signing.NearPayment;
+
+import com.surprising.wallet.common.signing.NearOperation;
+
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.model.mpc.NearSigningPayload;
-import com.surprising.wallet.model.mpc.NearRegistrationPayload;
+import com.surprising.wallet.common.signing.NearSigningPayload;
+import com.surprising.wallet.common.signing.NearRegistrationPayload;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
-import com.surprising.wallet.service.NearSubmissionService.Operation;
-import com.surprising.wallet.service.NearSubmissionService.Kind;
+
+import com.surprising.wallet.common.signing.NearOperation.Kind;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
@@ -20,6 +26,7 @@ import tools.jackson.databind.JsonNode;
 @Service
 @RequiredArgsConstructor
 public class NearTransactionService {
+    private final com.surprising.wallet.service.MpcAuthorizationService authorizations;
     private static final long TOKEN_GAS=30_000_000_000_000L;
     private final NearRpcClient rpc;
     private final NearSubmissionService submissions;
@@ -30,7 +37,7 @@ public class NearTransactionService {
     private final NearRegistrationService registrations;
     @NonNull private final WalletRuntimeConfigService runtime;
 
-    public String send(Operation op,ChainAddressRecord source) {
+    public String send(NearOperation op,ChainAddressRecord source) {
         runtime.requireTaskEnabled("NEAR",WalletRuntimeConfigService.TASK_WITHDRAW,"NEAR withdrawal");
         if(op.kind()!=Kind.WITHDRAWAL)throw new IllegalArgumentException("withdrawal operation required");
         return transfer(op,source);
@@ -39,17 +46,18 @@ public class NearTransactionService {
         runtime.requireTaskEnabled("NEAR",WalletRuntimeConfigService.TASK_COLLECTION,"NEAR collection");
         var previous=collections.findTxHash(tenant,"NEAR",reference);if(previous.isPresent())return previous.get();
         if(collections.claimSigningDurable(tenant,"NEAR",reference)!=1)throw new IllegalStateException("NEAR collection is claimed; recovery owns the intent");
-        var op=new Operation(tenant,reference,Kind.COLLECTION);
+        var op=new NearOperation(tenant,reference,Kind.COLLECTION);
         try{String hash=transfer(op,source);submissions.restoreSent(op,hash);return hash;}
         catch(RuntimeException error){submissions.unknown(op,error.getClass().getSimpleName());throw error;}
     }
-    private String transfer(Operation op,ChainAddressRecord source) {
+    private String transfer(NearOperation op,ChainAddressRecord source) {
         NearSigningPayload draft=null;
         if(submissions.intent(op).isEmpty()) {
             var payment=submissions.payment(op);var previousRegistration=registrations.intent(op);
             var original=previousRegistration.isPresent()?registrations.payload(op):null;
             var profile=(original==null?profiles.findAccountByChain("NEAR"):profiles.findByChainAndNetwork("NEAR",original.unsigned().network())).orElseThrow();
             var selectedRpc=rpc.forNetwork(profile.getNetwork());
+            if(op.kind()==Kind.COLLECTION)authorizations.planCollection(new com.surprising.wallet.common.approval.AutomaticParentPlan(op.tenantId(),source.getMpcKeyId(),"NEAR",profile.getNetwork(),payment.symbol(),op.reference(),payment.recipient(),payment.amount(),null));
             var status=selectedRpc.status();requireNetwork(profile.getNetwork(),status.path("chain_id").asText());
             var genesis=selectedRpc.genesisConfig();
             require(status.path("chain_id").asText().equals(genesis.path("chain_id").asText()),"NEAR genesis configuration belongs to another network");
@@ -71,7 +79,7 @@ public class NearTransactionService {
         var request=submissions.reserve(op,source,draft);submissions.sign(op,request.id());
         return broadcast(op,submissions.commit(op,request.id()),submissions.payload(request));
     }
-    public boolean recover(Operation op) {
+    public boolean recover(NearOperation op) {
         var request=submissions.intent(op);
         if(request.isEmpty()) {
             if(registrations.intent(op).isEmpty())return false;
@@ -80,8 +88,8 @@ public class NearTransactionService {
         submissions.sign(op,request.get().id());var signed=submissions.commit(op,request.get().id());
         String hash=broadcast(op,signed,submissions.payload(request.get()));submissions.restoreSent(op,hash);return true;
     }
-    public int releaseUnsigned(Operation op){return submissions.releaseUnsigned(op);}
-    private String broadcast(Operation op,MpcNearTransactionCodec.Signed signed,NearSigningPayload p) {
+    public int releaseUnsigned(NearOperation op){return submissions.releaseUnsigned(op);}
+    private String broadcast(NearOperation op,MpcNearTransactionCodec.Signed signed,NearSigningPayload p) {
         var selectedRpc=rpc.forNetwork(p.unsigned().network());requireIdentity(p,selectedRpc);boolean found;
         try{var known=selectedRpc.knownTransaction(signed.txHash(),p.unsigned().sender());found=signed.txHash().equals(known.path("transaction").path("hash").asText());require(found,"NEAR lookup returned another transaction");}
         catch(IllegalStateException error){if(!NearRpcClient.isUnknownTransactionError(error.getMessage()))throw error;found=false;}
@@ -92,9 +100,9 @@ public class NearTransactionService {
         }
         submissions.observed(op,signed.txHash());return signed.txHash();
     }
-    public boolean confirmWithdrawal(UUID tenant,String reference){return confirm(new Operation(tenant,reference,Kind.WITHDRAWAL),orders.findTxHash("NEAR",reference,tenant).orElseThrow());}
-    public boolean confirmCollection(UUID tenant,String reference){return confirm(new Operation(tenant,reference,Kind.COLLECTION),collections.findTxHash(tenant,"NEAR",reference).orElseThrow());}
-    private boolean confirm(Operation op,String hash) {
+    public boolean confirmWithdrawal(UUID tenant,String reference){return confirm(new NearOperation(tenant,reference,Kind.WITHDRAWAL),orders.findTxHash("NEAR",reference,tenant).orElseThrow());}
+    public boolean confirmCollection(UUID tenant,String reference){return confirm(new NearOperation(tenant,reference,Kind.COLLECTION),collections.findTxHash(tenant,"NEAR",reference).orElseThrow());}
+    private boolean confirm(NearOperation op,String hash) {
         var request=submissions.intent(op).orElseThrow();var p=submissions.payload(request);var selectedRpc=rpc.forNetwork(p.unsigned().network());requireIdentity(p,selectedRpc);
         var proof=submissions.proof(op).orElseGet(()->{
             var signed=submissions.commit(op,request.id());var execution=selectedRpc.finalTransaction(hash,p.unsigned().sender());
@@ -108,7 +116,7 @@ public class NearTransactionService {
         var status=selectedRpc.status();requireNetwork(p.unsigned().network(),status.path("chain_id").asText());
         require(p.unsigned().genesisHash().equals(status.path("genesis_hash").asText()),"NEAR RPC genesis differs from fixed intent");
     }
-    private void ensureRegistration(Operation op,ChainAddressRecord source,NearSubmissionService.Payment payment,
+    private void ensureRegistration(NearOperation op,ChainAddressRecord source,NearPayment payment,
             String contract,int decimals,String network,JsonNode status,long validity,NearRpcClient selectedRpc) {
         NearRegistrationPayload draft=null;
         if(registrations.intent(op).isEmpty()) {

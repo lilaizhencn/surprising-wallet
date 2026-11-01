@@ -85,7 +85,7 @@ class MoneroAddressPublicationIntegrationTest {
     @Test void accountObservationRejectsAnotherTenantRootNetworkOrPublicAddressBeforeTransport() {
         var address=service.create(principal(TENANT),command("alice"),"API","127.0.0.1");
         var owner=new ChainAddressRepository(jdbc).listMpcAddresses("XMR").getFirst();
-        var point=new com.surprising.wallet.chain.model.ChainScanPoint(100,100,"22".repeat(32));
+        var point=new com.surprising.wallet.common.chain.ChainScanPoint(100,100,"22".repeat(32));
         var anchor=new MoneroScanAnchorService.Anchor("regtest","11".repeat(32),point,"00".repeat(32));
         assertThrows(IllegalArgumentException.class,()->mpc.signing.observeMonero(UUID.randomUUID(),owner.getMpcKeyId(),address.address(),90,anchor,null,mpc.nodes));
         UUID root=jdbc.queryForObject("select id from wallet_mpc_key where key_group='XMR_ROOT'",UUID.class);

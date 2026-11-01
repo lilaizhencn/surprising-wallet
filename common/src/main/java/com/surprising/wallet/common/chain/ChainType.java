@@ -58,6 +58,11 @@ public enum ChainType {
         return "utxo".equals(model);
     }
 
+    /** Bitcoin consensus transaction families; Cardano has its own CBOR and signing rules. */
+    public boolean isBitcoinLike() {
+        return this == BTC || this == LTC || this == DOGE || this == BCH;
+    }
+
     public static int derivationCoinType(String chain, int configuredCoinType) {
         try {
             return ChainType.valueOf(chain.toUpperCase(Locale.ROOT)).isEvm()

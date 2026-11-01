@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.common.signing.MpcClient;
 import com.surprising.wallet.model.mpc.*;
@@ -98,7 +100,7 @@ public final class MpcRefreshNativeProbe {
         assertThrows(IllegalStateException.class,() -> new TransactionTemplate(mpc.manager).execute(status -> signing.reserveSignature(command(slot,key,2),mpc.nodes.parties().subList(0,2))));
         control("restart",List.of());
         signing = new MpcSigningService(new CustodyTenantTableRepository(jdbc),keys,epochs,mpc.requests,
-                new WalletMpcSignAttemptRepository(jdbc,json),mpc.crypto,json,mpc.manager);
+                new WalletMpcSignAttemptRepository(jdbc,json),mpc.crypto,json,mpc.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,mpc.manager));
         jdbc.update("update custody_tenant set status='SUSPENDED' where id=?",mpc.tenant);
         MpcKey active;
         try { active = signing.advanceRefresh(mpc.tenant,key.id(),2,mpc.nodes.clients()); }

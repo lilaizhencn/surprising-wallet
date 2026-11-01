@@ -1,5 +1,9 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.signing.MoneroSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.model.MoneroTransactionRecord;
 import com.surprising.wallet.chain.monero.MoneroSignedPayment;
 import com.surprising.wallet.chain.signing.MpcNodes;

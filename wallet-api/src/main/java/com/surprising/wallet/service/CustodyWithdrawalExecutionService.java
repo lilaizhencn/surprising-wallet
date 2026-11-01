@@ -91,11 +91,8 @@ public class CustodyWithdrawalExecutionService {
             throw new IllegalArgumentException("insufficient available balance");
         }
 
-        boolean approvalRequired = runtimeConfig.isWithdrawalAdminApprovalRequired();
-        String status = approvalRequired ? "PENDING_REVIEW" : "FROZEN";
-        String statusMessage = approvalRequired
-                ? "waiting for platform withdrawal approval before broadcast"
-                : null;
+        String status = "PENDING_REVIEW";
+        String statusMessage = "waiting for independent authorization";
         withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
         return new ExecutionResult(orderId, orderNo, status, amount, feeReserve, toAddress);
     }

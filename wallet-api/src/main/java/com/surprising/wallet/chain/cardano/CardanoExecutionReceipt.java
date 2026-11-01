@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
+
 import co.nstant.in.cbor.CborDecoder;
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
@@ -17,7 +19,7 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import utxorpc.v1beta.query.Query;
 
 /** Original Conway header/body commitments. Canonical chain membership is supplied by native FollowTip. */

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+
 import java.math.BigInteger;
 import java.util.*;
 import org.ton.ton4j.address.Address;

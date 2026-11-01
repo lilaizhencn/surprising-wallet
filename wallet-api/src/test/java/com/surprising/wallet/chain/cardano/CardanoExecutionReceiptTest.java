@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
+
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.UnsignedInteger;
 import com.google.protobuf.ByteString;
@@ -76,7 +78,7 @@ class CardanoExecutionReceiptTest {
         var point = CardanoRpcClient.point(CardanoRpcClient.reference(source.getCardano()));
         assertThrows(IllegalArgumentException.class, () -> CardanoExecutionReceipt.expiredUnspent(source, unsigned(vector),
                 selected(vector), point, utxorpc.v1beta.query.Query.ReadUtxosResponse.getDefaultInstance(), 3));
-        var changed = new com.surprising.wallet.chain.model.ChainScanPoint(point.height() + 1, point.slot() + 1, point.hash());
+        var changed = new com.surprising.wallet.common.chain.ChainScanPoint(point.height() + 1, point.slot() + 1, point.hash());
         assertThrows(IllegalArgumentException.class, () -> CardanoExecutionReceipt.expiredUnspent(source, unsigned(vector),
                 selected(vector), changed, utxorpc.v1beta.query.Query.ReadUtxosResponse.getDefaultInstance(), 3));
     }
@@ -92,7 +94,7 @@ class CardanoExecutionReceiptTest {
 
     @Test void actualRejectedExpiredPaymentProvesKnownZeroFeeWithUnspentOriginalInputs() throws Exception {
         var vector = expired();
-        var point = json.treeToValue(vector.path("searched"), com.surprising.wallet.chain.model.ChainScanPoint.class);
+        var point = json.treeToValue(vector.path("searched"), com.surprising.wallet.common.chain.ChainScanPoint.class);
         var outcome = CardanoExecutionReceipt.expiredUnspent(block(vector), unsigned(vector), selected(vector), point, unspent(vector), 3);
         assertEquals(BigInteger.ZERO, outcome.feeLovelace());
         assertTrue(outcome.slot() >= MpcCardanoTransactionCodec.expiry(unsigned(vector)));
@@ -100,7 +102,7 @@ class CardanoExecutionReceiptTest {
 
     @Test void expiryCannotReleaseFundsWhenAnOriginalInputIsSpentMissingOrChanged() throws Exception {
         var vector = expired(); var inputs = unspent(vector);
-        var point = json.treeToValue(vector.path("searched"), com.surprising.wallet.chain.model.ChainScanPoint.class);
+        var point = json.treeToValue(vector.path("searched"), com.surprising.wallet.common.chain.ChainScanPoint.class);
         assertThrows(IllegalArgumentException.class, () -> CardanoExecutionReceipt.expiredUnspent(block(vector), unsigned(vector), selected(vector),
                 point, inputs.toBuilder().clearItems().build(), 3));
         var item = inputs.getItems(0);
@@ -112,7 +114,7 @@ class CardanoExecutionReceiptTest {
 
     @Test void expiryRequiresFreshLedgerContextAndConfiguredConfirmationDepth() throws Exception {
         var vector = expired(); var inputs = unspent(vector);
-        var point = json.treeToValue(vector.path("searched"), com.surprising.wallet.chain.model.ChainScanPoint.class);
+        var point = json.treeToValue(vector.path("searched"), com.surprising.wallet.common.chain.ChainScanPoint.class);
         var stale = inputs.toBuilder().setLedgerTip(inputs.getLedgerTip().toBuilder().setHeight(point.height() - 1)).build();
         assertThrows(IllegalArgumentException.class, () -> CardanoExecutionReceipt.expiredUnspent(block(vector), unsigned(vector), selected(vector), point, stale, 3));
         assertThrows(IllegalArgumentException.class, () -> CardanoExecutionReceipt.expiredUnspent(block(vector), unsigned(vector), selected(vector), point, inputs, Integer.MAX_VALUE));

@@ -1,5 +1,9 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.sdk.signing.sui.MpcSuiTransactionCodec;
+import com.surprising.wallet.common.signing.SuiSigningPayload;
+import com.surprising.wallet.sdk.signing.sui.SuiCoin;
+
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.chain.sui.*;
 import com.surprising.wallet.common.chain.*;
@@ -69,7 +73,7 @@ class SuiSubmissionIntegrationTest {
         assertEquals(1,orders.claimSigningDurable(TENANT,"SUI",reference,source.getAddress()));
     }
     private SuiSigningPayload draft(Operation op,String symbol){
-        int decimals=9;String type=SuiRpcClient.SUI_COIN_TYPE;List<SuiRpcClient.SuiCoin> inputs=List.of();
+        int decimals=9;String type=SuiRpcClient.SUI_COIN_TYPE;List<SuiCoin> inputs=List.of();
         if(!symbol.equals("SUI")){
             var token=new TokenConfigRepository(jdbc).findDefinition("SUI","testnet",symbol).orElseThrow();
             type=token.getContractAddress();decimals=token.getDecimals();inputs=List.of(coin("cd"));
@@ -77,7 +81,7 @@ class SuiSubmissionIntegrationTest {
         return new SuiSigningPayload(symbol,BigDecimal.ONE,op.kind()==Kind.COLLECTION?BigDecimal.ZERO:new BigDecimal("0.1"),decimals,
                 new MpcSuiTransactionCodec.Unsigned("testnet",GENESIS,source.getAddress(),recipient,BigDecimal.ONE.movePointRight(decimals).longValueExact(),type,inputs,List.of(coin("ef")),1000,10_000_000,service.publicKey(source)));
     }
-    private static SuiRpcClient.SuiCoin coin(String id){return new SuiRpcClient.SuiCoin("0x"+id.repeat(32),"7",Base58.encode(new byte[32]),new BigDecimal("10000000000"));}
+    private static SuiCoin coin(String id){return new SuiCoin("0x"+id.repeat(32),"7",Base58.encode(new byte[32]),new BigDecimal("10000000000"));}
     private MpcSuiTransactionCodec.Signed prepared(Operation op,String symbol){var request=service.reserve(op,source,draft(op,symbol));service.sign(op,request.id());return service.commit(op,request.id());}
     private JsonNode receipt(Operation op,MpcSuiTransactionCodec.Signed signed,boolean paid,long fee){return SuiReceiptTestSupport.payment(service.payload(service.intent(op).orElseThrow()).unsigned(),signed,paid,fee);}
     @Test void objectReferencesAndIntentCommitTogetherBeforeMpcAndSelectedWireBeforeNetwork(){

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.monero;
 
+import com.surprising.wallet.sdk.signing.monero.MoneroDigestAuth;
+
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import java.io.IOException;

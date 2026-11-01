@@ -1,0 +1,25 @@
+# Independent approval-host configuration, never caller-supplied RPC URLs or Wallet credentials.
+# This profile provides read-only evidence. UTXO fixed-batch grants are undergoing verification.
+approval:
+  utxo-rpc:
+    timeout: PT10S
+    profiles:
+      - chain: BTC
+        network: mainnet
+        rpc-chain-name: main
+        # Must match independently checked genesis and asset network-identity utxo:<genesis>.
+        genesis-hash: REPLACE_WITH_INDEPENDENTLY_VERIFIED_GENESIS_HASH
+        endpoint: https://btc-readonly-node.example/
+        # One username:password line in an owner-only 0600 file; read-only RPC account.
+        basic-auth-file: /secure/btc-readonly.credentials
+        minimum-confirmations: 6
+
+# Optional BTC-only bounded RBF; omitted/zero means deny new payload versions.
+# Add to the chosen independently installed BTC profile, never a Wallet request:
+# maximum-rbf-versions: 5       # total root + replacements, maximum 5
+# maximum-rbf-fee-rate: 1000    # sat/vB hard policy maximum
+# maximum-rbf-fee-atomic: 100000
+# When enabled at original admission, reserve the full reviewed/asset fee allowance
+# ONCE. Every replacement must keep the same inputs/ownership and fit that original
+# reservation; reviewed withdrawal outputs cannot change. A collection output can
+# decrease only by the exact added fee, still to the same independently pinned treasury.

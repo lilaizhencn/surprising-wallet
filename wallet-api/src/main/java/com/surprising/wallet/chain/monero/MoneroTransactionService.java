@@ -1,6 +1,8 @@
 package com.surprising.wallet.chain.monero;
 
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.signing.MoneroSigningPayload;
+
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.model.mpc.*;
@@ -32,6 +34,7 @@ public class MoneroTransactionService {
     private final CollectionRecordRepository collections;
     private final CustodyGasService gas;
     private final WalletRuntimeConfigService runtime;
+    private final MpcAuthorizationService authorizations;
 
     public String send(Operation op,ChainAddressRecord source) {
         require(op.kind()==Kind.WITHDRAWAL,"Monero withdrawal operation required");
@@ -84,7 +87,8 @@ public class MoneroTransactionService {
             recoverOriginal(funding);confirm(funding);
             if(!submissions.terminal(funding))throw new MpcPendingException(existing.get().id(),"FUNDING_CONFIRMING");
         }
-        var observation=observe(source,payload,null).result().monero();
+        var snapshot=observe(source,payload,null);var observation=snapshot.result().monero();
+        if(business.kind()==Kind.COLLECTION)authorizations.planCollection(new com.surprising.wallet.common.approval.AutomaticParentPlan(business.tenantId(),source.getMpcKeyId(),"XMR",payload.network(),"XMR",business.reference(),payload.recipient(),payload.amount(),snapshot.request()));
         var balance=new BigInteger(observation.path("balanceAtomic").asText());
         var unlocked=new BigInteger(observation.path("unlockedBalanceAtomic").asText());
         var required=payload.amountAtomic().add(payload.maximumFeeAtomic()).add(BigInteger.ONE);
@@ -99,8 +103,9 @@ public class MoneroTransactionService {
         var amount=required.subtract(balance);
         var draft=new MoneroSigningPayload(payload.network(),payload.genesisHash(),gasSource.getAddress(),source.getAddress(),new BigDecimal(amount).movePointLeft(12),
                 BigDecimal.ZERO,payload.maximumFeeAtomic(),payload.requiredConfirmations());
-        var available=new BigInteger(observe(gasSource,draft,null).result().monero().path("unlockedBalanceAtomic").asText());
+        var gasSnapshot=observe(gasSource,draft,null);var available=new BigInteger(gasSnapshot.result().monero().path("unlockedBalanceAtomic").asText());
         require(available.compareTo(amount.add(draft.maximumFeeAtomic()).add(BigInteger.ONE))>=0,"Monero tenant Gas wallet cannot cover the original funding and fee");
+        draft=new MoneroSigningPayload(draft.network(),draft.genesisHash(),draft.sender(),draft.recipient(),draft.amount(),draft.customerFee(),draft.maximumFeeAtomic(),draft.requiredConfirmations(),List.of(snapshot.request(),gasSnapshot.request()));
         var request=submissions.reserve(funding,gasSource,draft);recoverOriginal(funding);confirm(funding);
         throw new MpcPendingException(request.id(),"FUNDING_UNLOCK_PENDING");
     }

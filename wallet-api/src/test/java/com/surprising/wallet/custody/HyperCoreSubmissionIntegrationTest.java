@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.sdk.signing.hypercore.MpcHyperCoreActionCodec;
+
 import com.surprising.wallet.chain.hypercore.*;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;

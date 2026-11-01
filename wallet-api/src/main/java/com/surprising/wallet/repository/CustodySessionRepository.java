@@ -28,6 +28,11 @@ public class CustodySessionRepository {
                 """, tenantId);
     }
 
+    public int revokeByUser(UUID tenantId, UUID userId) {
+        return jdbc.update("update custody_session set revoked_at=now() where tenant_id=? and tenant_user_id=? and revoked_at is null",
+                tenantId, userId);
+    }
+
     /** 插入登录会话。 */
     public void insert(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
                        String sourceIp, String userAgent, Instant expiresAt) {

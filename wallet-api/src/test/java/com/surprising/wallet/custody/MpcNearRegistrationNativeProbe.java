@@ -1,12 +1,18 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.NearOperation.Kind;
+
+import com.surprising.wallet.common.signing.NearOperation;
+
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+
 import com.surprising.wallet.chain.near.*;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
-import com.surprising.wallet.service.NearSubmissionService.*;
+
 import com.surprising.wallet.testutil.*;
 import java.math.*;
 import java.nio.file.*;
@@ -42,10 +48,10 @@ public final class MpcNearRegistrationNativeProbe {
     private NearSubmissionService payments;
     private NearRegistrationService registrations;
     private org.springframework.context.annotation.AnnotationConfigApplicationContext context;
-    private Operation current;
+    private NearOperation current;
     private boolean loseReply,registrationRace,staleQuote;
     private final Map<String,String> broadcasts=new LinkedHashMap<>();
-    private final List<Operation> operations=new ArrayList<>();
+    private final List<NearOperation> operations=new ArrayList<>();
     @Configuration(proxyBeanMethods=false) @EnableTransactionManagement static class Transactions { }
 
     public static void main(String[] args)throws Exception {
@@ -109,7 +115,7 @@ public final class MpcNearRegistrationNativeProbe {
                 assertEquals(originalRaw,new NearTransactionRepository(jdbc).find(MpcNearTransactionCodec.transactionHash(registrations.payload(lost).unsigned())).orElseThrow().getRawPayload());
                 assertEquals(BigInteger.valueOf(1_000_000),tokens("USDT",payments.payment(lost).recipient()));
 
-                var collection=new Operation(mpc.tenant,"near-storage-collection-"+UUID.randomUUID(),Kind.COLLECTION);operations.add(collection);current=collection;
+                var collection=new NearOperation(mpc.tenant,"near-storage-collection-"+UUID.randomUUID(),Kind.COLLECTION);operations.add(collection);current=collection;
                 assertEquals(1,new CollectionRecordRepository(jdbc).create(mpc.tenant,sourceCustody,collection.reference(),"NEAR","USDT",source.getAddress(),gas.getAddress(),BigDecimal.ONE,BigDecimal.ZERO,null));
                 assertNotNull(service.collect(mpc.tenant,collection.reference(),source));assertTrue(service.confirmCollection(mpc.tenant,collection.reference()));
                 assertEquals(gas.getAddress(),registrations.payload(collection).unsigned().beneficiary());
@@ -149,7 +155,7 @@ public final class MpcNearRegistrationNativeProbe {
         context.registerBean(CustodyGasUsageRepository.class,()->new CustodyGasUsageRepository(jdbc));context.registerBean(CustodyGasAccountRepository.class,()->new CustodyGasAccountRepository(jdbc));context.registerBean(CustodyAddressRepository.class,()->new CustodyAddressRepository(jdbc));
         context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
         context.registerBean(CustodyGasAccountingService.class,()->CustodyTestSupport.gasAccounting(jdbc));context.registerBean(ObjectMapper.class,()->json);
-        context.registerBean(MpcSigningService.class,()->new MpcSigningService(new CustodyTenantTableRepository(jdbc),new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,json),mpc.requests,new WalletMpcSignAttemptRepository(jdbc,json),mpc.crypto,json,mpc.manager));
+        context.registerBean(MpcSigningService.class,()->new MpcSigningService(new CustodyTenantTableRepository(jdbc),new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,json),mpc.requests,new WalletMpcSignAttemptRepository(jdbc,json),mpc.crypto,json,mpc.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,mpc.manager)));
         context.registerBean(MpcNodes.class,()->quorum);context.registerBean(NearRpcClient.class,()->rpc);context.registerBean(WalletRuntimeConfigService.class,()->new WalletRuntimeConfigService(new ChainProfileRepository(jdbc),new WalletSystemConfigRepository(jdbc)));
         context.registerBean(WithdrawalSettlementService.class);context.registerBean(NearSubmissionService.class);context.registerBean(NearRegistrationService.class);context.registerBean(NearTransactionService.class);context.refresh();
         payments=context.getBean(NearSubmissionService.class);registrations=context.getBean(NearRegistrationService.class);service=context.getBean(NearTransactionService.class);
@@ -177,8 +183,8 @@ public final class MpcNearRegistrationNativeProbe {
             if(registration && loseReply) {loseReply=false;throw new IllegalStateException("deliberately lost actual accepted registration response");}return answer;
         }).when(rpc).sendTransaction(anyString());
     }
-    private Operation withdrawal(String symbol,String recipient) {
-        var op=new Operation(mpc.tenant,"near-storage-withdrawal-"+UUID.randomUUID(),Kind.WITHDRAWAL);operations.add(op);
+    private NearOperation withdrawal(String symbol,String recipient) {
+        var op=new NearOperation(mpc.tenant,"near-storage-withdrawal-"+UUID.randomUUID(),Kind.WITHDRAWAL);operations.add(op);
         var orders=new WithdrawalOrderRepository(jdbc);new TransactionTemplate(mpc.manager).executeWithoutResult(status->{
             orders.createForTenant(mpc.tenant,op.reference(),source.getUserId(),"NEAR",symbol,source.getAddress(),source.getAccountId(),recipient,BigDecimal.ONE,BigDecimal.ZERO);
             assertTrue(new LedgerBalanceRepository(jdbc).freeze("NEAR",symbol,source.getAccountId(),BigDecimal.ONE,mpc.tenant));orders.updateStatus(mpc.tenant,"NEAR",op.reference(),"FROZEN",source.getAddress(),null,null);
@@ -193,7 +199,7 @@ public final class MpcNearRegistrationNativeProbe {
     private UUID custodyAddress(ChainAddressRecord address,String subject,int coordinate) {
         UUID id=UUID.randomUUID();jdbc.update("insert into custody_address(id,tenant_id,chain_address_id,chain,network,address,subject,source,derivation_subject,derivation_child) values (?,?,?,'NEAR','localnet',?,?,'API',?,0)",id,mpc.tenant,address.getId(),address.getAddress(),subject,coordinate);return id;
     }
-    private NearStorageReceipt.Outcome registrationOutcome(Operation op) {
+    private NearStorageReceipt.Outcome registrationOutcome(NearOperation op) {
         var p=registrations.payload(op);var tx=new NearTransactionRepository(jdbc).find(MpcNearTransactionCodec.transactionHash(p.unsigned())).orElseThrow();
         return NearStorageReceipt.verify(registrations.proof(op).orElseThrow(),p.unsigned(),json.readValue(tx.getRawPayload(),MpcNearTransactionCodec.Signed.class));
     }

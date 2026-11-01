@@ -38,6 +38,16 @@ public class EvmWithdrawalBatchRepository {
         return jdbc.queryForList("select status from evm_withdrawal_batch where tenant_id = ? and id = ?",
                 String.class, tenantId, batchId);
     }
+    public Optional<BatchRow> lock(UUID tenant,UUID id) {
+        return jdbc.query("select "+COLUMNS+" from evm_withdrawal_batch where tenant_id=? and id=? for update",EvmWithdrawalBatchRepository::mapBatch,tenant,id).stream().findFirst();
+    }
+    /** Only after the independent no-grant terminal check and every native-slot check under these locks. */
+    public int cancelUnsigned(UUID tenant,UUID batch) {
+        return jdbc.update("""
+                update evm_withdrawal_batch set status='FAILED',error_code='APPROVAL_TERMINAL',error_message='withdrawal could not be processed',updated_at=now()
+                where tenant_id=? and id=? and canonical_tx_hash is null and status in ('LOCKED','SIGNING','FAILED')
+                """,tenant,batch);
+    }
 
     public boolean existsPending(String chain,String network) {
         return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from evm_withdrawal_batch where chain=? and network=? and status in ('LOCKED','SIGNING','BROADCAST_UNKNOWN','SUBMITTED','CONFIRMING'))",Boolean.class,chain,network));

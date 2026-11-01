@@ -1,20 +1,17 @@
 package com.surprising.wallet.chain;
 
-import com.surprising.wallet.chain.cardano.MpcCardanoTransactionCodec;
-import com.surprising.wallet.chain.near.MpcNearTransactionCodec;
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec;
-import com.surprising.wallet.chain.sui.MpcSuiTransactionCodec;
-import com.surprising.wallet.chain.ton.MpcTonTransactionCodec;
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+import com.surprising.wallet.sdk.signing.sui.MpcSuiTransactionCodec;
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
-import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
 import com.surprising.wallet.sdk.signing.MoneroPublicAddressCodec;
 import java.util.Locale;
 import java.util.Objects;
-import org.bitcoinj.base.LegacyAddress;
-import org.bitcoinj.base.SegwitAddress;
 import org.bitcoinj.crypto.ECKey;
 import org.p2p.solanaj.core.PublicKey;
 import org.tron.TronWalletApi;
@@ -42,12 +39,7 @@ public final class MpcPublicAddressCodec {
                 case TRON -> TronWalletApi.getAddress(key.getPubKey());
                 case XRP -> org.xrpl.xrpl4j.crypto.keys.PublicKey.fromBase16EncodedPublicKey(
                         java.util.HexFormat.of().formatHex(publicKey).toUpperCase(Locale.ROOT)).deriveAddress().value();
-                case BTC, LTC -> SegwitAddress.fromKey(BitcoinLikeNetwork.parse(profile.getNetwork()).parameters(chain.name()), key).toString();
-                case DOGE -> LegacyAddress.fromKey(BitcoinLikeNetwork.parse(profile.getNetwork()).parameters(chain.name()), key).toString();
-                case BCH -> {
-                    var params = (BitcoinCashNetworkParameters) BitcoinLikeNetwork.parse(profile.getNetwork()).parameters("BCH");
-                    yield BitcoinCashAddressCodec.fromLegacy(LegacyAddress.fromKey(params, key), params.cashPrefix());
-                }
+                case BTC, LTC, DOGE, BCH -> com.surprising.wallet.sdk.signing.MpcUtxoTransactionCodec.address(chain.name(),BitcoinLikeNetwork.parse(profile.getNetwork()),java.util.HexFormat.of().formatHex(publicKey));
                 default -> throw new IllegalArgumentException("unsupported secp256k1 address");
             };
         }
@@ -57,7 +49,7 @@ public final class MpcPublicAddressCodec {
         return switch (chain) {
             case SOLANA -> new PublicKey(publicKey).toBase58();
             case SUI -> MpcSuiTransactionCodec.address(publicKey);
-            case APTOS -> com.surprising.wallet.chain.aptos.MpcAptosTransactionCodec.address(publicKey);
+            case APTOS -> com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec.address(publicKey);
             case ADA -> MpcCardanoTransactionCodec.address(publicKey, mainnet);
             case NEAR -> MpcNearTransactionCodec.address(publicKey);
             case DOT -> {

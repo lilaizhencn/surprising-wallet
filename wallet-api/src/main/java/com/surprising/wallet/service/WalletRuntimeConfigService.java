@@ -33,7 +33,6 @@ public class WalletRuntimeConfigService {
     public static final String TASK_TRANSFER = "transfer";
     public static final String GLOBAL_WALLET_ENABLED = "global.all.enabled";
     /** 提现管理员审批开关键 */
-    public static final String WITHDRAWAL_ADMIN_APPROVAL_REQUIRED = "withdrawal.admin.approval.required";
 
     /**
      * 按链平均出块速度设置的扫描间隔。调度器只负责高频检查，到期后才访问链 RPC。
@@ -152,11 +151,6 @@ public class WalletRuntimeConfigService {
                 chain.trim().toUpperCase(Locale.ROOT), DEFAULT_SCAN_INTERVAL_MILLIS);
     }
 
-    /** @return 提现是否需要管理员审批 */
-    public boolean isWithdrawalAdminApprovalRequired() {
-        return enabledSetting(WITHDRAWAL_ADMIN_APPROVAL_REQUIRED, false);
-    }
-
     /**
      * 要求指定链的某任务已启用，否则抛出 {@link IllegalStateException}。
      *
@@ -265,8 +259,4 @@ public class WalletRuntimeConfigService {
         }
     }
 
-    private boolean enabledSetting(String key, boolean defaultValue) {
-        return settings.find(key).map(WalletSystemConfigRepository.Setting::booleanValue)
-                .orElse(defaultValue);
-    }
 }

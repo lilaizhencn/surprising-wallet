@@ -1,5 +1,10 @@
 package com.surprising.wallet.chain.hypercore;
 
+import com.surprising.wallet.sdk.signing.hypercore.MpcHyperCoreActionCodec;
+import com.surprising.wallet.common.signing.HyperCoreSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;

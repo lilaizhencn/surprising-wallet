@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.sdk.signing.aptos.AptosHex;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;

@@ -141,8 +141,8 @@ class EvmUnknownAttemptRecoveryIntegrationTest {
         var profile = com.surprising.wallet.common.chain.AccountChainProfile.builder()
                 .chain("ETH").network("sepolia").chainId(11155111L).build();
         var operation = new com.surprising.wallet.service.Evm7702SigningService.Operation(firstTenant, id, "ETH",
-                collection ? com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.COLLECTION
-                        : com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL);
+                collection ? com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.COLLECTION
+                        : com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.WITHDRAWAL);
         String copiedRaw = "0x0102";
         org.mockito.Mockito.when(rpc.http(profile)).thenReturn(http);
         org.mockito.Mockito.when(rpc.isTransactionKnown(org.mockito.ArgumentMatchers.any(),

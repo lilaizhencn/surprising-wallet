@@ -1,5 +1,7 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.model.custody.GasUsageRecord;
+
 import com.surprising.wallet.model.custody.GasPricingMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
@@ -223,10 +225,10 @@ public class CustodyGasService {
         return usages.listForAccount(principal.tenantId(), gasAccountId, limit, offset);
     }
 
-    void reserveWithdrawal(UUID tenantId, UUID custodyWithdrawalId,
+    GasUsageRecord reserveWithdrawal(UUID tenantId, UUID custodyWithdrawalId,
                            String chain, String assetSymbol) {
         BigDecimal reservation = reservationAmount(chain, assetSymbol);
-        accounting.reserve(tenantId, "WITHDRAWAL", custodyWithdrawalId, reservation);
+        return accounting.reserve(tenantId, "WITHDRAWAL", custodyWithdrawalId, reservation);
     }
     BigDecimal reservationAmount(String chain, String assetSymbol) {
         GasPricingMetadata metadata =

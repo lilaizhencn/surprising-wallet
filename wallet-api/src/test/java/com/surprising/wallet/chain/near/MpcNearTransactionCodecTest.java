@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+
 import java.math.BigInteger;
 import java.util.*;
 import org.junit.jupiter.api.Test;

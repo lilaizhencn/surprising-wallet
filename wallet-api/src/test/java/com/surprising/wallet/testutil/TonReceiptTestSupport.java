@@ -1,5 +1,7 @@
 package com.surprising.wallet.testutil;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+
 import com.surprising.wallet.chain.ton.*;
 import java.math.BigInteger;
 import java.util.*;

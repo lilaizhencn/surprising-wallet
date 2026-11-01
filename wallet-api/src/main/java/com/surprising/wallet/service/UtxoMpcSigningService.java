@@ -3,6 +3,7 @@ package com.surprising.wallet.service;
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.queue.PgmqClient;
 import com.surprising.wallet.common.queue.QueueTenant;
@@ -15,9 +16,9 @@ import com.surprising.wallet.common.signing.UtxoSigningTask;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.model.mpc.MpcKey;
 import com.surprising.wallet.model.mpc.MpcPendingException;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
-import com.surprising.wallet.model.mpc.UtxoSigningPayload;
+import com.surprising.wallet.common.signing.UtxoSigningPayload;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainSigningTransactionRepository;
@@ -30,6 +31,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -89,9 +93,10 @@ public class UtxoMpcSigningService {
             require(locked.address().equals(input.address()) && locked.amount().compareTo(input.amount()) == 0,
                     "MPC UTXO input differs from the locked chain observation");
         }
-        var keys = inputKeys(request);
+        var owned = ownedKeys(request);
+        var keys = owned.inputs();
         var unsigned = prepare(request, keys);
-        var payload = new UtxoSigningPayload(task, unsigned, keys.stream().map(MpcKey::id).toList());
+        var payload = new UtxoSigningPayload(task, unsigned, keys.stream().map(MpcKey::id).toList(),owned.change().id());
         String payloadHex = HEX.formatHex(json.writeValueAsBytes(payload));
         for (int i = 0; i < keys.size(); i++) signing.reserveSignature(command(payload, payloadHex, keys.get(i), i), nodes.online());
     }
@@ -102,7 +107,7 @@ public class UtxoMpcSigningService {
         var outputs = new ArrayList<>(request.payments().stream().map(UtxoSigningRequest.Payment::address).toList());
         if (includeChange) outputs.add(request.changeAddress());
         long size = MpcUtxoTransactionCodec.estimateVBytes(request.asset().chain(), request.asset().network(),
-                publicInputs(request, inputKeys(request)), outputs);
+                publicInputs(request, ownedKeys(request).inputs()), outputs);
         return MpcUtxoTransactionCodec.feeAtomic(request.asset().chain(), size, rate);
     }
 
@@ -161,12 +166,16 @@ public class UtxoMpcSigningService {
         require(!slots.isEmpty(), "UTXO input slots missing");
         var payload = payload(slots.getFirst());
         require(payload.task().equals(task) && payload.keyIds().size() == slots.size(), "UTXO payload owner differs");
-        var keys = inputKeys(request);
+        var owned = ownedKeys(request);
+        var keys = owned.inputs();
         var unsigned = prepare(request, keys);
-        require(payload.unsigned().equals(unsigned), "UTXO payload differs from its canonical batch");
+        require(payload.unsigned().equals(unsigned) && payload.changeKeyId().equals(owned.change().id()), "UTXO payload differs from its canonical batch or joint change key");
         for (int i = 0; i < slots.size(); i++) {
+            int originalEpoch=slots.get(i).command().keyEpoch();
+            require(originalEpoch<=keys.get(i).activeEpoch() && (originalEpoch==keys.get(i).activeEpoch() || slots.get(i).state()==MpcSignRequest.State.COMPLETED),
+                    "only a completed original UTXO signature may be read after its key epoch refresh");
             require(payload.keyIds().get(i).equals(keys.get(i).id())
-                            && slots.get(i).command().equals(command(payload, slots.getFirst().command().payloadHex(), keys.get(i), i)),
+                            && slots.get(i).command().equals(command(payload, slots.getFirst().command().payloadHex(), keys.get(i), originalEpoch, i)),
                     "UTXO signature slot differs from its input and immutable payload");
         }
         return List.copyOf(slots);
@@ -174,21 +183,28 @@ public class UtxoMpcSigningService {
 
     private UtxoSigningPayload payload(MpcSignRequest slot) {
         require(ENCODING.equals(slot.command().payloadEncoding()), "UTXO payload encoding differs");
-        return json.readValue(HEX.parseHex(slot.command().payloadHex()), UtxoSigningPayload.class);
+        return UtxoSigningPayload.decode(slot.command(),json);
     }
 
-    private List<MpcKey> inputKeys(UtxoSigningRequest request) {
+    private OwnedKeys ownedKeys(UtxoSigningRequest request) {
         var profile = profiles.findAccountByChain(request.asset().chain()).orElseThrow();
         require(request.asset().network() == com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork.parse(profile.getNetwork())
                         && request.asset().currencyId() == profile.getRuntimeCurrencyId()
                         && request.asset().coinType() == profile.getBip44CoinType() && request.asset().decimals() == 8
                         && request.dustThreshold() >= profile.getDustThreshold(),
                 "UTXO signing asset, network or dust threshold differs from the configured chain");
+        var inputAddresses=new ArrayList<ChainAddressRecord>();
+        for(var input:request.inputs())inputAddresses.add(addresses.findEnabledByTenantAndAddress(request.tenantId(),request.asset().chain(),request.asset().chain(),input.address()).orElseThrow());
+        var change=addresses.findEnabledByTenantAndAddress(request.tenantId(),request.asset().chain(),request.asset().chain(),request.changeAddress()).orElseThrow();
+        var ids=new HashSet<UUID>();
+        for(var address:inputAddresses) { require(address.getMpcKeyId()!=null,"UTXO input has no joint key");ids.add(address.getMpcKeyId()); }
+        require(change.getMpcKeyId()!=null,"UTXO change has no joint key");ids.add(change.getMpcKeyId());
+        Map<UUID,MpcKey> locked=new HashMap<>();
+        // Input and change roles can reverse between batches; acquire their shared key locks in one stable order.
+        for(var id:ids.stream().sorted().toList())locked.put(id,signing.lockActiveKey(request.tenantId(),id,ChainType.valueOf(request.asset().chain())));
         var keys = new ArrayList<MpcKey>();
-        for (var input : request.inputs()) {
-            var address = addresses.findEnabledByTenantAndAddress(request.tenantId(), request.asset().chain(),
-                    request.asset().chain(), input.address()).orElseThrow();
-            var key = signing.lockActiveKey(request.tenantId(), address.getMpcKeyId(), ChainType.valueOf(request.asset().chain()));
+        for (int i=0;i<request.inputs().size();i++) {
+            var input=request.inputs().get(i);var address=inputAddresses.get(i);var key=locked.get(address.getMpcKeyId());
             require(key.userId() == address.getUserId() && key.biz() == address.getBiz() && key.addressIndex() == address.getAddressIndex()
                             && input.key().userId() == key.userId() && input.key().biz() == key.biz() && input.key().index() == key.addressIndex()
                             && input.key().redeemScript() == null
@@ -196,7 +212,10 @@ public class UtxoMpcSigningService {
                     "UTXO address differs from the tenant joint key");
             keys.add(key);
         }
-        return List.copyOf(keys);
+        var key=locked.get(change.getMpcKeyId());
+        require(key.userId()==change.getUserId() && key.biz()==change.getBiz() && key.addressIndex()==change.getAddressIndex()
+                && request.changeAddress().equals(MpcPublicAddressCodec.encode(profile,HEX.parseHex(key.publicKeyHex()))),"UTXO change differs from the tenant's owned joint key");
+        return new OwnedKeys(List.copyOf(keys),key);
     }
 
     private void validateBusiness(UtxoSigningRequest request) {
@@ -239,8 +258,11 @@ public class UtxoMpcSigningService {
     }
 
     private static MpcSignCommand command(UtxoSigningPayload payload, String hex, MpcKey key, int i) {
+        return command(payload,hex,key,key.activeEpoch(),i);
+    }
+    private static MpcSignCommand command(UtxoSigningPayload payload,String hex,MpcKey key,int epoch,int i) {
         var request = payload.task().request();
-        return new MpcSignCommand(request.tenantId(), key.id(), key.activeEpoch(), ChainType.valueOf(request.asset().chain()),
+        return new MpcSignCommand(request.tenantId(), key.id(), epoch, ChainType.valueOf(request.asset().chain()),
                 type(request), request.requestId().toString(), slot(i), MpcSignCommand.Purpose.TRANSACTION, ENCODING, hex,
                 HEX.formatHex(MpcUtxoTransactionCodec.digest(payload.unsigned(), i)));
     }
@@ -257,4 +279,5 @@ public class UtxoMpcSigningService {
     private static void requireTransaction() { require(TransactionSynchronizationManager.isActualTransactionActive(), "UTXO signing metadata requires a transaction"); }
     private static void require(boolean condition, String message) { if (!condition) throw new IllegalStateException(message); }
     private record Outcome(UtxoSigningTask task, UtxoSigningResult result, boolean ignored) { }
+    private record OwnedKeys(List<MpcKey> inputs,MpcKey change) { }
 }

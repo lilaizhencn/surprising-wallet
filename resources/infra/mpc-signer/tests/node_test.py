@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -58,6 +59,12 @@ class Cluster:
     def __init__(self, root, binary, tenant=None, monero_configs=None, extra_tenants=()):
         self.root, self.binary = root, binary
         self.processes, self.logs = {}, {}
+        self.authorization_cache = {}
+        self.authorization_lock = threading.RLock()
+        # Isolated test authority only. Production nodes never hold this private key.
+        openssl("genpkey", "-algorithm", "ED25519", "-out", root / "approval-authority.key")
+        public = openssl("pkey", "-in", root / "approval-authority.key", "-pubout", "-outform", "DER")
+        self.authorization_public_key = public[-32:].hex()
         openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                 "-subj", "/CN=isolated-wallet-mpc-test-ca", "-keyout", root / "ca.key",
                 "-addext", "basicConstraints=critical,CA:TRUE",
@@ -74,6 +81,7 @@ class Cluster:
                       for identity, port in zip(self.identities, self.ports)]
         for i in range(3):
             (root / f"node{i}.aes").write_bytes(os.urandom(32))
+            (root / f"node{i}.aes").chmod(0o600)
             config = {"bindHost": "127.0.0.1", "port": self.ports[i],
                       "certificateFile": str(root / f"node{i}.pem"),
                       "privateKeyFile": str(root / f"node{i}.key"),
@@ -81,6 +89,7 @@ class Cluster:
                       "encryptionKeyFile": str(root / f"node{i}.aes"),
                       "storeDirectory": str(root / f"node{i}-store"),
                       "sessionTimeoutSeconds": 15, "peers": self.peers,
+                      "authorizationPublicKeys": [self.authorization_public_key],
                       "clients": {self.client_id: {"tenants": tenants,
                                    "operations": ["CREATE_KEY", "REFRESH", "SIGN", "READ_RESULT"]}}}
             if monero_configs is not None:
@@ -104,7 +113,39 @@ class Cluster:
             context.load_cert_chain(self.root / (name + ".pem"), self.root / (name + ".key"))
         return context
 
-    def request(self, i, path, body=None, context=None):
+    def signing_authorization(self, descriptor, **changes):
+        with self.authorization_lock:
+            return self._signing_authorization(descriptor, **changes)
+
+    def _signing_authorization(self, descriptor, **changes):
+        canonical = json.dumps(descriptor, sort_keys=True, separators=(",", ":"))
+        if not changes and canonical in self.authorization_cache:
+            return self.authorization_cache[canonical]
+        claims = {"v": 1, "authorizationId": str(uuid.uuid4()), "requestId": str(uuid.uuid4()),
+                  "tenantId": descriptor["tenantId"], "keyId": descriptor["keyId"], "epoch": descriptor["epoch"],
+                  "sessionId": descriptor["sessionId"], "operation": descriptor["operation"],
+                  "algorithm": descriptor["algorithm"], "online": descriptor["online"],
+                  "messageHash": hashlib.sha256(bytes.fromhex(descriptor["messageHex"])).hexdigest(),
+                  "chain": "XMR" if descriptor["algorithm"] == "MONERO_NATIVE_2_OF_3" else "ETH",
+                  "network": "regtest", "businessHash": hashlib.sha256(canonical.encode()).hexdigest(),
+                  "purpose": "WITHDRAWAL", "issuedAt": int(time.time()), "expiresAt": int(time.time()) + 300}
+        claims.update(changes)
+        payload = json.dumps(claims, sort_keys=True, separators=(",", ":")).encode()
+        # OpenSSL raw Ed25519 needs a regular input file; the test fixture directory is private.
+        source = self.root / ("approval-message-" + str(uuid.uuid4()))
+        try:
+            source.write_bytes(b"SW-MPC-AUTHORIZATION-V1\n" + payload)
+            signature = openssl("pkeyutl", "-sign", "-rawin", "-inkey", self.root / "approval-authority.key", "-in", source)
+        finally:
+            source.unlink(missing_ok=True)
+        proof = {"payloadHex": payload.hex(), "signatureHex": signature.hex()}
+        if not changes:
+            self.authorization_cache[canonical] = proof
+        return proof
+
+    def request(self, i, path, body=None, context=None, authorize=True):
+        if body is not None and path == "/v1/sessions" and body.get("operation") in ("SIGN", "MONERO_RELAY") and authorize and "authorization" not in body:
+            body = dict(body, authorization=self.signing_authorization(body))
         data = None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(f"https://localhost:{self.ports[i]}" + path,
                                          data=data, headers={"Content-Type": "application/json"})

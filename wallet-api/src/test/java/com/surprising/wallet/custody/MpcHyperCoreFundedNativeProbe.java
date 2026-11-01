@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.hypercore.*;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
@@ -60,7 +62,7 @@ public final class MpcHyperCoreFundedNativeProbe {
         var security = new CustodySecurityProperties();
         security.setSecretMasterKey(HexFormat.of().formatHex(Files.readAllBytes(root.resolve("coordinator.aes"))));
         var crypto = new CustodyCryptoService(security); crypto.validateConfiguration();
-        var signing = new MpcSigningService(tenants, keys, epochs, requests, attempts, crypto, JSON, manager);
+        var signing = new MpcSigningService(tenants, keys, epochs, requests, attempts, crypto, JSON, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,JSON,manager));
         var properties = new MpcNodeProperties(); properties.setCaFile(root.resolve("ca.pem"));
         properties.setCertificateFile(root.resolve("client.pem")); properties.setPrivateKeyFile(root.resolve("client.key"));
         var configured = new ArrayList<MpcNodeProperties.Node>();

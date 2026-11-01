@@ -9,9 +9,9 @@ import com.surprising.wallet.model.mpc.MpcKeyEpoch;
 import com.surprising.wallet.model.mpc.MpcObservation;
 import com.surprising.wallet.model.mpc.MpcPendingException;
 import com.surprising.wallet.model.mpc.MpcSignAttempt;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
-import com.surprising.wallet.model.mpc.MoneroSigningPayload;
+import com.surprising.wallet.common.signing.MoneroSigningPayload;
 import com.surprising.wallet.chain.monero.MoneroSignedPayment;
 import com.surprising.wallet.repository.CustodyTenantTableRepository;
 import com.surprising.wallet.repository.WalletMpcKeyEpochRepository;
@@ -45,11 +45,12 @@ public class MpcSigningService {
     private final CustodyCryptoService crypto;
     private final ObjectMapper json;
     private final TransactionTemplate transaction;
+    private final MpcAuthorizationService authorizations;
 
     public MpcSigningService(CustodyTenantTableRepository tenants, WalletMpcKeyRepository keys,
                              WalletMpcKeyEpochRepository epochs, WalletMpcSignRequestRepository requests,
                              WalletMpcSignAttemptRepository attempts, CustodyCryptoService crypto,
-                             ObjectMapper json, PlatformTransactionManager manager) {
+                             ObjectMapper json, PlatformTransactionManager manager,MpcAuthorizationService authorizations) {
         this.tenants = tenants;
         this.keys = keys;
         this.epochs = epochs;
@@ -58,6 +59,7 @@ public class MpcSigningService {
         this.crypto = crypto;
         this.json = json;
         transaction = new TransactionTemplate(manager);
+        this.authorizations=authorizations;
     }
 
     public MpcKey reserveKey(UUID tenant, ChainType chain, long userId, int biz, long addressIndex,
@@ -176,13 +178,16 @@ public class MpcSigningService {
             policy.put("genesisHash",payload.genesisHash());policy.put("sender",payload.sender());
             policy.put("signSessionId",selected.signSessionId().toString());policy.put("signIntentHash",selected.signIntentHash());
             policy.put("transactionHash",selected.transactionHash());
-            relays.add(new MpcClient.Request(UUID.randomUUID(),tenant,key.id(),request.command().keyEpoch(),MpcClient.Operation.MONERO_RELAY,
+            UUID relaySession=UUID.nameUUIDFromBytes(("SW-MONERO-RELAY-V1:"+tenant+":"+requestId+":"+selected.signSessionId()+":"+party).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            relays.add(new MpcClient.Request(relaySession,tenant,key.id(),request.command().keyEpoch(),MpcClient.Operation.MONERO_RELAY,
                     MpcClient.Algorithm.MONERO_NATIVE_2_OF_3,List.of(party),HexFormat.of().formatHex(json.writeValueAsBytes(policy))));
         }
         long deadline=System.nanoTime()+nodes.operationTimeout().toNanos();
         do {
             for(var relay:relays) {
-                var exchange=exchange(relay,nodes.clients());var result=exchange.results().get(relay.online().getFirst());
+                var proof=authorizations.authorizeMoneroRelay(requestId,selected.signSessionId(),relay);
+                if(proof==null)continue; // Only try another original material holder; never construct another payment.
+                var exchange=exchange(relay,nodes.clients(),proof);var result=exchange.results().get(relay.online().getFirst());
                 if(result!=null && result.state()==MpcClient.State.COMPLETED) {
                     require(key.publicKeyHex().equals(result.publicKeyHex()) && payload.sender().equals(result.publicAddress()),
                             "Monero relay holder changed its registered public identity");
@@ -223,7 +228,7 @@ public class MpcSigningService {
             if (key.state() == MpcKey.State.CREATING) pause(key.id(), key.state().name());
         }
         if (key.state() != MpcKey.State.ACTIVE) throw new MpcPendingException(key.id(), key.state().name());
-        return key;
+        return authorizations.registerKey(tenant,key.id());
     }
 
     /** Locks the public key while its chain address or signing request is committed. */
@@ -231,6 +236,7 @@ public class MpcSigningService {
         require(TransactionSynchronizationManager.isActualTransactionActive(), "MPC key publication requires a transaction");
         var key = keys.lock(tenant, id).orElseThrow(() -> new IllegalArgumentException("MPC key is unavailable"));
         require(key.state() == MpcKey.State.ACTIVE && key.keyGroup().equals(keyGroup(chain)), "MPC key is not active for this chain");
+        require(epochs.registration(tenant,id,key.activeEpoch()).isPresent(),"MPC key is not independently registered for publication");
         return key;
     }
 
@@ -241,7 +247,8 @@ public class MpcSigningService {
             var key = requireKey(tenant, keyId);
             return new KeySnapshot(key, epochs.find(tenant, keyId, 1).orElseThrow());
         });
-        if (snapshot.key().state() != MpcKey.State.CREATING) return snapshot.key();
+        if (snapshot.key().state() != MpcKey.State.CREATING)
+            return snapshot.key().state()==MpcKey.State.ACTIVE?authorizations.registerKey(tenant,keyId):snapshot.key();
         var exchange = exchange(snapshot.epoch().request(), clients);
         var completed = exchange.results().values().stream().filter(result -> result.state() == MpcClient.State.COMPLETED).toList();
         boolean ready = completed.size() == 3 && completed.stream().map(MpcClient.Result::publicKeyHex).distinct().count() == 1
@@ -250,7 +257,7 @@ public class MpcSigningService {
         boolean failed = exchange.results().values().stream().anyMatch(result ->
                 result.state() == MpcClient.State.FAILED || result.state() == MpcClient.State.INTERRUPTED)
                 || (completed.size() == 3 && !ready);
-        return inTransaction(() -> {
+        var activated=inTransaction(() -> {
             var key = keys.lock(tenant, keyId).orElseThrow();
             if (key.state() != MpcKey.State.CREATING) return key;
             var state = ready ? MpcKeyEpoch.State.ACTIVE : failed ? MpcKeyEpoch.State.FAILED : MpcKeyEpoch.State.PREPARING;
@@ -260,6 +267,7 @@ public class MpcSigningService {
             else if (failed) require(keys.failCreation(tenant, keyId) == 1, "MPC key failure raced");
             return requireKey(tenant, keyId);
         });
+        return activated.state()==MpcKey.State.ACTIVE?authorizations.registerKey(tenant,keyId):activated;
     }
 
     /** The source epoch makes a repeated operator call resume the same ceremony, even after activation. */
@@ -287,6 +295,7 @@ public class MpcSigningService {
             var source = epochs.find(tenant, keyId, sourceEpoch).orElseThrow();
             require(source.state() == MpcKeyEpoch.State.ACTIVE && source.request().online().equals(parties),
                     "MPC refresh must retain all three original holders and their order");
+            require(epochs.registration(tenant,keyId,sourceEpoch).isPresent(),"MPC refresh source has no independent registration receipt");
             require(!requests.hasPendingForKey(tenant, keyId), "MPC key has unresolved signing requests");
             epochs.create(new MpcClient.Request(UUID.randomUUID(), tenant, keyId, sourceEpoch + 1,
                     MpcClient.Operation.REFRESH, MpcClient.Algorithm.valueOf(key.algorithm()), parties, ""), actor.trim(), reason.trim());
@@ -309,11 +318,11 @@ public class MpcSigningService {
                     && epoch.state() == MpcKeyEpoch.State.PREPARING, "MPC original refresh is unavailable");
             return new KeySnapshot(key, epoch);
         });
-        if (snapshot.epoch().state() != MpcKeyEpoch.State.PREPARING) return snapshot.key();
+        if (snapshot.epoch().state() != MpcKeyEpoch.State.PREPARING) return authorizations.registerKey(tenant,keyId);
         var exchange = exchange(snapshot.epoch().request(), clients);
         boolean ready = exchange.results().size() == 3 && exchange.results().values().stream().allMatch(result ->
                 result.state() == MpcClient.State.COMPLETED && snapshot.key().publicKeyHex().equals(result.publicKeyHex()));
-        return inTransaction(() -> {
+        var refreshed=inTransaction(() -> {
             var key = keys.lock(tenant, keyId).orElseThrow();
             var epoch = epochs.find(tenant, keyId, targetEpoch).orElseThrow();
             if (epoch.state() == MpcKeyEpoch.State.ACTIVE || epoch.state() == MpcKeyEpoch.State.RETIRED) return key;
@@ -329,6 +338,7 @@ public class MpcSigningService {
             }
             return requireKey(tenant, keyId);
         });
+        return refreshed.state()==MpcKey.State.ACTIVE?authorizations.registerKey(tenant,keyId):refreshed;
     }
 
     /** Joins the caller's balance/nonce/UTXO transaction; no native call occurs here. */
@@ -342,8 +352,10 @@ public class MpcSigningService {
             var epoch = epochs.find(command.tenantId(), command.keyId(), command.keyEpoch()).orElseThrow();
             require(epoch.state() == MpcKeyEpoch.State.ACTIVE && epoch.request().online().containsAll(online),
                     "MPC signing quorum is not registered");
-            var request = requests.reserve(UUID.randomUUID(), command);
+            require(epochs.registration(command.tenantId(),key.id(),command.keyEpoch()).isPresent(),"MPC signing epoch has no independent registry receipt");
+            var request = requests.reserve(UUID.randomUUID(), command,command.businessReferences(json));
             require(request.command().equals(command), "MPC business reference already has a different transaction intent");
+            require(request.state()!=MpcSignRequest.State.CANCELLED,"MPC signing business was independently cancelled");
             if (request.currentAttemptId() == null) {
                 var nativeRequest = new MpcClient.Request(UUID.randomUUID(), command.tenantId(), command.keyId(), command.keyEpoch(),
                         MpcClient.Operation.SIGN, MpcClient.Algorithm.valueOf(key.algorithm()), online, command.preimageHex());
@@ -359,6 +371,7 @@ public class MpcSigningService {
         requireOutsideTransaction();
         var request = inTransaction(() -> requests.find(tenant, requestId).orElseThrow());
         if (request.state() == MpcSignRequest.State.COMPLETED) return request;
+        if (request.state() == MpcSignRequest.State.CANCELLED) return request;
         require(request.currentAttemptId() != null, "MPC request has no current attempt");
         return advanceAttempt(tenant, requestId, request.currentAttemptId(), clients);
     }
@@ -370,7 +383,7 @@ public class MpcSigningService {
         do {
             request = advanceSignature(tenant, requestId, nodes.clients());
             if (request.state() == MpcSignRequest.State.COMPLETED) return signature(tenant, requestId).orElseThrow();
-            if (request.state() == MpcSignRequest.State.INDETERMINATE) break;
+            if (request.state() == MpcSignRequest.State.INDETERMINATE || request.state()==MpcSignRequest.State.CANCELLED) break;
             pause(requestId, request.state().name());
         } while (System.nanoTime() < deadline);
         throw new MpcPendingException(requestId, request.state().name());
@@ -383,15 +396,12 @@ public class MpcSigningService {
             var request = requests.find(tenant, requestId).orElseThrow();
             var attempt = attempts.find(tenant, attemptId).orElseThrow();
             require(attempt.requestId().equals(requestId), "MPC attempt belongs to another request");
-            if (attempt.request().algorithm() == MpcClient.Algorithm.MONERO_NATIVE_2_OF_3
-                    && attempt.state() == MpcSignAttempt.State.PENDING) {
-                attempts.start(tenant, attemptId);
-                attempt = attempts.find(tenant, attemptId).orElseThrow();
-            }
             return new SigningSnapshot(request, attempt, requireKey(tenant, request.command().keyId()));
         });
-        if (snapshot.attempt().state() == MpcSignAttempt.State.COMPLETED) return snapshot.request();
-        var exchange = exchange(snapshot.attempt().request(), clients);
+        if (snapshot.request().state()==MpcSignRequest.State.CANCELLED || snapshot.attempt().state() == MpcSignAttempt.State.COMPLETED) return snapshot.request();
+        var proof=authorizations.authorize(tenant,requestId,attemptId); // Returns only after the original proof commits.
+        inTransaction(()->attempts.start(tenant,attemptId)); // Durable dispatch fence before any native SIGN call.
+        var exchange = exchange(snapshot.attempt().request(), clients,proof);
         String receiver = snapshot.attempt().request().online().getFirst();
         var signed = exchange.results().get(receiver);
         boolean nativeMonero = snapshot.attempt().request().algorithm() == MpcClient.Algorithm.MONERO_NATIVE_2_OF_3;
@@ -462,7 +472,8 @@ public class MpcSigningService {
 
     public MpcSignRequest replay(UUID tenant, UUID requestId, List<String> online, String actor, String reason) {
         require(actor != null && !actor.isBlank() && actor.length() <= 192
-                        && reason != null && reason.trim().length() >= 5 && reason.length() <= 512,
+                        && actor.equals(actor.trim()) && actor.chars().noneMatch(Character::isISOControl)
+                        && reason != null && reason.trim().length() >= 5 && reason.length() <= 512 && reason.chars().noneMatch(Character::isISOControl),
                 "MPC replay requires actor and reason");
         return inTransaction(() -> {
             var initial = requests.find(tenant, requestId).orElseThrow();
@@ -486,6 +497,14 @@ public class MpcSigningService {
     }
 
     private static Exchange exchange(MpcClient.Request request, List<MpcClient> clients) {
+        require(request.operation()!=MpcClient.Operation.SIGN && request.operation()!=MpcClient.Operation.MONERO_RELAY,
+                "native payment execution requires an independently persisted authorization proof");
+        return exchange(request,clients,null);
+    }
+
+    private static Exchange exchange(MpcClient.Request request,List<MpcClient> clients,com.surprising.wallet.common.approval.SigningAuthorization.Proof proof) {
+        boolean payment=request.operation()==MpcClient.Operation.SIGN || request.operation()==MpcClient.Operation.MONERO_RELAY;
+        require(payment==(proof!=null),"native payment authorization is missing or has the wrong operation scope");
         var byId = new LinkedHashMap<String, MpcClient>();
         for (var client : clients) require(byId.put(client.node().partyId(), client) == null, "duplicate MPC client identity");
         require(byId.keySet().containsAll(request.online()), "MPC clients do not cover the registered quorum");
@@ -508,16 +527,16 @@ public class MpcSigningService {
         for (String party : ordered) {
             var result = results.get(party);
             if (result == null) break;
-            boolean originalMoneroRecovery = request.operation() == MpcClient.Operation.SIGN
-                    && request.algorithm() == MpcClient.Algorithm.MONERO_NATIVE_2_OF_3
-                    && Set.of(MpcClient.State.INTERRUPTED, MpcClient.State.INDETERMINATE).contains(result.state());
+            boolean originalSigningRecovery = request.operation() == MpcClient.Operation.SIGN
+                    && (result.state()==MpcClient.State.INTERRUPTED || (request.algorithm()==MpcClient.Algorithm.MONERO_NATIVE_2_OF_3
+                    && result.state()==MpcClient.State.INDETERMINATE));
             boolean originalRefreshRecovery = request.operation() == MpcClient.Operation.REFRESH
                     && Set.of(MpcClient.State.INTERRUPTED, MpcClient.State.FAILED).contains(result.state());
-            if (result.state() == MpcClient.State.ABSENT || originalMoneroRecovery || originalRefreshRecovery) {
+            if (result.state() == MpcClient.State.ABSENT || originalSigningRecovery || originalRefreshRecovery) {
                 try {
-                    result = byId.get(party).submit(request);
+                    result = payment?byId.get(party).submit(request,proof):byId.get(party).submit(request);
                     results.put(party, result);
-                    if (!originalMoneroRecovery || result.state() == MpcClient.State.COMPLETED)
+                    if (!originalSigningRecovery || result.state() == MpcClient.State.COMPLETED)
                         observations.put(party, new MpcObservation(result.state().name(), result.intentHash()));
                 } catch (MpcClient.CallException unknown) {
                     observations.put(party, new MpcObservation("UNREACHABLE", null));

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.xrp;
 
+import com.surprising.wallet.sdk.signing.xrp.MpcXrpTransactionCodec;
+
 import com.google.common.primitives.UnsignedInteger;
 import java.util.HexFormat;
 import org.bitcoinj.base.Sha256Hash;

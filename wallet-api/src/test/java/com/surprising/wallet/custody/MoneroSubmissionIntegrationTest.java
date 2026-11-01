@@ -1,5 +1,9 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.MoneroSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.monero.MoneroSignedPayment;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.common.signing.MpcClient;
@@ -221,29 +225,30 @@ class MoneroSubmissionIntegrationTest {
         return clients;
     }
     @ParameterizedTest @EnumSource(value=MpcClient.State.class,names={"INTERRUPTED","INDETERMINATE"})
-    void nativeRecoveryOnlyResubmitsTheExactOriginalAttempt(MpcClient.State state) {
+    void originalMoneroAttemptWithoutIndependentAdmissionCannotReachAnyHolder(MpcClient.State state) {
         var request=service.reserve(op(),source,draft());assertFalse(signing.hasStartedMoneroSignature(TENANT,request.id()));
         var attempts=new WalletMpcSignAttemptRepository(jdbc,json);
         var original=attempts.find(TENANT,request.currentAttemptId()).orElseThrow().request();var clients=unknownClients(state);
-        assertEquals(MpcSignRequest.State.INDETERMINATE,signing.advanceSignature(TENANT,request.id(),clients).state());
-        for(var client:clients)verify(client).submit(original);
-        assertTrue(signing.hasStartedMoneroSignature(TENANT,request.id()));assertEquals(1,attempts.history(TENANT,request.id()).size());
+        assertThrows(MpcPendingException.class,()->signing.advanceSignature(TENANT,request.id(),clients));
+        for(var client:clients)verifyNoInteractions(client);
+        assertFalse(signing.hasStartedMoneroSignature(TENANT,request.id()));assertEquals(1,attempts.history(TENANT,request.id()).size());
+        assertEquals(original,attempts.find(TENANT,request.currentAttemptId()).orElseThrow().request());
         assertEquals(0,service.releaseUnsigned(op()));equalsAmount("1.1",balance("locked_balance",ACCOUNT));
     }
     @ParameterizedTest @EnumSource(value=MpcClient.State.class,names={"INTERRUPTED","INDETERMINATE"})
-    void otherMpcAlgorithmsNeverResubmitAnUnknownAttempt(MpcClient.State state) {
+    void automaticAttemptWithoutIndependentOperatingProfileCannotReachAnyHolder(MpcClient.State state) {
         var owner=fixture.address(jdbc,TENANT,ChainType.ETH,46,1,"DEPOSIT");var key=signing.requireKey(TENANT,owner.getMpcKeyId());
         var request=new org.springframework.transaction.support.TransactionTemplate(fixture.manager).execute(status->signing.reserveSignature(new MpcSignCommand(
                 TENANT,key.id(),key.activeEpoch(),ChainType.ETH,MpcSignCommand.BusinessType.DEV_FAUCET,"unknown-ecdsa","transaction",MpcSignCommand.Purpose.TRANSACTION,"TEST_JSON","00","11".repeat(32)),fixture.nodes.online()));
-        var clients=unknownClients(state);assertEquals(MpcSignRequest.State.INDETERMINATE,signing.advanceSignature(TENANT,request.id(),clients).state());
-        for(var client:clients)verify(client,never()).submit(any());
+        var clients=unknownClients(state);assertThrows(IllegalStateException.class,()->signing.advanceSignature(TENANT,request.id(),clients));
+        for(var client:clients)verifyNoInteractions(client);
         assertEquals(1,new WalletMpcSignAttemptRepository(jdbc,json).history(TENANT,request.id()).size());
     }
     @Test void anObservedNativeAttemptNeverPlansAnotherGasSupplementBeforeRecoveringItsMaterials() {
         var request=service.reserve(op(),source,draft());new WalletMpcSignAttemptRepository(jdbc,json).observe(TENANT,request.currentAttemptId(),MpcSignAttempt.State.INDETERMINATE,Map.of());
         var daemon=mock(com.surprising.wallet.chain.monero.MoneroDaemonClient.class);var profiles=new ChainProfileRepository(jdbc);
         var workflow=new com.surprising.wallet.chain.monero.MoneroTransactionService(daemon,service,signing,fixture.nodes,profiles,new ChainAddressRepository(jdbc),
-                new CollectionRecordRepository(jdbc),CustodyTestSupport.gas(jdbc),new WalletRuntimeConfigService(profiles,new WalletSystemConfigRepository(jdbc)));
+                new CollectionRecordRepository(jdbc),CustodyTestSupport.gas(jdbc),new WalletRuntimeConfigService(profiles,new WalletSystemConfigRepository(jdbc)),mock(com.surprising.wallet.service.MpcAuthorizationService.class));
         doThrow(new MpcPendingException(request.id(),"INDETERMINATE")).when(signing).awaitSignature(TENANT,request.id(),fixture.nodes);
         assertThrows(MpcPendingException.class,()->workflow.recover(op()));verifyNoInteractions(daemon);
         assertEquals(1,jdbc.queryForObject("select count(*) from monero_transaction where tenant_id=?",Integer.class,TENANT));equalsAmount("1.1",balance("locked_balance",ACCOUNT));

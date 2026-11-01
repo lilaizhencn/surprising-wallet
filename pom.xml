@@ -231,6 +231,14 @@
             <plugins>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <configuration>
+                        <!-- Repackage must see a fresh thin JAR, including updated reactor dependencies. -->
+                        <forceCreation>true</forceCreation>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.14.1</version>
                     <configuration>
@@ -315,5 +323,6 @@
         <module>common</module>
         <module>chain-sdks</module>
         <module>wallet-api</module>
+        <module>wallet-approval</module>
     </modules>
 </project>

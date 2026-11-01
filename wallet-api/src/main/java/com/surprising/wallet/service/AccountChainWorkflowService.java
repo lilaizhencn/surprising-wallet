@@ -1,5 +1,7 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.signing.NearOperation;
+
 import com.surprising.wallet.chain.aptos.AptosTransactionService;
 import com.surprising.wallet.chain.cardano.CardanoTransactionService;
 import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
@@ -214,7 +216,7 @@ public class AccountChainWorkflowService {
             withdrawalOrderRepository.markStaleSigningUnknown("NEAR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
             for (var pending : withdrawalOrderRepository.listByStatus("NEAR","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
                 try {
-                    var operation = new NearSubmissionService.Operation(pending.getTenantId(),pending.getOrderNo(),NearSubmissionService.Kind.WITHDRAWAL);
+                    var operation = new NearOperation(pending.getTenantId(),pending.getOrderNo(),NearOperation.Kind.WITHDRAWAL);
                     if (!nearTransactionService.recover(operation)) nearTransactionService.releaseUnsigned(operation);
                 } catch (RuntimeException error) {log.warn("NEAR recovery pending: {}",pending.getOrderNo());}
             }
@@ -355,7 +357,7 @@ public class AccountChainWorkflowService {
             collectionRecordRepository.markStaleSigningUnknown("NEAR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
             for (var pending : collectionRecordRepository.listByStatus("NEAR","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
                 try {
-                    var operation = new NearSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),NearSubmissionService.Kind.COLLECTION);
+                    var operation = new NearOperation(pending.getTenantId(),pending.getCollectionNo(),NearOperation.Kind.COLLECTION);
                     if (!nearTransactionService.recover(operation)) nearTransactionService.releaseUnsigned(operation);
                 } catch (RuntimeException error) {log.warn("NEAR recovery pending: {}",pending.getCollectionNo());}
             }
@@ -476,7 +478,7 @@ public class AccountChainWorkflowService {
                 }
                 yield moneroTransactionService.send(new MoneroSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),MoneroSubmissionService.Kind.WITHDRAWAL),from);
             }
-            case "NEAR" -> nearTransactionService.send(new NearSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),NearSubmissionService.Kind.WITHDRAWAL),from);
+            case "NEAR" -> nearTransactionService.send(new NearOperation(order.getTenantId(),order.getOrderNo(),NearOperation.Kind.WITHDRAWAL),from);
             case "HYPERCORE" -> hyperCoreTransactionService.send(new HyperCoreSubmissionService.Operation(order.getTenantId(),order.getOrderNo(),HyperCoreSubmissionService.Kind.WITHDRAWAL),from);
             case "TRON" -> tronWorkflow.broadcast(profile, order, from);
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);

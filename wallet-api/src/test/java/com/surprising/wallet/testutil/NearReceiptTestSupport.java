@@ -1,5 +1,7 @@
 package com.surprising.wallet.testutil;
 
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+
 import com.surprising.wallet.chain.near.*;
 import java.math.BigInteger;
 import java.util.*;

@@ -38,6 +38,7 @@ Controller 只负责请求边界和委托，Job 只负责 `@Scheduled` 调度编
 
 ```
 wallet-api → common, chain-sdks
+独立 wallet-approval → common, chain-sdks（独立进程、审批身份与数据库角色）
 common → chain-sdks
 独立 wallet-mpc-signer → cb-mpc / Monero 原生协议（mTLS，不访问钱包 PostgreSQL）
 ```
@@ -45,7 +46,7 @@ common → chain-sdks
 - `wallet-api` 内部按 MVC 分层协作，不再通过 `wallet-service` 模块传递业务类。
 - `common` 和 `chain-sdks` 不得依赖 `wallet-api`；独立原生签名服务不依赖任何 Java 模块，也不访问钱包数据库。
 - 项目不再保留 `wallet-service` 模块、POM 或独立构建入口。
-- @Scheduled 只允许在 wallet-api 中；原生 MPC 持有者独立运行，不使用 Java 调度。
+- @Scheduled 只允许在 wallet-api 和独立 wallet-approval 中；审批过期扫描绑定 approvalExpiryScheduler，原生 MPC 持有者不使用 Java 调度。
 
 ### job 包划分
 
@@ -60,9 +61,11 @@ wallet-api/job/
 
 ### 线程池
 
-唯一可执行 JAR 为 wallet-api，固定承载 API 与业务调度。钱包签名由三个独立原生 MPC 持有者完成；Java 只配置 mTLS 客户端，不配置钱包 Seed 或本地私钥。每类 `@Scheduled` 必须配置独立线程池：
+钱包业务 JAR 为 wallet-api，固定承载 API 与业务调度；wallet-approval 是另一个独立审批 JAR，必须独立进程、身份与受限数据库角色部署。钱包签名由三个独立原生 MPC 持有者完成；Java 只配置 mTLS 客户端，不配置钱包 Seed 或本地私钥。每类 `@Scheduled` 必须配置独立线程池：
 
 - **wallet-api**：按 job 类别分池，`SchedulingConfig.java` 中定义 `@Bean ThreadPoolTaskScheduler`（custody/evm7702/account/deposit/withdraw 各一个）。业务 Service 不直接声明 `@Scheduled`。
+
+- **wallet-approval**：ApprovalExpiryJob 显式绑定独立 approvalExpiryScheduler；只调度服务，不执行数据库操作。
 
 禁止所有 `@Scheduled` 共用一个默认线程池。
 
@@ -382,10 +385,94 @@ run-monero-flow.sh 现在分别在现有本机 PG18 的三个隔离测试库中�
 
 ## 独立 MPC 签名架构
 
-- Maven 只有 chain-sdks、common、wallet-api；wallet-api 是唯一 Java 应用。签名节点使用 resources/infra/mpc-signer 的 C++ 可执行程序，三名持有者分别保存自己的加密份额；XMR 使用已批准的 Monero 原生 2-of-3 协议。
+- Maven 模块为 chain-sdks、common、wallet-api、独立 wallet-approval；wallet-api 承载钱包业务，wallet-approval 使用独立进程、身份与数据库角色。签名节点使用 resources/infra/mpc-signer 的 C++ 可执行程序，三名持有者分别保存自己的加密份额；XMR 使用已批准的 Monero 原生 2-of-3 协议。
 - Java 不保留 walletSeed、BIP32 私有根、本地钱包私钥签名、全局默认热钱包或旧签名模式。mTLS 客户端私钥仅用于传输身份，不是钱包签名密钥。
 - 所有客户、Gas 和中继地址经明确租户的 CustodyAddressService/MpcSigningService 发布，原公钥、key、租户和地址不可变；地址校验与公开编码不依赖私钥服务。
 - UTXO 只保留 wallet_mpc_sign → wallet_sign_done 的签名队列阶段；其余提现、事件、RBF 队列继续使用既有 PGMQ 事务和 read_ct 栅栏。原意图、原文、未知状态和资金约束不得因模块清理改变。
 - 钱包配置概览使用 mpcConfigured 描述独立签名客户端配置；不恢复 Seed 配置兼容字段。systemd Java 入口为 surprising-wallet.service；原生节点单独部署。
 
 - 旧签名路径清理后已有 SDK 8 / PGMQ 12 / API 101 项定向检查及实际可执行 JAR 两轮无 Seed 启动通过；构建必须 clean 清除旧组件 class。本机完整冷恢复已通过；当前 28 链最终实际回归已通过；提交前仍须核对对应验收材料。
+
+## 租户独立审批
+
+- 租户子账号仅由当前启用的 TENANT_ADMIN 管理；OPERATOR 发起业务，APPROVER 读取及审核，VIEWER 只读。API Key 不管理人员。子账号变更与会话撤销、审计同事务，不在此入口创建或修改管理员。
+- APPROVER 角色不代表已完成独立审批身份登记，不得仅凭 wallet 数据库的审批标记授权原生节点签名。独立授权服务、签名凭证和实时审核页面共同构成闭环。
+- 两种提币来源均适用租户规则；外部 API / Webhook 保持正常处理中状态，不暴露内部待审状态。审批后的签名仍遵守原 nonce / 输入和未知结果不退款的既有规则。
+
+### 独立审批模块与表边界
+
+- `wallet-approval → common, chain-sdks`，不得依赖或组件扫描 `wallet-api`。Wallet 不持有审批签名私钥或独立审核登录凭证。
+- `approval` schema 归独立审批数据库角色所有，Wallet 业务数据库角色不得拥有其读写/DDL 权限。审批身份的首次登记必须通过独立管理通道，不能由 Wallet 子账号管理直接生成。
+- `Approval{Tenant,Member,MemberRevocation,Policy,Request,Decision,Audit,Session,Key,SigningTransaction,SigningVersion,SigningSlot,SigningGrant,FeeReservation}Repository` 分别只访问 `approval.{tenant,member,member_revocation,policy,request,decision,audit,session,key,signing_transaction,signing_version,signing_slot,signing_grant,fee_reservation}` 单表。跨表校验和事务编排在审批 Service。
+- 规则按租户、链、资产设置；累计阈值在独立租户行锁下计算，待审批金额也计入累计。业务意图固定，决策不可改写，审核人不能审核自己从控制台发起的订单。
+- 业务规则通过不代表已获得 MPC 签名权限；最终交易必须经过对应链显式核验及每个持有者的授权验签。源码策略、原生协议与实际广播的验证范围以 resources/docs/zh/approval-validation.md 为准。
+
+- 提币内部审批等待通过 PublicWithdrawalStatus 统一映射为公开 FROZEN，并隐藏审核等待原因；custody_withdrawal 与事件、幂等响应、查询过滤保持相同公开模型，不能提前伪造已广播状态。
+
+- 独立审批新策略默认 ALL_WITHDRAWALS 全部人工审核，API 必须显式指定 allWithdrawals；不得因缺失布尔配置而静默免审。独立站退出必须清除旧租户缓存并忽略迟到的旧请求响应。
+
+- ApprovalKeyRegistryService 只接受三名持有者在独立 mTLS 读取下完成且一致的真实公钥登记结果；网络观察在事务外，公钥登记/连续 epoch 更新和审计在短事务内；Java 提交的结果 JSON 不是证据。
+
+- 独立资产配置不得由 Wallet 客户端传入或覆盖；受理请求必须冻结 asset_snapshot 并绑定审核哈希，校验金额/手续费精度与独立费用上限。既有请求回放保留原资产身份，配置变更不能静默改写审核内容。
+
+- 审批规则与累计金额必须包含网络维度；主网/测试网不能借用同名资产规则或混加额度。策略只允许创建在独立主机已注册的资产/网络域内。
+
+- MpcSignCommand、WithdrawalIntent、ApprovalAssetSnapshot 是 common 的共享不可变契约；两应用不得通过应用模块依赖复用模型。独立 issuer 私钥只允许在审批域加载，Wallet 和 MPC 持有者只能持有其验证公钥。
+
+- SigningCandidate 只描述已提交的原签名槽与原生请求；ApprovalSigningService 必须解码实际交易并在独立事务内绑定 request → signing_transaction → signing_version → signing_slot → signing_grant，同时预留独立手续费预算和审计，提交成功后才能返回证明。已有同 session 只返回原证明，不能延长有效期或改写执行描述；同槽新 session 仅按该链已实现的 nonce/输入互斥与显式审计恢复规则独立授权。
+- request.signing_transaction_id 是已开始签名的唯一依据；不得另存可脱离交易凭据的 signing_started 标记。未知签名不能释放审批绑定或费用预算。尚未实现独立交易解码的链及自动业务必须拒绝签发，不允许仅靠业务元数据放行。
+
+- WalletWithdrawalApprovalRepository 只访问 wallet_withdrawal_approval。原申请、订单与主本金/Gas 冻结同事务保存，独立服务网络访问必须在事务外；WithdrawalApprovalService 通过短事务应用独立收据，WithdrawalApprovalJob 只负责调度并绑定 withdrawTaskScheduler。审批状态不替代最终交易凭证；已领取签名/广播未知的订单不因拒绝或过期直接退款。
+- 移除旧全局 withdrawal.admin.approval.required 配置；全部新提现先保持内部 PENDING_REVIEW，按独立租户策略受理后才放行准备交易。FundingSource、外部业务引用和真实发起人必须固定在共享审批意图中。
+
+- MpcAuthorizationService 必须先验证独立证明的签名、原交易哈希/租户/网络/签名槽/原生会话，并将原证明和审计一起提交到 wallet_mpc_sign_attempt.authorization_proof；MpcSigningService 在提交 dispatch fence 后只使用 submit(Request,Proof) 发送 SIGN。原证明一旦持久化不可清空或替换；恢复原件不在 Wallet 侧按当前时间作废，首次受理有效期由每个持有者独立强制执行。未支持的交易族保持暂停，不能改走无证明签名。
+
+- DKG/REFRESH 在 Wallet 本地完成后，必须由 MpcAuthorizationService 事务外请求独立服务观察真实三持有者，再将 approval_registration 与审计原子写入 wallet_mpc_key_epoch。未登记 epoch 不得发布地址、准备新签名或开始后续刷新。登记回执一旦保存不可替换/清空；已有登记不得每次签名都重新要求三台在线。
+
+- 普通 EVM 恢复可在同一签名槽下新建 native session，但必须携带已持久化的 replay actor/reason，独立核验原命令、账户/nonce、版本与审批绑定完全不变。每个 session 单独保存不可改写执行描述和证明；原证明永不延长，费用仍按一笔互斥原交易预留一次。不得把该规则泛化到无账户 nonce/输入互斥保障的链。
+
+
+- Aptos 公开 BCS/地址工具属于 chain-sdks/sdk/signing/aptos，共享 AptosSigningPayload 属于 common.signing。独立审批仅允许规范 framework APT/primary-FA、普通账户 sequence、legacy Ed25519 的逐字节校验；不得放行 arbitrary script/sponsored/orderless。同原 sequence 的显式恢复必须完整命令不变，只保留一份原交易和费用预留；不得泛化到其他无序号链。Wallet 的 maxGas 不能因固定下限越过配置总费用预算。唯一跨语言 golden fixture 位于 resources/test-fixtures/mpc/aptos-codec-reference.json。
+
+
+- 独立审核员管理由 ApprovalMemberService 编排 member/session/audit 单表仓储；浏览器仅独立 TENANT_ADMIN 可邀请/重置/停用 APPROVER，不管理自身或其他管理员。Wallet/mTLS 不得创建、重置或启用独立凭证。激活能力仅存 SHA-256、24h 有效且事务内单次消费；前端令牌放 URL fragment，不写 localStorage/审计。重置立即阻断旧密码并撤销会话，停用清除链接。决策成员行使用 FOR SHARE 与状态/凭证变更互斥，不阻塞独立 admission 租户锁。成员管理字段/状态与索引以 init-sql 为唯一基线。
+
+
+- ApprovalUtxoRpcClient 只允许独立主机配置的只读节点，禁止服务请求提供端点/凭证。观察必须在数据库事务外；核对创世块/网络/同步/原输出金额脚本与同一 tip，全次超时与回复大小受限，无重定向。此查询必须与批次审批、找零、原输入绑定及整笔费用单次预留一起使用；不得仅因 gettxout 成功就放行签名。
+
+
+- UTXO 公共 UtxoSigningPayload 属于 common.signing，固定批次/输入公钥与显式 changeKeyId。UTXO 地址/输出脚本属于 SDK MpcUtxoTransactionCodec。独立 UtxoWithdrawalVerifier 必须验证全部审核付款、独立节点输出金额与脚本、登记公钥和找零所有权，以及实际 wire/每输入摘要和整批费限；多订单/多槽必须绑定同一永久交易凭据；不得使用无证明回退。
+
+- UTXO 公共 Asset 在构造时限制8位精度，校验器先约束族/数量/精度再计算金额。Wallet 必须将全部输入及找零 key 去重统一排序后加锁，不得按输入/找零角色分别加锁产生跨批次环。
+
+
+- 独立 UTXO 批次签发新增 ApprovalSpendLockRepository，仅对应 approval.spend_lock；逐 outpoint 永久占用，不允许部分重叠输入被另一交易复用。approval.signing_version.chain_evidence 只写审批域事务外实际观察的原事实，无调用方事实写入口；后续输入/原载荷恢复读取不可改写原件。首次事务同时提交全部审批绑定、单交易/版本、单次费用、当前槽/证明及审计。common.ApprovalTransactionHash 为全部审批与固定版本生成 V2 businessHash，所有输入共用；原生凭证编码仍 V1。每输入一个 Wallet request ID、每 session 原证明不可替换。新表/字段/触发器与 init-sql、架构边界测试及图文同批同步。
+
+
+- 公开链 wire 编码与 Sui/UTxORPC protobuf 生成属于 chain-sdks；不可恢复 wallet-api 生成入口或让独立审批依赖 Wallet 类型。共用签名 payload 属于 common.signing。
+- ApprovalChainRpcClient 只用独立主机配置的只读 HTTP/gRPC 节点，不接受 Wallet URL/凭证/观察结果；网络查询在事务外，首次新鲜事实与版本/费用/审计原子固化。Sui 只读 live 对象版本；ADA 逐 outpoint；DOT 扩展和 call 索引由独立 runtime 查询。
+- WalletMpcRelayRepository 单表对应 wallet_mpc_relay，保存原 SIGN 关联与稳定 relay session/holder/descriptor/once-proof；禁止清理、更换或无证明广播。独立 MONERO_RELAY 只授权真实原持有者完成的同一 transactionHash，不占用新支付或费用。
+- EIP-7702 全批次 Plan 统一版本和订单集合；AUTH/OP/relayer 必须绑定同一登记身份与 pin 住的 delegate code/executor，最终外层要检查实际 tuple/内层有效签名/完整 wire。原 EVM nonce 与中继/授权 nonce 使用统一永久占用域，手续费只预留一次。
+- 本轮按用户指示先补齐全链授权，再统一测试验证。任何新增族代码在最终验证前均不声明通过；尚缺独立规则的自动业务继续拒绝签发，不允许为跑通流程放开 generic digest。
+
+
+- ApprovalAutomaticOperationRepository 只对应 approval.automatic_operation；SYSTEM 用途收据与人工审批分开，人工请求入口继续拒绝 SYSTEM。自动候选不得携带人工审批 IDs，人工提现不得使用自动规则。
+- 自动用途规则只从独立主机安装，必须明确 treasury/Gas 来源、单笔/24h/永久金额与费用额度、数量和间隔，禁止只验证地址同租户就放行任意循环。未知签名/终态不释放永久费用额度；改规则 UUID 不能重置历史曝光。
+- 自动原证明和用途收据一并提交 wallet_mpc_sign_attempt，证明非空后两者禁止覆盖。父准备 scope 一生只绑定一个自动操作；通用 Gas 必须独立证明父业务及实际余额缺口，尚未实现的准备类型不得先放行。
+- EIP-7702 自动归集必须验证每个来源、collector/delegate 代码与 immutable role、完整 ABI、全部有效签名和原 tuples；NEP-145 必须独立证明未注册/最低押金/父 Token 来源余额并核对规范 Borsh。
+
+- Bitcoin 类链须用 ChainType.isBitcoinLike() 分流，ADA 的 isUtxo() 只描述账本模型，不能据此套用 Bitcoin signing/genesis/address。
+- automatic_operation 支持尚未签名的 COLLECTION 预计划；计划与独立余额证据必需，只允许一次 NULL→transaction_id 绑定。预登记已占额度，最终绑定不能重复扣费或改计划。
+- Gas/自动来源余额通过 ApprovalOperatingBalanceReader 在事务外读取，首次新鲜证据随版本持久化。XMR 仅可直接读取两名原持有者已完成的原观察，并校验独立 daemon 规范锚点；不能给独立审批身份签名或协议提交权限。
+- XRPL ADDRESS_PREPARATION 为显式零本金 SYSTEM 用途；实际激活 XRP 与费记入原生总支出。其他自动付款和所有人工提现保持正本金。须校验同一 validated ledger、目标 joint key、独立 Gas 角色/issuer/currency/trustLimit/NoRipple 与真实 reserve 缺口，不伪造普通付款审批。
+- EVM 每槽须保存独立 feeModel/chain/block/size 事实，OP Stack/Scroll 的额外原生预留参与全部额度；7702 整批一次预留并约束最终外层大小。费用报价与 headroom 不得称作链上绝对费用上限。
+
+- BTC RBF 仅按独立 profile 的显式版本/费率/绝对费用权限放行，最多五版本。首次预留完整审核费上限；所有替换复用同一 outpoints/公钥/change 域、审核集合和费用预留。提现输出不变；归集只扣确切新增费用且 treasury 不变。自动用途稳定引用 utxo:transactionId，不能换 request UUID 重置曝光。永久版本与 audit 保留根绑定和各版本 V2 hash；其他链不得继承这一互斥规则。
+
+- 子账号停用/移除 APPROVER 时同事务保存 custody_tenant_user 的递增撤销代次/操作人/时间；custodyTaskScheduler 的 ApprovalMemberRevocationJob 只调度，由 Service 在事务外发送 mTLS 并短事务确认。启用不能清空待传通知；待传时暂停新的证明申请，原证明仍可恢复原交易。
+- ApprovalMemberRevocationRepository 仅对应 approval.member_revocation（审批域现共 16 表）；最高代次不可回退/删除，未知成员也保留 fence。新代次停用审核员/清除激活/撤销会话/审计同事务；旧通知不能覆盖独立管理员已明确恢复的资格。独立邀请/重置须确认当前撤销代次，Wallet 端不得有独立凭证 enable/reset/enroll 权限。
+- 跨域撤销是持久重试，不能宣称即时原子撤销或撤回已签发证明/有效历史审核。数据库角色与 OS/PKI 隔离材料位于 resources/infra/approval；两个应用启动时必须执行无旁路的 DatabaseRoleIsolation 系统目录检查。runtime 不拥有 DB/schema、不具管理或跨域权限，DDL owner 为独立 NOLOGIN 角色。
+
+- wallet_mpc_sign_request.business_references 与原命令同事务生成并永久不可改写；CANCELLED 携带真实独立终态收据，不能重新绑定尝试/证明或调度。只可由事务外新鲜读取的独立 EXPIRED/REJECTED + signingStarted=false 驱动清理；任何原证明/签名/广播记录或归属矛盾保持冻结。
+- UnsignedWithdrawalCancellationService 必须把 native/batch/UTXO/可退 Gas、其他未出款成员重排、原订单退款、投影事件/审计与 terminal_cleanup_complete 放在同一事务。已授权 Gas/注册子业务不随母单伪退款；终态未清理订单继续轮询，不得记录终态后永久失去收敛入口。
+- AccountSequenceRepository 与 EvmNonceRepository 在各自原单表保存唯一 pending_owner/值；owner 为 tenant/type/reference，7702 属整批 relayer。不同未受理 owner 不再分配后续 nonce；MpcNonceAdmissionService 与第一个真实原证明原子受理，后续槽验原证明。仅独立证明从未授权并原子取消时，才交回该 owner 的排他末端预留，不回退其他已受理交易。HyperCore timestamp 不套用连续序号规则。

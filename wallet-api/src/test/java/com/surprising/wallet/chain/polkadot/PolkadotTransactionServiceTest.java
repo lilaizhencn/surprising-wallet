@@ -1,7 +1,10 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+import com.surprising.wallet.common.signing.PolkadotSigningPayload;
+
 import com.surprising.wallet.chain.model.ChainAsset;
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec.Role;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.model.mpc.*;
@@ -21,7 +24,7 @@ class PolkadotTransactionServiceTest {
         when(assets.findActiveDefinition("DOT","DOT")).thenReturn(Optional.of(ChainAsset.builder().decimals(12).build()));
         when(rpc.networkInfo(Role.ASSET_HUB,"source",null)).thenReturn(json.readTree("{\"nativeDecimals\":12,\"nativeBalance\":\"1000000000000\",\"frozenBalance\":\"0\",\"existentialDeposit\":\"100000000000\"}"));
         when(rpc.paymentInfo(eq(Role.ASSET_HUB),eq("source"),eq("source"),any(BigInteger.class),isNull())).thenReturn(new BigInteger("1000000000"));
-        var service=new PolkadotTransactionService(rpc,mock(PolkadotSubmissionService.class),mock(ChainProfileRepository.class),assets,mock(TokenConfigRepository.class),mock(ChainAddressRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),mock(CustodyGasService.class),mock(WalletRuntimeConfigService.class));
+        var service=new PolkadotTransactionService(rpc,mock(PolkadotSubmissionService.class),mock(ChainProfileRepository.class),assets,mock(TokenConfigRepository.class),mock(ChainAddressRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),mock(CustodyGasService.class),mock(WalletRuntimeConfigService.class),mock(com.surprising.wallet.service.MpcAuthorizationService.class));
         assertEquals(0,new BigDecimal("0.897").compareTo(service.collectableNativeAmount("source",BigDecimal.TEN,new BigDecimal("0.002"))));
         verify(rpc).paymentInfo(Role.ASSET_HUB,"source","source",new BigInteger("900000000000"),null);
         when(rpc.networkInfo(Role.ASSET_HUB,"source",null)).thenReturn(json.readTree("{\"nativeDecimals\":12,\"nativeBalance\":\"1000000000000\",\"frozenBalance\":\"500000000000\",\"existentialDeposit\":\"100000000000\"}"));
@@ -63,7 +66,7 @@ class PolkadotTransactionServiceTest {
             var request=mock(MpcSignRequest.class);when(request.id()).thenReturn(UUID.randomUUID());when(submissions.intent(any())).thenAnswer(call->op.equals(call.getArgument(0))?Optional.of(request):Optional.empty());
             when(submissions.commit(op,request.id())).thenReturn(signed);when(submissions.payload(request)).thenReturn(new PolkadotSigningPayload("DOT",new BigDecimal(u.amountAtomic()).movePointLeft(12),BigDecimal.ZERO,12,12,BigInteger.TEN.pow(10),BigInteger.ONE,u));
             when(rpc.proof(u,signed.txHash())).thenReturn(proof);
-            service=new PolkadotTransactionService(rpc,submissions,mock(ChainProfileRepository.class),mock(ChainAssetRepository.class),mock(TokenConfigRepository.class),mock(ChainAddressRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),mock(CustodyGasService.class),mock(WalletRuntimeConfigService.class));
+            service=new PolkadotTransactionService(rpc,submissions,mock(ChainProfileRepository.class),mock(ChainAssetRepository.class),mock(TokenConfigRepository.class),mock(ChainAddressRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),mock(CustodyGasService.class),mock(WalletRuntimeConfigService.class),mock(com.surprising.wallet.service.MpcAuthorizationService.class));
         }
     }
 

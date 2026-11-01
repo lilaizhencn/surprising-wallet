@@ -1,5 +1,9 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.signing.AptosSigningPayload;
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.aptos.*;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
@@ -61,7 +65,7 @@ public class AptosSubmissionService {
         else {var token=tokens.findDefinition("APTOS",profile.getNetwork(),owner.symbol()).orElseThrow();require(draft.decimals()==token.getDecimals()
                     && MpcAptosTransactionCodec.canonicalAddress(AptosFungibleAsset.requireMetadata(token)).equals(draft.unsigned().metadata()),"Aptos metadata or precision differs from enabled asset");}
         if(op.kind()==Kind.COLLECTION)require(addresses.findEnabledByTenantAndAddress(op.tenantId(),"APTOS",draft.unsigned().recipient()).orElseThrow().getMpcKeyId()!=null,"Aptos collector has no tenant joint key");
-        var u=draft.unsigned();long sequence=sequences.reserve("APTOS",source.getAddress(),u.sequence());
+        var u=draft.unsigned();long sequence=sequences.reserve("APTOS",source.getAddress(),u.sequence(),MpcSignCommand.reservationOwner(op.tenantId(),MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference()));
         var fixed=new AptosSigningPayload(draft.symbol(),draft.amount(),draft.customerFee(),draft.decimals(),new MpcAptosTransactionCodec.Unsigned(u.sender(),sequence,u.recipient(),u.amountAtomic(),u.metadata(),u.maxGasAmount(),u.gasUnitPrice(),u.expiration(),u.chainId(),u.publicKeyHex()));
         return signing.reserveSignature(new MpcSignCommand(op.tenantId(),key.id(),key.activeEpoch(),ChainType.APTOS,MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference(),SLOT,
                 MpcSignCommand.Purpose.TRANSACTION,ENCODING,HEX.formatHex(json.writeValueAsBytes(fixed)),HEX.formatHex(MpcAptosTransactionCodec.signingBytes(fixed.unsigned()))),nodes.online());

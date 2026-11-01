@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;

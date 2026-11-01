@@ -1,6 +1,6 @@
 package com.surprising.wallet.testutil;
 
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.HexFormat;

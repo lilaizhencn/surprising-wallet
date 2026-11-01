@@ -1,0 +1,96 @@
+# Install only on the independent approval host. These are deliberately incomplete examples,
+# not production defaults. No Wallet request can replace these endpoints, identities or roles.
+# New account-chain authorization code has not yet undergone the final unified verification.
+approval:
+  chain-rpc:
+    timeout: PT30S
+    profiles:
+      - chain: SOLANA
+        network: testnet
+        role: DEFAULT
+        network-identity: solana:REPLACE_WITH_FULL_GENESIS_BASE58
+        endpoint: https://independent-solana-node.example.invalid
+        headers-file: /etc/surprising-approval/solana-readonly-headers.json
+        parameters:
+          # The SPL payer is a separately installed role, never accepted from Wallet metadata.
+          'feePayer.REPLACE_WITH_TENANT_UUID': REPLACE_WITH_TENANT_REGISTERED_GAS_PUBLIC_ADDRESS
+      - chain: SUI
+        network: testnet
+        role: DEFAULT
+        network-identity: sui:REPLACE_WITH_FULL_GENESIS_CHECKPOINT_BASE58
+        # Native gRPC, no path; the profile uses only typed LedgerService reads.
+        endpoint: https://independent-sui-grpc.example.invalid:443
+      - chain: ADA
+        network: preview
+        role: DEFAULT
+        network-identity: cardano:REPLACE_WITH_64_LOWERCASE_GENESIS_HEX:2
+        # Native UTxORPC Query/Sync reads, never SubmitService.
+        endpoint: https://independent-cardano-utxorpc.example.invalid:443
+      - chain: DOT
+        network: mainnet
+        role: ASSET_HUB
+        network-identity: polkadot:REPLACE_WITH_64_LOWERCASE_ASSET_HUB_GENESIS_HEX
+        endpoint: https://independent-polkadot-readonly-runtime.example.invalid
+        headers-file: /etc/surprising-approval/polkadot-readonly-headers.json
+        parameters:
+          rpcUrl: wss://independently-selected-asset-hub.example.invalid
+      - chain: NEAR
+        network: testnet
+        role: DEFAULT
+        network-identity: near:REPLACE_WITH_FULL_GENESIS_BASE58
+        endpoint: https://independent-near-node.example.invalid
+        parameters:
+          maximumGasPriceYocto: REPLACE_WITH_INDEPENDENT_POSITIVE_INTEGER_PRICE_POLICY
+      - chain: TON
+        network: testnet
+        role: DEFAULT
+        network-identity: ton:REPLACE_WITH_64_LOWERCASE_ZERO_STATE_ROOT_HASH
+        endpoint: https://independent-toncenter.example.invalid/api/v2/jsonRPC
+        headers-file: /etc/surprising-approval/ton-readonly-headers.json
+      - chain: TRON
+        network: nile
+        role: DEFAULT
+        network-identity: tron:REPLACE_WITH_64_LOWERCASE_GENESIS_BLOCK_ID
+        endpoint: https://independent-tron-node.example.invalid
+      - chain: XRP
+        network: testnet
+        role: DEFAULT
+        network-identity: xrpl:1
+        endpoint: https://independent-xrpl-node.example.invalid
+        parameters:
+          networkId: '1'
+          'gasAddress.REPLACE_WITH_TENANT_UUID': REPLACE_WITH_TENANT_REGISTERED_GAS_PUBLIC_ADDRESS
+          'trustLimit.REPLACE_WITH_TENANT_UUID': '1000000000'
+      - chain: HYPERCORE
+        network: testnet
+        role: DEFAULT
+        network-identity: hyperliquid:Testnet
+        endpoint: https://independently-selected-hyperliquid-testnet.example.invalid
+        parameters:
+          hyperliquidChain: Testnet
+      - chain: ETH
+        network: sepolia
+        role: DEFAULT
+        network-identity: eip155:11155111
+        endpoint: https://independent-evm-node.example.invalid
+        parameters:
+          'payoutDelegate.REPLACE_WITH_TENANT_UUID': REPLACE_WITH_INDEPENDENTLY_INSTALLED_DELEGATE_ADDRESS
+          'payoutDelegateCodeHash.REPLACE_WITH_TENANT_UUID': REPLACE_WITH_0X_64_LOWERCASE_RUNTIME_CODE_HASH
+          'relayer.REPLACE_WITH_TENANT_UUID': REPLACE_WITH_TENANT_REGISTERED_RELAYER_PUBLIC_ADDRESS
+          maximumBatchGas: REPLACE_WITH_POSITIVE_INTEGER_GAS_POLICY
+          feeModel: standard
+          maximumSignedTransactionBytes: '32768'
+          # On OP Stack / Scroll use op-stack / scroll and install BOTH fields:
+          # maximumExtraFeeAtomic: REPLACE_WITH_EXPLICIT_POSITIVE_NATIVE_RESERVE
+          # extraFeeHeadroomBps: '20000'
+# headers-file: owner-only regular file, chmod 0600, containing a JSON object such as
+# {"authorization":"Bearer REPLACE_ON_APPROVAL_HOST"}. Never commit real credentials.
+# Independent assets use these same network identities. HyperCore tokenIdentifier freezes
+# its entire spot wire token (NAME:0xTOKENID), including canonical USDC.
+# Bitcoin-like profiles remain under approval.utxo-rpc; ADA has its own UTxORPC.
+# XMR balance evidence additionally requires an independent daemon profile and reads the
+# original MONERO_OBSERVE results from both enrolled holders; it never submits a protocol.
+# Every EVM profile must install feeModel and maximumSignedTransactionBytes.
+# Arbitrum/Nitro fees already include parent data gas in the signed gas limit.
+# OP Stack/Scroll reserve separate L1/operator expense once for the whole version.
+# Quotes and headroom are policy exposure, NOT protocol-enforced absolute fee caps.

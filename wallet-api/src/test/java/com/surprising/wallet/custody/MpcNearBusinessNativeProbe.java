@@ -1,5 +1,12 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.NearOperation;
+
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+import com.surprising.wallet.common.signing.NearSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.near.*;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
@@ -45,10 +52,10 @@ public final class MpcNearBusinessNativeProbe {
         var custodyRows=new CustodyAddressRepository(jdbc);var source=addresses.findOwned(tenant,custodyRows.require(tenant,sourceView.id()).chainAddressId()).orElseThrow();var collector=addresses.findOwned(tenant,custodyRows.require(tenant,collectorView.id()).chainAddressId()).orElseThrow();
         var tokens=new TokenConfigRepository(jdbc);var orders=new WithdrawalOrderRepository(jdbc);var collections=new CollectionRecordRepository(jdbc);var transactions=new NearTransactionRepository(jdbc);var requests=new WalletMpcSignRequestRepository(jdbc);var balances=new LedgerBalanceRepository(jdbc);var transaction=new TransactionTemplate(manager);
         var runtime=new WalletRuntimeConfigService(profiles,new WalletSystemConfigRepository(jdbc));var quorum=spy(nodes);doNothing().when(quorum).close();
-        var loseReply=new AtomicBoolean();var broadcasts=new ArrayList<String>();NearSubmissionService.Operation[] current={null};
+        var loseReply=new AtomicBoolean();var broadcasts=new ArrayList<String>();NearOperation[] current={null};
         doAnswer(call->{
             require(!TransactionSynchronizationManager.isActualTransactionActive(),"NEAR RPC broadcast held a business transaction");var op=Objects.requireNonNull(current[0]);
-            String hash=op.kind()==NearSubmissionService.Kind.WITHDRAWAL?orders.findTxHash("NEAR",op.reference(),tenant).orElseThrow():collections.findTxHash(tenant,"NEAR",op.reference()).orElseThrow();
+            String hash=op.kind()==NearOperation.Kind.WITHDRAWAL?orders.findTxHash("NEAR",op.reference(),tenant).orElseThrow():collections.findTxHash(tenant,"NEAR",op.reference()).orElseThrow();
             var selected=json.readValue(transactions.find(hash).orElseThrow().getRawPayload(),MpcNearTransactionCodec.Signed.class);
             require(hash.equals(selected.txHash()) && selected.signedTransactionBase64().equals(call.getArgument(0)),"NEAR selected wire reached RPC before durable business hash/raw");
             require(requests.findBusiness(tenant,ChainType.NEAR,MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference(),"transaction").orElseThrow().state()==MpcSignRequest.State.COMPLETED,"NEAR RPC preceded durable MPC result");
@@ -87,7 +94,7 @@ public final class MpcNearBusinessNativeProbe {
                 doReturn(pair.stream().map(nodes.parties()::get).toList()).when(quorum).online();
                 for(String symbol:List.of("NEAR","USDT","USDC")) {
                     BigDecimal amount="NEAR".equals(symbol) && round==2?new BigDecimal("0.000000000000000000000001"):BigDecimal.ONE;
-                    String reference="near-business-"+UUID.randomUUID();var op=new NearSubmissionService.Operation(tenant,reference,NearSubmissionService.Kind.WITHDRAWAL);current[0]=op;
+                    String reference="near-business-"+UUID.randomUUID();var op=new NearOperation(tenant,reference,NearOperation.Kind.WITHDRAWAL);current[0]=op;
                     createOrder(transaction,orders,balances,tenant,source,reference,symbol,recipient,amount,new BigDecimal("0.1"));var before=balance(realRpc,symbol,fixture,recipient,json);int count=broadcasts.size();loseReply.set(true);
                     try{service.send(op,source);throw new AssertionError("NEAR fixture did not lose an actual accepted response");}catch(IllegalStateException expected){require(broadcasts.size()==count+1 && !loseReply.get(),"NEAR failed before deliberately losing a real accepted response: "+expected);submissions.unknown(op,"fixture lost response");}
                     String hash=orders.findTxHash("NEAR",reference,tenant).orElseThrow();require(hashes.add(hash),"NEAR owned operations reused a selected transaction");require(realRpc.finalTransaction(hash,source.getAddress()).path("status").has("SuccessValue"),"NEAR formal MPC payout failed");String raw=transactions.find(hash).orElseThrow().getRawPayload();
@@ -102,12 +109,12 @@ public final class MpcNearBusinessNativeProbe {
                 round++;
             }
             for(String symbol:List.of("NEAR","USDT","USDC")) {
-                String reference="near-collection-"+UUID.randomUUID();collections.create(tenant,sourceView.id(),reference,"NEAR",symbol,source.getAddress(),collector.getAddress(),BigDecimal.ONE,BigDecimal.ZERO,null);current[0]=new NearSubmissionService.Operation(tenant,reference,NearSubmissionService.Kind.COLLECTION);
+                String reference="near-collection-"+UUID.randomUUID();collections.create(tenant,sourceView.id(),reference,"NEAR",symbol,source.getAddress(),collector.getAddress(),BigDecimal.ONE,BigDecimal.ZERO,null);current[0]=new NearOperation(tenant,reference,NearOperation.Kind.COLLECTION);
                 var before=balance(realRpc,symbol,fixture,collector.getAddress(),json);String hash=service.collect(tenant,reference,source);realRpc.finalTransaction(hash,source.getAddress());
                 require(service.confirmCollection(tenant,reference) && !service.confirmCollection(tenant,reference),"NEAR collection did not settle once");require(balance(realRpc,symbol,fixture,collector.getAddress(),json).subtract(before).equals(BigInteger.TEN.pow(symbol.equals("NEAR")?24:6)),"NEAR actual collection principal differs");fees=fees.add(transactions.find(hash).orElseThrow().getFeeYocto());
             }
             for(boolean token:List.of(false,true)) {
-                String symbol=token?"USDC":"NEAR",reference="near-failed-"+UUID.randomUUID(),receiver=token?recipient:"missing-"+UUID.randomUUID().toString().replace("-","")+".near";var op=new NearSubmissionService.Operation(tenant,reference,NearSubmissionService.Kind.WITHDRAWAL);current[0]=op;
+                String symbol=token?"USDC":"NEAR",reference="near-failed-"+UUID.randomUUID(),receiver=token?recipient:"missing-"+UUID.randomUUID().toString().replace("-","")+".near";var op=new NearOperation(tenant,reference,NearOperation.Kind.WITHDRAWAL);current[0]=op;
                 createOrder(transaction,orders,balances,tenant,source,reference,symbol,receiver,BigDecimal.ONE,BigDecimal.ZERO);var before=token?balance(realRpc,symbol,fixture,receiver,json):BigInteger.ZERO;
                 if(token) {
                     String publicKey=submissions.publicKey(source);var access=realRpc.accessKey(source.getAddress(),Base58.encode(HexFormat.of().parseHex(publicKey)));long height=access.path("block_height").asLong(),validity=realRpc.genesisConfig().path("transaction_validity_period").asLong();

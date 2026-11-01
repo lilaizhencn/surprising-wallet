@@ -1,7 +1,11 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.signing.HyperCoreSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
-import com.surprising.wallet.chain.hypercore.MpcHyperCoreActionCodec;
+import com.surprising.wallet.sdk.signing.hypercore.MpcHyperCoreActionCodec;
 import com.surprising.wallet.chain.hypercore.HyperCoreExecutionReceipt;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -86,7 +90,7 @@ public class HyperCoreSubmissionService {
         require(decimals>=0 && decimals<=36,"HyperCore asset precision is invalid");
         owner.amount().movePointRight(decimals).toBigIntegerExact();
         if(operation.kind()==Kind.COLLECTION)require(addresses.findEnabledByTenantAndAddress(operation.tenantId(),"HYPERCORE",owner.recipient()).orElseThrow().getMpcKeyId()!=null,"HyperCore collector has no owned joint key");
-        long nonce=sequences.reserve("HYPERCORE",source.getAddress(),System.currentTimeMillis());
+        long nonce=sequences.reserveTimestamp(source.getAddress(),System.currentTimeMillis());
         var unsigned=MpcHyperCoreActionCodec.prepare(source.getAddress(),owner.recipient(),owner.amount(),wireToken,nonce,"mainnet".equals(profile.getNetwork()));
         var payload=new HyperCoreSigningPayload(owner.symbol(),owner.amount(),owner.fee(),unsigned);validate(owner,payload);
         return signing.reserveSignature(new MpcSignCommand(operation.tenantId(),key.id(),key.activeEpoch(),ChainType.HYPERCORE,

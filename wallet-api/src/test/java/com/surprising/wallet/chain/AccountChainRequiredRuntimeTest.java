@@ -98,7 +98,7 @@ class AccountChainRequiredRuntimeTest {
                 // Recovery is queried before new-work gates; no intent exists in this entry-gating scenario.
                 var service = new CardanoTransactionService(dependency(CardanoRpcClient.class), mock(com.surprising.wallet.service.CardanoSubmissionService.class),
                         dependency(ChainProfileRepository.class), dependency(TokenConfigRepository.class), dependency(ChainAddressRepository.class),
-                        dependency(CollectionRecordRepository.class), dependency(CustodyGasService.class), runtime, dependency(tools.jackson.databind.ObjectMapper.class));
+                        dependency(CollectionRecordRepository.class), dependency(CustodyGasService.class), runtime, dependency(tools.jackson.databind.ObjectMapper.class),dependency(com.surprising.wallet.service.MpcAuthorizationService.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT, "COLL", null));
             }
             case "NEAR" -> {
@@ -107,7 +107,7 @@ class AccountChainRequiredRuntimeTest {
                         dependency(NearTransactionRepository.class),dependency(DepositService.class),
                         dependency(ChainAddressRepository.class),dependency(ChainProfileRepository.class),
                         dependency(TokenConfigRepository.class),dependency(DepositRecordRepository.class),runtime);
-                var service = new NearTransactionService(
+                var service = new NearTransactionService(dependency(com.surprising.wallet.service.MpcAuthorizationService.class),
                         dependency(NearRpcClient.class),dependency(NearSubmissionService.class),
                         dependency(ChainProfileRepository.class),dependency(TokenConfigRepository.class),
                         dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.NearRegistrationService.class),runtime);
@@ -115,7 +115,7 @@ class AccountChainRequiredRuntimeTest {
             }
             case "DOT" -> {
                 var scanner = new PolkadotDepositScanner(dependency(PolkadotRuntimeClient.class),dependency(ChainScanHeightRepository.class),dependency(DepositService.class),dependency(ChainAddressRepository.class),dependency(ChainProfileRepository.class),dependency(TokenConfigRepository.class),dependency(ChainAssetRepository.class),dependency(DepositRecordRepository.class),runtime);
-                var service = new PolkadotTransactionService(dependency(PolkadotRuntimeClient.class),dependency(com.surprising.wallet.service.PolkadotSubmissionService.class),dependency(ChainProfileRepository.class),dependency(ChainAssetRepository.class),dependency(TokenConfigRepository.class),dependency(ChainAddressRepository.class),dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.CustodyGasService.class),runtime);
+                var service = new PolkadotTransactionService(dependency(PolkadotRuntimeClient.class),dependency(com.surprising.wallet.service.PolkadotSubmissionService.class),dependency(ChainProfileRepository.class),dependency(ChainAssetRepository.class),dependency(TokenConfigRepository.class),dependency(ChainAddressRepository.class),dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.CustodyGasService.class),runtime,dependency(com.surprising.wallet.service.MpcAuthorizationService.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT,"COLL",null));
             }
             case "SOLANA" -> {

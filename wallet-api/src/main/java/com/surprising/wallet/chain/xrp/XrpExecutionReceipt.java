@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.xrp;
 
+import com.surprising.wallet.sdk.signing.xrp.MpcXrpTransactionCodec;
+
 import java.math.BigDecimal;
 import org.xrpl.xrpl4j.codec.binary.XrplBinaryCodec;
 import org.xrpl.xrpl4j.model.transactions.IssuedCurrencyAmount;

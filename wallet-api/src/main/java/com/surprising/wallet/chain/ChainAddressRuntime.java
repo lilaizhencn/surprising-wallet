@@ -1,9 +1,9 @@
 package com.surprising.wallet.chain;
 
 import com.surprising.wallet.chain.monero.MoneroAddressValidator;
-import com.surprising.wallet.chain.tron.TronAddressCodec;
-import com.surprising.wallet.chain.near.MpcNearTransactionCodec;
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec;
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
 import com.surprising.wallet.common.chain.ChainType;
 import org.bitcoinj.base.Base58;
 import org.bitcoinj.base.Bech32;

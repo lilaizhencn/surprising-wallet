@@ -1,5 +1,7 @@
 package com.surprising.wallet.testutil;
 
+import com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec;
+
 import com.surprising.wallet.chain.evm.*;
 import java.math.BigInteger;
 import java.util.List;

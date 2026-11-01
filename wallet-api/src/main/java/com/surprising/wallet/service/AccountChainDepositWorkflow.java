@@ -10,7 +10,7 @@ import com.surprising.wallet.chain.polkadot.PolkadotDepositScanner;
 import com.surprising.wallet.chain.solana.SolanaDepositScanner;
 import com.surprising.wallet.chain.sui.SuiDepositScanner;
 import com.surprising.wallet.chain.ton.TonDepositScanner;
-import com.surprising.wallet.chain.tron.TronAddressCodec;
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
 import com.surprising.wallet.chain.tron.TronClientFactory;
 import com.surprising.wallet.chain.tron.TronDepositScanner;
 import com.surprising.wallet.chain.tron.TronScanner;

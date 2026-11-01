@@ -2,10 +2,10 @@ package com.surprising.wallet.testutil;
 
 import com.google.protobuf.ByteString;
 import com.surprising.wallet.chain.cardano.CardanoPublicTransactionBuilder;
-import com.surprising.wallet.chain.cardano.MpcCardanoTransactionCodec;
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
 import com.surprising.wallet.chain.cardano.CardanoRpcClient;
-import com.surprising.wallet.chain.model.ChainScanPoint;
-import com.surprising.wallet.model.mpc.CardanoSigningPayload;
+import com.surprising.wallet.common.chain.ChainScanPoint;
+import com.surprising.wallet.common.signing.CardanoSigningPayload;
 import java.math.BigDecimal;
 import java.util.HexFormat;
 import utxorpc.v1beta.cardano.Cardano;

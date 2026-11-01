@@ -31,8 +31,8 @@ import com.surprising.wallet.repository.CustodyAddressRepository;
  * 托管提现服务，处理租户的提现请求流程。
  *
  * <p>核心功能：创建提现请求（幂等）、查询提现记录、校验地址归属、
- * 管理员审批、估算手续费。提现流程包括预扣余额、链上构造交易、
- * sig1/sig2 双重签名、广播上链、确认后扣款。
+ * 独立审批受理与费用预留。原申请和资金冻结一起提交，独立审核通过后才准备链上交易，
+ * 最终交易还须获得独立授权凭证，再通过 MPC 签名、广播并按链上结果结算。
  */
 @Service
 public class CustodyWithdrawalService {
@@ -53,6 +53,7 @@ public class CustodyWithdrawalService {
     private final CustodyEventService events;
     private final CustodyAddressRepository addresses;
     private final CustodyGasAccountRepository gasAccounts;
+    private final com.surprising.wallet.repository.WalletWithdrawalApprovalRepository approvals;
 
     public CustodyWithdrawalService(CustodyWithdrawalExecutionService executionService,
                                     CustodyGasService gasService,
@@ -64,7 +65,8 @@ public class CustodyWithdrawalService {
                                     CustodyGasAccountRepository gasAccounts,
                                     CustodyTenantTableRepository tenants, ChainAddressRepository chainAddresses,
                                     CustodyReorgDeficitRepository deficits, CustodyIdempotencyRepository idempotency,
-                                    CustodyWithdrawalRepository withdrawals, CustodyAuditRepository audits, CustodyPoolFundingService pool) {
+                                    CustodyWithdrawalRepository withdrawals, CustodyAuditRepository audits, CustodyPoolFundingService pool,
+                                    com.surprising.wallet.repository.WalletWithdrawalApprovalRepository approvals) {
         this.tenants = tenants;
         this.chainAddresses = chainAddresses;
         this.deficits = deficits;
@@ -80,6 +82,7 @@ public class CustodyWithdrawalService {
         this.addresses = addresses;
         this.gasAccounts = gasAccounts;
         this.pool = pool;
+        this.approvals = approvals;
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -127,7 +130,7 @@ public class CustodyWithdrawalService {
                 address, account, symbol, toAddress, new BigDecimal(amount), orderPrefix, command.fundingSource());
         UUID withdrawalId = UUID.randomUUID();
         String orderNo = result.orderNo();
-        String status = result.status();
+        String status = com.surprising.wallet.model.custody.PublicWithdrawalStatus.of(result.status());
         BigDecimal amountValue = result.amount();
         BigDecimal feeValue = result.fee();
         String broadcastAddress = result.toAddress();
@@ -147,8 +150,12 @@ public class CustodyWithdrawalService {
                 status,
                 "API".equals(normalizedSource) ? "API_KEY" : "CONSOLE",
                 principal.actorId().toString(),command.subject(),command.fundingSource().name());
-        gasService.reserveWithdrawal(
+        var gasReservation=gasService.reserveWithdrawal(
                 tenant.id(), withdrawalId, chain, symbol);
+        var intent=new com.surprising.wallet.common.approval.WithdrawalIntent(withdrawalId,tenant.id(),orderNo,chain,address.network(),symbol,
+                broadcastAddress,amountValue,java.util.Objects.requireNonNull(gasReservation,"durable gas reservation required").reservedAmount(),
+                normalizedSource,principal.actorId(),command.subject(),externalReference,command.fundingSource().name());
+        approvals.insert(withdrawalId,result.orderId(),intent);
 
         UUID eventId = UUID.randomUUID();
         WithdrawalView view = new WithdrawalView(

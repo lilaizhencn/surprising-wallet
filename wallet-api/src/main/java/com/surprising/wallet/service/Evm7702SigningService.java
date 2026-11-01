@@ -6,7 +6,8 @@ import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
+import com.surprising.wallet.common.signing.Evm7702SigningPayload;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.EvmCollectionBatchRepository;
@@ -76,9 +77,10 @@ public class Evm7702SigningService {
 
     public Optional<Plan> plan(Operation operation) {
         return inner(operation,PLAN_SLOT).map(request->{
-            require(request.command().payloadEncoding().equals("EIP7702_BATCH_PLAN_JSON")
+            require(request.command().payloadEncoding().equals(Evm7702SigningPayload.ENCODING)
                     && request.command().purpose()==MpcSignCommand.Purpose.EIP7702_OPERATION,"original batch plan encoding differs");
-            return json.readValue(HexFormat.of().parseHex(request.command().payloadHex()),Plan.class);
+            var frozen=Evm7702SigningPayload.decode(request.command(),json).plan();
+            return new Plan(frozen.chainId(),frozen.relayerNonce(),frozen.relayer(),frozen.preparationJson());
         });
     }
     public <T> T preparation(Operation operation,Class<T> type) {
@@ -103,16 +105,20 @@ public class Evm7702SigningService {
         require(operations.stream().map(input->input.owner().getMpcKeyId()).distinct().count()==operations.size(),"an authority cannot consume one operation nonce twice in a batch");
         requirePublicOwner(relayer,operation.chain(),true);
         signing.lockActiveKey(relayer.getTenantId(),relayer.getMpcKeyId(),ChainType.valueOf(operation.chain()));
-        BigInteger nonce=nonces.reserve(operation.chain(),relayer.getAddress().toLowerCase(Locale.ROOT),pendingNonce);
+        BigInteger nonce=nonces.reserve(operation.chain(),relayer.getAddress().toLowerCase(Locale.ROOT),pendingNonce,MpcSignCommand.reservationOwner(operation.tenantId(),operation.type(),operation.reference()));
         require(nonce.signum()>=0 && nonce.compareTo(BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE))<0,"operator nonce exhausted");
         Plan plan=new Plan(chainId,nonce,relayer,json.writeValueAsString(preparation));
+        List<String> references=operation.type()==MpcSignCommand.BusinessType.WITHDRAWAL
+                ?json.readValue(payouts.claimPayload(operation.tenantId(),operation.batchId()).orElseThrow(),com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator.Batch.class).items().stream().map(com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator.ClaimedItem::orderNo).toList()
+                :json.readValue(collections.claimPayload(operation.tenantId(),operation.batchId()).orElseThrow(),com.surprising.wallet.coordinator.Evm7702CollectionCoordinator.Batch.class).items().stream().map(com.surprising.wallet.coordinator.Evm7702CollectionCoordinator.ClaimedItem::collectionNo).toList();
+        var envelope=new Evm7702SigningPayload(new Evm7702SigningPayload.Plan(chainId,nonce,relayer,plan.preparationJson(),references),null);
         for(var input:inputs) {
             require(operation.tenantId().equals(input.owner().getTenantId()),"inner authority belongs to another tenant");
             var key=activePublicOwner(input.owner(),operation.chain());
-            String payload=PLAN_SLOT.equals(input.slot())?json.writeValueAsString(plan):input.payloadJson();
+            String payload=json.writeValueAsString(envelope);
             var command=new MpcSignCommand(operation.tenantId(),key.id(),key.activeEpoch(),ChainType.valueOf(operation.chain()),
                     operation.type(),operation.reference(),input.slot(),input.purpose(),
-                    PLAN_SLOT.equals(input.slot())?"EIP7702_BATCH_PLAN_JSON":"EIP7702_INNER_JSON",
+                    Evm7702SigningPayload.ENCODING,
                     HexFormat.of().formatHex(json.writeValueAsBytes(json.readTree(payload))),input.digestHex());
             signing.reserveSignature(command,nodes.online());
         }
@@ -128,8 +134,8 @@ public class Evm7702SigningService {
                 && input.owner().getTenantId().equals(operation.tenantId())
                 && request.command().purpose()==input.purpose()
                 && request.command().preimageHex().equals(input.digestHex()),"original EIP-7702 slot differs");
-        if(!PLAN_SLOT.equals(input.slot()))require(request.command().payloadHex().equals(
-                HexFormat.of().formatHex(json.writeValueAsBytes(json.readTree(input.payloadJson())))),"inner original payload differs");
+        var original=Evm7702SigningPayload.decode(inner(operation,PLAN_SLOT).orElseThrow().command(),json);
+        require(Evm7702SigningPayload.decode(request.command(),json).equals(original),"inner slot differs from the immutable whole-batch plan");
         requirePublicOwner(input.owner(),operation.chain(),false);
         return signing.awaitSignature(operation.tenantId(),request.id(),nodes);
     }
@@ -146,7 +152,8 @@ public class Evm7702SigningService {
     }
     public OuterPayload outerPayload(Operation operation) {
         var request=outer(operation).orElseThrow();
-        var payload=json.readValue(HexFormat.of().parseHex(request.command().payloadHex()),OuterPayload.class);
+        var envelope=Evm7702SigningPayload.decode(request.command(),json);var selected=Objects.requireNonNull(envelope.outer());
+        var payload=new OuterPayload(envelope.plan().chainId(),selected.unsignedHex(),selected.estimatedGas(),selected.reservedFee());
         var plan=plan(operation).orElseThrow();
         require(plan.chainId()==payload.chainId() && plan.relayerNonce().equals(payload.raw().getNonce())
                 && request.command().keyId().equals(plan.relayer().getMpcKeyId())
@@ -169,9 +176,11 @@ public class Evm7702SigningService {
         requirePublicOwner(plan.relayer(),operation.chain(),false);
         var key=signing.lockActiveKey(plan.relayer().getTenantId(),plan.relayer().getMpcKeyId(),ChainType.valueOf(operation.chain()));
         var payload=new OuterPayload(plan.chainId(),HexFormat.of().formatHex(MpcEvmTransactionCodec.unsignedPayload(raw,plan.chainId())),estimatedGas,fee);
+        var original=Evm7702SigningPayload.decode(inner(operation,PLAN_SLOT).orElseThrow().command(),json);
+        var envelope=new Evm7702SigningPayload(original.plan(),new Evm7702SigningPayload.Outer(payload.unsignedHex(),estimatedGas,fee));
         var command=new MpcSignCommand(plan.relayer().getTenantId(),key.id(),key.activeEpoch(),ChainType.valueOf(operation.chain()),
-                operation.type(),operation.reference(),RELAYER_SLOT,MpcSignCommand.Purpose.TRANSACTION,"EIP7702_OUTER_JSON",
-                HexFormat.of().formatHex(json.writeValueAsBytes(payload)),HexFormat.of().formatHex(MpcEvmTransactionCodec.digest(raw,plan.chainId())));
+                operation.type(),operation.reference(),RELAYER_SLOT,MpcSignCommand.Purpose.TRANSACTION,Evm7702SigningPayload.ENCODING,
+                HexFormat.of().formatHex(json.writeValueAsBytes(envelope)),HexFormat.of().formatHex(MpcEvmTransactionCodec.digest(raw,plan.chainId())));
         signing.reserveSignature(command,nodes.online());
         return payload;
     }
@@ -209,7 +218,7 @@ public class Evm7702SigningService {
         if(operation.type()==MpcSignCommand.BusinessType.COLLECTION) {
             var batch=json.readValue(collections.claimPayload(operation.tenantId(),operation.batchId()).orElseThrow(),
                     com.surprising.wallet.coordinator.Evm7702CollectionCoordinator.Batch.class);
-            var payload=json.convertValue(preparation,com.surprising.wallet.model.mpc.Evm7702CollectionPayload.class);
+            var payload=json.convertValue(preparation,com.surprising.wallet.common.signing.Evm7702CollectionPayload.class);
             require(batch.config().chainId().longValueExact()==chainId && payload.chainId().equals(batch.config().chainId())
                     && payload.items().size()==batch.items().size(),"collection plan context differs");
             requireSameRelayer(batch.relayerChainAddress(),relayer);
@@ -224,15 +233,15 @@ public class Evm7702SigningService {
                         && request.callGasLimit().compareTo(BigInteger.valueOf(500_000))<=0,"collection payment differs from original claim");
                 if(item.authorization()!=null) {
                     requireAuthorization(item.authorization(),chainId,request.authority(),batch.config().delegateAddress());
-                    result.add(input(item.authority(),"authorization-"+index,MpcSignCommand.Purpose.EIP7702_AUTHORIZATION,item.authorization(),com.surprising.wallet.chain.evm.MpcEvm7702Codec.digest(item.authorization())));
+                    result.add(input(item.authority(),"authorization-"+index,MpcSignCommand.Purpose.EIP7702_AUTHORIZATION,item.authorization(),com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.digest(item.authorization())));
                 }
                 result.add(input(item.authority(),"operation-"+index,MpcSignCommand.Purpose.EIP7702_OPERATION,request,
-                        new com.surprising.wallet.chain.evm.Evm7702OperationSigner().digest(payload.chainId(),request)));
+                        new com.surprising.wallet.sdk.signing.evm7702.Evm7702OperationSigner().digest(payload.chainId(),request)));
             }
         } else {
             var batch=json.readValue(payouts.claimPayload(operation.tenantId(),operation.batchId()).orElseThrow(),
                     com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator.Batch.class);
-            var payload=json.convertValue(preparation,com.surprising.wallet.model.mpc.Evm7702PayoutPayload.class);var request=payload.request();
+            var payload=json.convertValue(preparation,com.surprising.wallet.common.signing.Evm7702PayoutPayload.class);var request=payload.request();
             require(batch.config().chainId().longValueExact()==chainId && payload.chainId().equals(batch.config().chainId())
                     && request.items().size()==batch.items().size()
                     && payload.authority().getMpcKeyId().equals(batch.hotChainAddress().getMpcKeyId())
@@ -248,10 +257,10 @@ public class Evm7702SigningService {
             }
             if(payload.authorization()!=null) {
                 requireAuthorization(payload.authorization(),chainId,request.authority(),batch.config().payoutDelegateAddress());
-                result.add(input(payload.authority(),"authorization-0",MpcSignCommand.Purpose.EIP7702_AUTHORIZATION,payload.authorization(),com.surprising.wallet.chain.evm.MpcEvm7702Codec.digest(payload.authorization())));
+                result.add(input(payload.authority(),"authorization-0",MpcSignCommand.Purpose.EIP7702_AUTHORIZATION,payload.authorization(),com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.digest(payload.authorization())));
             }
             result.add(input(payload.authority(),PLAN_SLOT,MpcSignCommand.Purpose.EIP7702_OPERATION,request,
-                    new com.surprising.wallet.chain.evm.Evm7702PayoutSigner().digest(payload.chainId(),request)));
+                    new com.surprising.wallet.sdk.signing.evm7702.Evm7702PayoutSigner().digest(payload.chainId(),request)));
         }
         return result;
     }
@@ -262,33 +271,33 @@ public class Evm7702SigningService {
         String destination,data;BigInteger priority,maxFee,blockGas;
         com.surprising.wallet.repository.Evm7702ConfigRepository.Configuration config;
         if(operation.type()==MpcSignCommand.BusinessType.COLLECTION) {
-            var payload=preparation(operation,com.surprising.wallet.model.mpc.Evm7702CollectionPayload.class);
+            var payload=preparation(operation,com.surprising.wallet.common.signing.Evm7702CollectionPayload.class);
             var batch=json.readValue(collections.claimPayload(operation.tenantId(),operation.batchId()).orElseThrow(),com.surprising.wallet.coordinator.Evm7702CollectionCoordinator.Batch.class);
-            var signed=new java.util.ArrayList<byte[]>();var items=new java.util.ArrayList<com.surprising.wallet.chain.evm.Evm7702CollectionRequest>();
+            var signed=new java.util.ArrayList<byte[]>();var items=new java.util.ArrayList<com.surprising.wallet.sdk.signing.evm7702.Evm7702CollectionRequest>();
             for(int index=0;index<payload.items().size();index++) {
                 var item=payload.items().get(index);byte[] publicKey=publicKey(item.authority(),operation.chain());
-                if(item.authorization()!=null)authorizations.add(com.surprising.wallet.chain.evm.MpcEvm7702Codec.authorization(item.authorization(),publicKey,
-                        completedInner(operation,item.authority(),"authorization-"+index,com.surprising.wallet.chain.evm.MpcEvm7702Codec.digest(item.authorization()))));
-                byte[] digest=new com.surprising.wallet.chain.evm.Evm7702OperationSigner().digest(payload.chainId(),item.request());
-                signed.add(com.surprising.wallet.chain.evm.MpcEvm7702Codec.collectionSignature(payload.chainId(),item.request(),publicKey,completedInner(operation,item.authority(),"operation-"+index,digest)));
+                if(item.authorization()!=null)authorizations.add(com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.authorization(item.authorization(),publicKey,
+                        completedInner(operation,item.authority(),"authorization-"+index,com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.digest(item.authorization()))));
+                byte[] digest=new com.surprising.wallet.sdk.signing.evm7702.Evm7702OperationSigner().digest(payload.chainId(),item.request());
+                signed.add(com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.collectionSignature(payload.chainId(),item.request(),publicKey,completedInner(operation,item.authority(),"operation-"+index,digest)));
                 items.add(item.request());
             }
-            data=new com.surprising.wallet.chain.evm.Evm7702ContractCodec().encodeCollectBatch(items,signed);
+            data=new com.surprising.wallet.sdk.signing.evm7702.Evm7702ContractCodec().encodeCollectBatch(items,signed);
             destination=batch.config().collectorAddress();priority=payload.maxPriorityFeePerGas();maxFee=payload.maxFeePerGas();blockGas=payload.blockGasLimit();config=batch.config();
         } else {
-            var payload=preparation(operation,com.surprising.wallet.model.mpc.Evm7702PayoutPayload.class);
+            var payload=preparation(operation,com.surprising.wallet.common.signing.Evm7702PayoutPayload.class);
             var batch=json.readValue(payouts.claimPayload(operation.tenantId(),operation.batchId()).orElseThrow(),com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator.Batch.class);
             byte[] publicKey=publicKey(payload.authority(),operation.chain());
-            if(payload.authorization()!=null)authorizations.add(com.surprising.wallet.chain.evm.MpcEvm7702Codec.authorization(payload.authorization(),publicKey,
-                    completedInner(operation,payload.authority(),"authorization-0",com.surprising.wallet.chain.evm.MpcEvm7702Codec.digest(payload.authorization()))));
-            byte[] digest=new com.surprising.wallet.chain.evm.Evm7702PayoutSigner().digest(payload.chainId(),payload.request());
-            byte[] signature=com.surprising.wallet.chain.evm.MpcEvm7702Codec.payoutSignature(payload.chainId(),payload.request(),publicKey,completedInner(operation,payload.authority(),PLAN_SLOT,digest));
-            data=new com.surprising.wallet.chain.evm.Evm7702PayoutCodec().encode(payload.request(),signature);
+            if(payload.authorization()!=null)authorizations.add(com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.authorization(payload.authorization(),publicKey,
+                    completedInner(operation,payload.authority(),"authorization-0",com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.digest(payload.authorization()))));
+            byte[] digest=new com.surprising.wallet.sdk.signing.evm7702.Evm7702PayoutSigner().digest(payload.chainId(),payload.request());
+            byte[] signature=com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.payoutSignature(payload.chainId(),payload.request(),publicKey,completedInner(operation,payload.authority(),PLAN_SLOT,digest));
+            data=new com.surprising.wallet.sdk.signing.evm7702.Evm7702PayoutCodec().encode(payload.request(),signature);
             destination=batch.hotWallet();priority=payload.maxPriorityFeePerGas();maxFee=payload.maxFeePerGas();blockGas=payload.blockGasLimit();config=batch.config();
         }
         BigInteger cap=BigInteger.valueOf(config.maxBatchGas()).min(new BigDecimal(blockGas).multiply(config.blockGasRatio()).toBigInteger());
         require(gasLimit.signum()>0 && gasLimit.compareTo(cap)<=0,"outer gas exceeds original bounds");
-        return com.surprising.wallet.chain.evm.MpcEvm7702Codec.batch(plan.chainId(),plan.relayerNonce(),priority,maxFee,gasLimit,destination,data,authorizations);
+        return com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.batch(plan.chainId(),plan.relayerNonce(),priority,maxFee,gasLimit,destination,data,authorizations);
     }
 
     private byte[] completedInner(Operation operation,ChainAddressRecord owner,String slot,byte[] digest) {
@@ -301,7 +310,7 @@ public class Evm7702SigningService {
         require(Objects.equals(original.getTenantId(),supplied.getTenantId()) && Objects.equals(original.getId(),supplied.getId())
                 && Objects.equals(original.getMpcKeyId(),supplied.getMpcKeyId()) && original.getAddress().equalsIgnoreCase(supplied.getAddress()),"configured operator differs from original claim");
     }
-    private static void requireAuthorization(com.surprising.wallet.chain.evm.MpcEvm7702Codec.Authorization authorization,long chainId,String owner,String delegate) {
+    private static void requireAuthorization(com.surprising.wallet.sdk.signing.evm7702.MpcEvm7702Codec.Authorization authorization,long chainId,String owner,String delegate) {
         require(authorization.chainId().equals(BigInteger.valueOf(chainId)) && authorization.authority().equalsIgnoreCase(owner)
                 && authorization.delegate().equalsIgnoreCase(delegate),"authorization differs from original approved delegate");
     }

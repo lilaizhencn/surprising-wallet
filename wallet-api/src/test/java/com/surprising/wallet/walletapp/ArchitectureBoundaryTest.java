@@ -1,5 +1,7 @@
 package com.surprising.wallet.walletapp;
 
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -34,7 +36,7 @@ class ArchitectureBoundaryTest {
     @Test
     void mpcMetadataUsesOneRepositoryPerTable() throws IOException {
         var mappings = Map.of("Key", "wallet_mpc_key", "KeyEpoch", "wallet_mpc_key_epoch",
-                "SignRequest", "wallet_mpc_sign_request", "SignAttempt", "wallet_mpc_sign_attempt");
+                "SignRequest", "wallet_mpc_sign_request", "SignAttempt", "wallet_mpc_sign_attempt", "Relay", "wallet_mpc_relay");
         var table = Pattern.compile("\\bwallet_mpc_[a-z_]+\\b");
         for (var entry : mappings.entrySet()) {
             var file = sourceRoot().resolve("repository/WalletMpc" + entry.getKey() + "Repository.java");
@@ -45,6 +47,15 @@ class ArchitectureBoundaryTest {
             while (matcher.find()) tables.add(matcher.group());
             assertEquals(Set.of(entry.getValue()), tables, file.toString());
         }
+    }
+
+    @Test
+    void withdrawalApprovalReceiptHasOneTableAndJobOnlyDelegates() throws IOException {
+        var repository=Files.readString(sourceRoot().resolve("repository/WalletWithdrawalApprovalRepository.java"));
+        assertTrue(repository.contains("@Repository") && repository.contains("wallet_withdrawal_approval"));
+        assertFalse(repository.matches("(?s).*\\b(from|join|into|update)\\s+(approval\\.|custody_withdrawal\\b|withdrawal_order\\b|ledger_balance\\b).*"));
+        var job=Files.readString(sourceRoot().resolve("job/withdraw/WithdrawalApprovalJob.java"));
+        assertTrue(job.contains("withdrawTaskScheduler") && job.contains("approvals.reconcile()"));assertFalse(job.contains("Repository"));
     }
 
     @Test
@@ -67,7 +78,10 @@ class ArchitectureBoundaryTest {
             assertFalse(source.contains("wallet_mpc_sign_request") || source.contains("withdrawal_order") || source.contains("collection_record"));
         }
         for (String name : List.of("CardanoRpcClient", "CardanoPublicTransactionBuilder", "MpcCardanoTransactionCodec", "CardanoExecutionReceipt")) {
-            var source = Files.readString(root.resolve("chain/cardano/" + name + ".java"));
+            var file=name.equals("MpcCardanoTransactionCodec")
+                    ? Path.of(System.getProperty("user.dir")).resolve("../chain-sdks/src/main/java/com/surprising/wallet/sdk/signing/cardano/"+name+".java")
+                    :root.resolve("chain/cardano/"+name+".java");
+            var source = Files.readString(file);
             assertFalse(source.contains("SecretKey") || source.contains("CardanoKeyService") || source.contains("SignerProviders") || source.contains("privateSeed()"), name);
         }
         var submission = Files.readString(root.resolve("service/CardanoSubmissionService.java"));
@@ -190,7 +204,7 @@ class ArchitectureBoundaryTest {
         Pattern tablePattern = Pattern.compile(
                 "(?i)\\b(?:from|join|into|update|delete\\s+from)\\s+([a-z_][a-z0-9_]*)");
         Pattern ctePattern = Pattern.compile(
-                "(?i)(?:\\bwith|,)\\s*([a-z_][a-z0-9_]*)\\s+as\\s*\\(");
+                "(?i)(?:\\bwith|,)\\s*([a-z_][a-z0-9_]*)\\s+as\\s*(?:(?:not\\s+)?materialized\\s*)?\\(");
         Pattern sqlLinePattern = Pattern.compile(
                 "(?i).*\\b(?:select\\s+.+\\s+from|insert\\s+into|update\\s+[a-z_][a-z0-9_]*\\s+set|delete\\s+from)\\b.*");
         for (Path file : javaFiles(repositoryRoot)) {
@@ -203,10 +217,17 @@ class ArchitectureBoundaryTest {
                         "cross-table repository facade must delegate SQL to @Repository: " + file);
             }
             if (!repository) continue;
-            Matcher matcher = tablePattern.matcher(source);
+            // Inspect SQL literals, so documentation and error text such as "differs from its owner" are not tables.
+            var sqlLiterals=Pattern.compile("\"\"\"[\\s\\S]*?\"\"\"|\"(?:\\\\.|[^\"\\\\])*\"").matcher(source);
+            var sql=new StringBuilder();
+            while(sqlLiterals.find()) {
+                String literal=sqlLiterals.group().replaceFirst("^\"{1,3}","").stripLeading();
+                if(literal.matches("(?is)^(select|insert|update|delete|with|alter|create|truncate|drop)\\b.*"))sql.append(literal).append('\n');
+            }
+            Matcher matcher = tablePattern.matcher(sql);
             Set<String> tables = new HashSet<>();
             while (matcher.find()) tables.add(matcher.group(1).toLowerCase());
-            Matcher cteMatcher = ctePattern.matcher(source);
+            Matcher cteMatcher = ctePattern.matcher(sql);
             while (cteMatcher.find()) tables.remove(cteMatcher.group(1).toLowerCase());
             tables.remove("set");
             tables.remove("excluded");

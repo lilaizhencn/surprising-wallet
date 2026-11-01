@@ -1,6 +1,8 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.model.mpc.SolanaSigningPayload;
+import com.surprising.wallet.sdk.signing.solana.MpcSolanaTransactionCodec;
+
+import com.surprising.wallet.common.signing.SolanaSigningPayload;
 import com.surprising.wallet.testutil.SolanaReceiptTestSupport;
 import java.math.BigDecimal;
 import java.util.*;

@@ -1,8 +1,10 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec.Role;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.model.mpc.PolkadotSigningPayload;
+import com.surprising.wallet.common.signing.PolkadotSigningPayload;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
 import com.surprising.wallet.service.PolkadotSubmissionService.Operation;
@@ -30,6 +32,7 @@ public class PolkadotTransactionService {
     private final CollectionRecordRepository collections;
     private final CustodyGasService gas;
     @NonNull private final WalletRuntimeConfigService runtime;
+    private final MpcAuthorizationService authorizations;
 
     public String send(Operation op,ChainAddressRecord source) {
         runtime.requireTaskEnabled("DOT",WalletRuntimeConfigService.TASK_WITHDRAW,"DOT withdrawal");
@@ -47,6 +50,7 @@ public class PolkadotTransactionService {
         PolkadotSigningPayload draft=null;
         if(submissions.intent(op).isEmpty()) {
             var payment=submissions.payment(op);String assetId=null;int decimals=nativeDecimals();Role role=Role.ASSET_HUB;
+            if(op.kind()==Kind.COLLECTION)authorizations.planCollection(new com.surprising.wallet.common.approval.AutomaticParentPlan(op.tenantId(),source.getMpcKeyId(),"DOT",profiles.findAccountByChain("DOT").orElseThrow().getNetwork(),payment.symbol(),op.reference(),payment.recipient(),payment.amount(),null));
             if(!"DOT".equals(payment.symbol())) {
                 var profile=profiles.findAccountByChain("DOT").orElseThrow();var token=tokens.findDefinition("DOT",profile.getNetwork(),payment.symbol()).orElseThrow();
                 assetId=token.getContractAddress();decimals=token.getDecimals();role=Role.ASSET_HUB;

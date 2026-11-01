@@ -3,14 +3,14 @@ package com.surprising.wallet.service;
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.chain.signing.MpcNodes;
-import com.surprising.wallet.chain.tron.MpcTronTransactionCodec;
+import com.surprising.wallet.sdk.signing.tron.MpcTronTransactionCodec;
 import com.surprising.wallet.chain.tron.TronExecutionReceipt;
 import org.tron.trident.proto.Response;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
-import com.surprising.wallet.model.mpc.TronSigningPayload;
+import com.surprising.wallet.common.signing.TronSigningPayload;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CollectionRecordRepository;
@@ -220,8 +220,7 @@ public class TronSubmissionService {
     }
     /** Separates distinct payments even if SDK time, TAPOS, destination and amount coincide. */
     public static byte[] memo(Operation operation) {
-        return org.bitcoinj.base.Sha256Hash.hash(("surprising-wallet:tron:v1\n"+operation.tenantId()+"\n"
-                +operation.kind()+"\n"+operation.reference()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return MpcTronTransactionCodec.businessMemo(operation.tenantId(),operation.kind().name(),operation.reference());
     }
     private static void validate(Operation operation,Owner owner,TronSigningPayload payload) {
         require(payload!=null && payload.decimals()>=0 && payload.decimals()<=36 && owner.amount().compareTo(payload.amount())==0

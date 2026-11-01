@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.monero;
 
 import com.surprising.wallet.common.signing.MpcClient;
-import com.surprising.wallet.model.mpc.MoneroSigningPayload;
+import com.surprising.wallet.common.signing.MoneroSigningPayload;
 import com.surprising.wallet.sdk.signing.MoneroPublicAddressCodec;
 import java.math.BigDecimal;
 import java.math.BigInteger;

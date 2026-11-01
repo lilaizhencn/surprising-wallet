@@ -1,7 +1,7 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.chain.model.CardanoTransactionRecord;
-import com.surprising.wallet.chain.model.ChainScanPoint;
+import com.surprising.wallet.common.chain.ChainScanPoint;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.ResultSet;

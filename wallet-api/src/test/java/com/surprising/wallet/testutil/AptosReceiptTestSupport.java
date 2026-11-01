@@ -1,6 +1,6 @@
 package com.surprising.wallet.testutil;
 
-import com.surprising.wallet.chain.aptos.MpcAptosTransactionCodec;
+import com.surprising.wallet.sdk.signing.aptos.MpcAptosTransactionCodec;
 import java.util.Map;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;

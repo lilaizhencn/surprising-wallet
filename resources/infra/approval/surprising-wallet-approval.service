@@ -1,0 +1,37 @@
+[Unit]
+Description=Surprising Wallet Independent Approval Authority
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wallet-approval
+Group=wallet-approval
+WorkingDirectory=/opt/surprising-wallet-approval
+EnvironmentFile=/etc/surprising-wallet-approval/approval.env
+ExecStart=/usr/bin/java -Xms256m -Xmx1g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-approval/current/wallet-approval.jar --spring.config.additional-location=file:/etc/surprising-wallet-approval/
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=60
+SuccessExitStatus=143
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+ReadOnlyPaths=/etc/surprising-wallet-approval /opt/surprising-wallet-approval
+ReadWritePaths=/var/log/surprising-wallet-approval
+InaccessiblePaths=-/etc/surprising-wallet -/var/lib/surprising-wallet-mpc -/opt/surprising-wallet-backend
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

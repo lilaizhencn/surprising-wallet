@@ -154,8 +154,8 @@ public class CustodyTransactionQueryService {
             var address = pageAddresses.get(row.custodyAddressId());
             return new WithdrawalView(row.id(), row.custodyAddressId(), row.orderNo(), row.externalReference(),
                     row.chain(), row.assetSymbol(), row.toAddress(), row.amount(), row.fee(),
-                    order == null ? null : order.txHash(), order == null ? row.status() : order.status(),
-                    order == null ? null : order.errorMessage(), row.createdByType(),
+                    order == null ? null : order.txHash(), com.surprising.wallet.model.custody.PublicWithdrawalStatus.of(order == null ? row.status() : order.status()),
+                    order == null ? null : com.surprising.wallet.model.custody.PublicWithdrawalStatus.message(order.status(),order.errorMessage()), row.createdByType(),
                     row.subject(), row.createdAt(), row.updatedAt(),
                     order != null && order.fundsReleased() && java.util.Set.of("FAILED","REJECTED","CANCELLED").contains(order.status()),
                     fee == null || fee.actualAmount()==null ? null : fee.actualAmount().toPlainString(),

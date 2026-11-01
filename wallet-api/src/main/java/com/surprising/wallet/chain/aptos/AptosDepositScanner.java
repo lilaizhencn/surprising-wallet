@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.sdk.signing.aptos.AptosHex;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;

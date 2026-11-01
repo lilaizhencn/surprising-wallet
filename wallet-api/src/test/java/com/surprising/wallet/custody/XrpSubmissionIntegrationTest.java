@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.sdk.signing.xrp.MpcXrpTransactionCodec;
+
 import com.google.common.primitives.UnsignedInteger;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.chain.xrp.*;
@@ -146,7 +148,7 @@ class XrpSubmissionIntegrationTest {
         return gas;
     }
     private XrpSubmissionService.Operation preparation() {
-        return new XrpSubmissionService.Operation(TENANT,XrpSubmissionService.preparationReference(source,"USDT",false),XrpSubmissionService.Kind.FUNDING);
+        return new XrpSubmissionService.Operation(TENANT,XrpSubmissionService.preparationReference(source,"USDT",false),XrpSubmissionService.Kind.ADDRESS_PREPARATION);
     }
     private MpcSignRequest reservePreparation(ChainAddressRecord gas) {
         return service.reserve(preparation(),gas,"USDT",BigDecimal.ONE,Payment.builder().from(draft()).account(Address.of(gas.getAddress())).destination(Address.of(source.getAddress())).build());

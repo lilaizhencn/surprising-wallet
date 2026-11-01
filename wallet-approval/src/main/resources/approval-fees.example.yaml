@@ -1,0 +1,11 @@
+# Independent host configuration; replace the tenant UUID and verify limits before enabling signing.
+approval:
+  fees:
+    budgets:
+      - tenant-id: 00000000-0000-0000-0000-000000000000
+        chain: ETH
+        network: sepolia
+        network-identity: eip155:11155111
+        native-symbol: ETH
+        native-decimals: 18
+        rolling24h-limit: "0.01"

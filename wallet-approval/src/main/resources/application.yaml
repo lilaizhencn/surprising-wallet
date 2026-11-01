@@ -1,0 +1,35 @@
+server:
+  port: ${APPROVAL_PORT:9095}
+  ssl:
+    enabled: true
+    key-store: ${APPROVAL_TLS_KEYSTORE}
+    key-store-password: ${APPROVAL_TLS_KEYSTORE_PASSWORD}
+    key-store-type: PKCS12
+    trust-store: ${APPROVAL_TLS_TRUSTSTORE}
+    trust-store-password: ${APPROVAL_TLS_TRUSTSTORE_PASSWORD}
+    trust-store-type: PKCS12
+    client-auth: want
+    enabled-protocols: TLSv1.3
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  application:
+    name: wallet-approval
+  datasource:
+    url: ${APPROVAL_DB_URL}
+    username: ${APPROVAL_DB_USERNAME}
+    password: ${APPROVAL_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 1
+  sql:
+    init:
+      mode: never
+approval:
+  public-origin: ${APPROVAL_PUBLIC_ORIGIN}
+  # Explicit SPKI-to-tenant map comes from an independent local deployment config.
+  service-clients: {}

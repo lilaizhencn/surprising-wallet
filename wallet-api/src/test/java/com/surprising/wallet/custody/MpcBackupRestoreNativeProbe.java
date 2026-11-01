@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.signing.MpcClient;
@@ -53,7 +55,7 @@ public final class MpcBackupRestoreNativeProbe {
     private MpcSigningService service(byte[] master) {
         var security=new CustodySecurityProperties();security.setSecretMasterKey(HexFormat.of().formatHex(master));
         return new MpcSigningService(new CustodyTenantTableRepository(jdbc),keys,epochs,support.requests,attempts,
-                new CustodyCryptoService(security),json,support.manager);
+                new CustodyCryptoService(security),json,support.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
     }
 
     private void prepare() throws Exception {

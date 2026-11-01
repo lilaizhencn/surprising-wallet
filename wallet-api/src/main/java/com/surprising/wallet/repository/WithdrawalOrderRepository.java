@@ -352,6 +352,39 @@ public class WithdrawalOrderRepository {
                 (rs, rowNum) -> map(rs), tenantId, id).stream().findFirst();
     }
 
+    public int releaseIndependentReview(UUID tenant,long id) {
+        return jdbc.update("update withdrawal_order set status='FROZEN',error_message=null,updated_at=now() where tenant_id=? and id=? and status='PENDING_REVIEW' and tx_hash is null and not funds_released and not durable_submission",tenant,id);
+    }
+
+    /** Basic unclaimed refusal. Claimed orders require UnsignedWithdrawalCancellationService to prove no grant and clean every resource. */
+    public int refuseIndependentReview(UUID tenant,long id) {
+        return jdbc.update("update withdrawal_order set status='FAILED',funds_released=true,error_message='withdrawal could not be processed',updated_at=now() where tenant_id=? and id=? and status in ('PENDING_REVIEW','FROZEN') and tx_hash is null and not funds_released and not durable_submission",tenant,id);
+    }
+    public boolean canIndependentlyCancel(UUID tenant,long id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select tx_hash is null and not funds_released and status in ('PENDING_REVIEW','FROZEN','RETRYING','SIGNING','BROADCAST_UNKNOWN')
+                from withdrawal_order where tenant_id=? and id=?
+                """,Boolean.class,tenant,id));
+    }
+    public boolean independentRefundComplete(UUID tenant,long id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("select status='FAILED' and funds_released and tx_hash is null from withdrawal_order where tenant_id=? and id=?",Boolean.class,tenant,id));
+    }
+    /** Caller atomically cancelled all no-grant native/batch resources using a fresh independent terminal receipt. */
+    public int refuseIndependentlyCancelled(UUID tenant,long id) {
+        return jdbc.update("""
+                update withdrawal_order set status='FAILED',funds_released=true,error_message='withdrawal could not be processed',lease_owner=null,lease_until=null,updated_at=now()
+                where tenant_id=? and id=? and tx_hash is null and not funds_released
+                    and status in ('PENDING_REVIEW','FROZEN','RETRYING','SIGNING','BROADCAST_UNKNOWN')
+                """,tenant,id);
+    }
+    public int requeueUnsignedBatchMember(UUID tenant,String chain,String reference) {
+        return jdbc.update("""
+                update withdrawal_order set status='FROZEN',durable_submission=false,error_message=null,lease_owner=null,lease_until=null,updated_at=now()
+                where tenant_id=? and chain=? and order_no=? and tx_hash is null and not funds_released
+                    and status in ('FROZEN','RETRYING','SIGNING','BROADCAST_UNKNOWN')
+                """,tenant,chain,reference);
+    }
+
     /** 按主键领取提现订单。 */
     public int claimSigning(UUID tenantId, long id) {
         return jdbc.update("""

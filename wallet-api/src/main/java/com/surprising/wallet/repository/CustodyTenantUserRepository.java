@@ -117,6 +117,60 @@ public class CustodyTenantUserRepository {
                 """, CustodyTenantUserRepository::mapView, tenantId);
     }
 
+    public void insertMember(UUID id, UUID tenant, String email, String name, String passwordHash, String role) {
+        jdbc.update("insert into custody_tenant_user(id,tenant_id,email,display_name,password_hash,role,status) values (?,?,?,?,?,?,'ACTIVE')",
+                id, tenant, email, name, passwordHash, role);
+    }
+
+    public Optional<TenantUserRecord> lockMember(UUID tenant, UUID id) {
+        return jdbc.query("""
+                select id,tenant_id,email,display_name,password_hash,role,status,failed_login_count,locked_until
+                  from custody_tenant_user where tenant_id=? and id=? for update
+                """, CustodyTenantUserRepository::mapUser, tenant, id).stream().findFirst();
+    }
+
+    public int updateMember(UUID tenant, UUID id, String name, String role, String status) {
+        return jdbc.update("""
+                update custody_tenant_user set display_name=?,role=?,status=?,updated_at=now()
+                 where tenant_id=? and id=? and role in ('OPERATOR','APPROVER','VIEWER')
+                """, name, role, status, tenant, id);
+    }
+
+    /** Joins the same transaction as the account mutation and mandatory audit. Re-enabling never clears pending revocation. */
+    public void enqueueApprovalRevocation(UUID tenant,UUID id,UUID actor) {
+        if(jdbc.update("""
+                update custody_tenant_user set approval_revocation_sequence=approval_revocation_sequence+1,
+                    approval_revocation_actor=?,approval_revoked_at=clock_timestamp()
+                where tenant_id=? and id=? and role in ('OPERATOR','APPROVER','VIEWER')
+                  and approval_revocation_sequence<1000000000000000
+                """,actor,tenant,id)!=1)throw new IllegalStateException("approval revocation generation unavailable");
+    }
+    public List<com.surprising.wallet.common.approval.ApprovalMemberRevocation> pendingApprovalRevocations(int limit) {
+        return jdbc.query("""
+                select tenant_id,id,approval_revocation_sequence,approval_revocation_actor,approval_revoked_at
+                from custody_tenant_user where approval_revocation_sequence>approval_revocation_delivered
+                order by approval_revoked_at,id limit ?
+                """,(r,n)->new com.surprising.wallet.common.approval.ApprovalMemberRevocation(r.getObject("tenant_id",UUID.class),r.getObject("id",UUID.class),
+                    r.getLong("approval_revocation_sequence"),r.getObject("approval_revocation_actor",UUID.class),r.getTimestamp("approval_revoked_at").toInstant()),Math.min(Math.max(limit,1),100));
+    }
+    public boolean pendingApprovalRevocation(UUID tenant) {
+        return !jdbc.queryForList("select id from custody_tenant_user where tenant_id=? and approval_revocation_sequence>approval_revocation_delivered limit 1",UUID.class,tenant).isEmpty();
+    }
+    public int acknowledgeApprovalRevocation(UUID tenant,UUID member,long sent,long accepted) {
+        return jdbc.update("""
+                update custody_tenant_user set approval_revocation_sequence=greatest(approval_revocation_sequence,?),
+                    approval_revocation_delivered=greatest(approval_revocation_delivered,?)
+                where tenant_id=? and id=? and approval_revocation_sequence=? and approval_revocation_delivered<?
+                """,accepted,accepted,tenant,member,sent,accepted);
+    }
+
+    public int resetMemberPassword(UUID tenant, UUID id, String hash) {
+        return jdbc.update("""
+                update custody_tenant_user set password_hash=?,failed_login_count=0,locked_until=null,updated_at=now()
+                 where tenant_id=? and id=? and role in ('OPERATOR','APPROVER','VIEWER')
+                """, hash, tenant, id);
+    }
+
     /** 解锁租户管理员。 */
     public int unlockAdministrator(UUID tenantId, UUID userId) {
         return jdbc.update("""

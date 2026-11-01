@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;

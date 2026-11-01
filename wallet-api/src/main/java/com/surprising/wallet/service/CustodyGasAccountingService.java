@@ -61,7 +61,7 @@ public class CustodyGasAccountingService {
         return Boolean.TRUE.equals(transactions.execute(status->{
             var request=mpcRequests.lock(tenantId,requestId).orElseThrow();
             var command=request.command();
-            if(command.businessType()!=com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.FUNDING)
+            if(!java.util.Set.of(com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.FUNDING,com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.ADDRESS_PREPARATION).contains(command.businessType()))
                 throw new IllegalArgumentException("preparation gas requires an owned system MPC intent");
             var account=accounts.lockForChain(tenantId,command.chain().name()).orElse(null);
             if(account==null)return false;

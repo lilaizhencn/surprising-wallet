@@ -1,9 +1,9 @@
 package com.surprising.wallet.chain;
 
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.chain.cardano.MpcCardanoTransactionCodec;
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec;
-import com.surprising.wallet.chain.near.MpcNearTransactionCodec;
+import com.surprising.wallet.sdk.signing.cardano.MpcCardanoTransactionCodec;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
 import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

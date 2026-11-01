@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.*;

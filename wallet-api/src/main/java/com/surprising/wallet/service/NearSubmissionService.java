@@ -1,5 +1,16 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.signing.NearOperation.Kind;
+
+import com.surprising.wallet.common.signing.NearPayment;
+
+import com.surprising.wallet.common.signing.NearOperation;
+
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+import com.surprising.wallet.common.signing.NearSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.chain.near.*;
@@ -32,22 +43,17 @@ public class NearSubmissionService {
     private final ObjectMapper json;
     private final WithdrawalSettlementService settlements;
     private final CustodyGasUsageRepository gasUsages;
-    public enum Kind { WITHDRAWAL,COLLECTION }
-    public record Operation(UUID tenantId,String reference,Kind kind) {
-        public Operation {Objects.requireNonNull(tenantId);Objects.requireNonNull(kind);if(reference==null||reference.isBlank())throw new IllegalArgumentException("NEAR business reference required");}
-    }
-    public record Payment(String symbol,String recipient,BigDecimal amount,BigDecimal customerFee) { }
-    public Optional<MpcSignRequest> intent(Operation op){return requests.findBusiness(op.tenantId(),ChainType.NEAR,MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference(),SLOT);}
-    public static String registrationReference(Operation op) {
+    public Optional<MpcSignRequest> intent(NearOperation op){return requests.findBusiness(op.tenantId(),ChainType.NEAR,MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference(),SLOT);}
+    public static String registrationReference(NearOperation op) {
         try{return "near-storage:"+HEX.formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(
                 (op.tenantId()+":"+op.kind()+":"+op.reference()).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
         catch(java.security.NoSuchAlgorithmException unavailable){throw new IllegalStateException(unavailable);}
     }
-    public Optional<MpcSignRequest> registration(Operation op) {
+    public Optional<MpcSignRequest> registration(NearOperation op) {
         return requests.findBusiness(op.tenantId(),ChainType.NEAR,MpcSignCommand.BusinessType.FUNDING,registrationReference(op),"storage-registration");
     }
     @Transactional(propagation=Propagation.MANDATORY)
-    public Payment lockRegistrationOwner(Operation op,String sender,Payment expected) {
+    public NearPayment lockRegistrationOwner(NearOperation op,String sender,NearPayment expected) {
         var owner=lockOwner(op);
         require(owner.hash()==null && intent(op).isEmpty() && Set.of("SIGNING","BROADCAST_UNKNOWN").contains(owner.state())
                 && owner.sender().equals(sender) && owner.symbol().equals(expected.symbol()) && owner.recipient().equals(expected.recipient())
@@ -61,9 +67,9 @@ public class NearSubmissionService {
         require(HEX.formatHex(MpcNearTransactionCodec.signingBytes(p.unsigned())).equals(request.command().preimageHex()),"NEAR fixed signing message differs");return p;
     }
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public Payment payment(Operation op){var owner=lockOwner(op);return new Payment(owner.symbol(),owner.recipient(),owner.amount(),owner.fee());}
+    public NearPayment payment(NearOperation op){var owner=lockOwner(op);return new NearPayment(owner.symbol(),owner.recipient(),owner.amount(),owner.fee());}
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public MpcSignRequest reserve(Operation op,ChainAddressRecord source,NearSigningPayload draft) {
+    public MpcSignRequest reserve(NearOperation op,ChainAddressRecord source,NearSigningPayload draft) {
         var owner=lockOwner(op);
         require(op.tenantId().equals(source.getTenantId()) && "NEAR".equals(source.getChain()) && owner.sender().equals(source.getAddress()),"NEAR source differs from owned business");
         var previous=intent(op);
@@ -81,7 +87,7 @@ public class NearSubmissionService {
         if(op.kind()==Kind.COLLECTION && registration(op).isEmpty())require(addresses.findEnabledByTenantAndAddress(op.tenantId(),"NEAR",u.recipient()).orElseThrow().getMpcKeyId()!=null,"NEAR collector has no owned joint key");
         // One unresolved sender intent across all assets avoids invalidating an older selected nonce.
         require(!transactions.hasPendingSender(u.sender()),"NEAR sender already has a pending payment intent");
-        long nonce=sequences.reserve("NEAR",u.sender(),u.nonce());
+        long nonce=sequences.reserve("NEAR",u.sender(),u.nonce(),MpcSignCommand.reservationOwner(op.tenantId(),MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference()));
         var fixed=new NearSigningPayload(draft.symbol(),draft.amount(),draft.customerFee(),draft.decimals(),
                 new MpcNearTransactionCodec.Unsigned(u.network(),u.genesisHash(),u.sender(),nonce,u.recipient(),u.amountAtomic(),u.tokenContract(),u.gas(),u.memo(),u.blockHeight(),u.validUntilHeight(),u.blockHash(),u.publicKeyHex()));
         String digest=MpcNearTransactionCodec.transactionHash(fixed.unsigned());
@@ -89,9 +95,9 @@ public class NearSubmissionService {
         return signing.reserveSignature(new MpcSignCommand(op.tenantId(),key.id(),key.activeEpoch(),ChainType.NEAR,MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference(),SLOT,
                 MpcSignCommand.Purpose.TRANSACTION,ENCODING,HEX.formatHex(json.writeValueAsBytes(fixed)),HEX.formatHex(MpcNearTransactionCodec.signingBytes(fixed.unsigned()))),nodes.online());
     }
-    public void sign(Operation op,UUID id){require(intent(op).orElseThrow().id().equals(id),"NEAR signature request differs from owner");signing.awaitSignature(op.tenantId(),id,nodes);}
+    public void sign(NearOperation op,UUID id){require(intent(op).orElseThrow().id().equals(id),"NEAR signature request differs from owner");signing.awaitSignature(op.tenantId(),id,nodes);}
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public MpcNearTransactionCodec.Signed commit(Operation op,UUID id) {
+    public MpcNearTransactionCodec.Signed commit(NearOperation op,UUID id) {
         var owner=lockOwner(op);var request=intent(op).orElseThrow();require(request.id().equals(id),"NEAR selected request differs from owner");
         var p=payload(request);validate(owner,p);var signed=selected(op,request);String raw=json.writeValueAsString(signed);var row=transactions.find(signed.txHash()).orElseThrow();
         if(owner.hash()!=null){require(owner.hash().equals(signed.txHash()) && raw.equals(row.getRawPayload()),"NEAR durable raw/hash differs from selected witness");return signed;}
@@ -100,17 +106,17 @@ public class NearSubmissionService {
         require((op.kind()==Kind.WITHDRAWAL?orders.bindPrepared(op.tenantId(),"NEAR",op.reference(),signed.txHash()):collections.bindPrepared(op.tenantId(),"NEAR",op.reference(),signed.txHash()))==1,"NEAR raw/hash business binding raced");return signed;
     }
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public void observed(Operation op,String digest){var owner=lockOwner(op);require(digest.equals(owner.hash()) && intent(op).isPresent(),"NEAR observed digest differs from owner");transactions.markSubmitted(digest);}
+    public void observed(NearOperation op,String digest){var owner=lockOwner(op);require(digest.equals(owner.hash()) && intent(op).isPresent(),"NEAR observed digest differs from owner");transactions.markSubmitted(digest);}
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public void restoreSent(Operation op,String digest) {
+    public void restoreSent(NearOperation op,String digest) {
         var owner=lockOwner(op);require(digest.equals(owner.hash()) && intent(op).isPresent(),"NEAR recovery digest differs from owner");if(!Set.of("SIGNING","BROADCAST_UNKNOWN").contains(owner.state()))return;
         require((op.kind()==Kind.WITHDRAWAL?orders.recoverPreparedSent(op.tenantId(),"NEAR",op.reference(),digest):collections.recoverPreparedSent(op.tenantId(),"NEAR",op.reference(),digest))==1,"NEAR SENT recovery raced");transactions.markSubmitted(digest);
     }
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public void unknown(Operation op,String reason){var owner=lockOwner(op);if(!"SIGNING".equals(owner.state()))return;if(op.kind()==Kind.WITHDRAWAL)orders.markBroadcastUnknown(op.tenantId(),"NEAR",op.reference(),owner.sender(),reason);else collections.markSigningUnknown(op.tenantId(),"NEAR",op.reference(),reason);}
+    public void unknown(NearOperation op,String reason){var owner=lockOwner(op);if(!"SIGNING".equals(owner.state()))return;if(op.kind()==Kind.WITHDRAWAL)orders.markBroadcastUnknown(op.tenantId(),"NEAR",op.reference(),owner.sender(),reason);else collections.markSigningUnknown(op.tenantId(),"NEAR",op.reference(),reason);}
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public int releaseUnsigned(Operation op){var owner=lockOwner(op);if(owner.hash()!=null||intent(op).isPresent()||registration(op).isPresent())return 0;return op.kind()==Kind.WITHDRAWAL?orders.recoverUnsignedDurable(op.tenantId(),"NEAR",op.reference()):collections.recoverUnsignedDurable(op.tenantId(),"NEAR",op.reference());}
-    private void requireRegistrationReady(Operation op,NearSigningPayload draft) {
+    public int releaseUnsigned(NearOperation op){var owner=lockOwner(op);if(owner.hash()!=null||intent(op).isPresent()||registration(op).isPresent())return 0;return op.kind()==Kind.WITHDRAWAL?orders.recoverUnsignedDurable(op.tenantId(),"NEAR",op.reference()):collections.recoverUnsignedDurable(op.tenantId(),"NEAR",op.reference());}
+    private void requireRegistrationReady(NearOperation op,NearSigningPayload draft) {
         var request=registration(op).orElseThrow();
         var p=NearRegistrationService.payload(op,request,json);
         require(request.state()==MpcSignRequest.State.COMPLETED,"NEP-145 signature is incomplete");
@@ -126,9 +132,9 @@ public class NearSubmissionService {
                 && p.payment().recipient().equals(draft.unsigned().recipient()) && p.unsigned().contract().equals(draft.unsigned().tokenContract())
                 && p.tokenDecimals()==draft.decimals(),"NEAR payment differs from original completed registration");
     }
-    public Optional<NearExecutionReceipt.Proof> proof(Operation op){return intent(op).flatMap(request->transactions.find(MpcNearTransactionCodec.transactionHash(payload(request).unsigned()))).map(NearTransactionRecord::getExecutionReceipt).map(raw->json.readValue(raw,NearExecutionReceipt.Proof.class));}
+    public Optional<NearExecutionReceipt.Proof> proof(NearOperation op){return intent(op).flatMap(request->transactions.find(MpcNearTransactionCodec.transactionHash(payload(request).unsigned()))).map(NearTransactionRecord::getExecutionReceipt).map(raw->json.readValue(raw,NearExecutionReceipt.Proof.class));}
     @Transactional(propagation=Propagation.REQUIRES_NEW,rollbackFor=Throwable.class)
-    public boolean settle(Operation op,NearExecutionReceipt.Proof receipt,long latest,int requiredConfirmations) {
+    public boolean settle(NearOperation op,NearExecutionReceipt.Proof receipt,long latest,int requiredConfirmations) {
         var owner=lockOwner(op);var request=intent(op).orElseThrow();var p=payload(request);validate(owner,p);var signed=selected(op,request);
         require(signed.txHash().equals(owner.hash()),"NEAR receipt differs from owned hash");var row=transactions.find(signed.txHash()).orElseThrow();
         require(json.writeValueAsString(signed).equals(row.getRawPayload()),"NEAR receipt has no selected durable wire");
@@ -143,12 +149,12 @@ public class NearSubmissionService {
         require(collections.updateAmounts(op.tenantId(),"NEAR",op.reference(),owner.amount(),new BigDecimal(outcome.expenseYocto()).movePointLeft(24))==1,"NEAR collection fee update raced");
         require((outcome.paid()?collections.markConfirmed(op.tenantId(),"NEAR",op.reference(),signed.txHash()):collections.updateStatus(op.tenantId(),"NEAR",op.reference(),"FAILED",signed.txHash(),"final NEAR execution failure with completed refunds",null))==1,"NEAR collection settlement raced");return true;
     }
-    private MpcNearTransactionCodec.Signed selected(Operation op,MpcSignRequest request){require(request.state()==MpcSignRequest.State.COMPLETED,"NEAR MPC result is not completed");var p=payload(request);require(signing.requireKey(op.tenantId(),request.command().keyId()).publicKeyHex().equals(p.unsigned().publicKeyHex()),"NEAR selected joint key differs");return MpcNearTransactionCodec.assemble(p.unsigned(),signing.signature(op.tenantId(),request.id()).orElseThrow());}
+    private MpcNearTransactionCodec.Signed selected(NearOperation op,MpcSignRequest request){require(request.state()==MpcSignRequest.State.COMPLETED,"NEAR MPC result is not completed");var p=payload(request);require(signing.requireKey(op.tenantId(),request.command().keyId()).publicKeyHex().equals(p.unsigned().publicKeyHex()),"NEAR selected joint key differs");return MpcNearTransactionCodec.assemble(p.unsigned(),signing.signature(op.tenantId(),request.id()).orElseThrow());}
     private static void validate(Owner owner,NearSigningPayload p){require(p!=null && owner.amount().signum()>0 && owner.symbol().equals(p.symbol()) && owner.amount().compareTo(p.amount())==0 && owner.fee().compareTo(p.customerFee())==0
             && owner.sender().equals(p.unsigned().sender()) && owner.recipient().equals(p.unsigned().recipient())
             && p.decimals()>=0 && p.decimals()<=24 && owner.amount().movePointRight(p.decimals()).toBigIntegerExact().equals(p.unsigned().amountAtomic()),"NEAR payload differs from exact owned payment");
         require(("NEAR".equals(owner.symbol()) && p.decimals()==24 && p.unsigned().tokenContract()==null)||(!"NEAR".equals(owner.symbol()) && p.unsigned().tokenContract()!=null),"NEAR asset kind differs");}
-    private Owner lockOwner(Operation op){if(op.kind()==Kind.WITHDRAWAL){var row=orders.lockForSettlement(op.tenantId(),"NEAR",op.reference()).orElseThrow();return new Owner(row.getStatus(),row.getFromAddress(),row.getToAddress(),row.getAssetSymbol(),row.getAmount(),row.getFee(),row.getTxHash());}var row=collections.lockForSubmission(op.tenantId(),"NEAR",op.reference()).orElseThrow();return new Owner(row.getStatus(),row.getFromAddress(),row.getToAddress(),row.getAssetSymbol(),row.getAmount(),BigDecimal.ZERO,row.getTxHash());}
+    private Owner lockOwner(NearOperation op){if(op.kind()==Kind.WITHDRAWAL){var row=orders.lockForSettlement(op.tenantId(),"NEAR",op.reference()).orElseThrow();return new Owner(row.getStatus(),row.getFromAddress(),row.getToAddress(),row.getAssetSymbol(),row.getAmount(),row.getFee(),row.getTxHash());}var row=collections.lockForSubmission(op.tenantId(),"NEAR",op.reference()).orElseThrow();return new Owner(row.getStatus(),row.getFromAddress(),row.getToAddress(),row.getAssetSymbol(),row.getAmount(),BigDecimal.ZERO,row.getTxHash());}
     private static NearTransactionRecord record(Owner owner,NearSigningPayload p,String hash,String status,Long height,Long gas,java.math.BigInteger fee,String raw,String proof){return NearTransactionRecord.builder().chain("NEAR").txHash(hash).actionIndex(0L).sender(p.unsigned().sender()).receiver(p.unsigned().recipient()).assetSymbol(p.symbol()).amount(owner.amount()).gasBurnt(gas).feeYocto(fee).blockHeight(height).status(status).rawPayload(raw).executionReceipt(proof).build();}
     private record Owner(String state,String sender,String recipient,String symbol,BigDecimal amount,BigDecimal fee,String hash) { }
     private static void require(boolean condition,String message){if(!condition)throw new IllegalStateException(message);}

@@ -138,6 +138,15 @@ class CustodyWithdrawalProjectionIntegrationTest {
         assertCustomerAlreadySettled(confirmed);
     }
 
+    @Test void pendingReviewDoesNotLeakThroughReconciliationOrEmitAnApprovalEvent() {
+        var change=withdrawal("ETH","internal-review");
+        jdbc.update("update withdrawal_order set status='PENDING_REVIEW',tx_hash=null,error_message='waiting for platform approval' where tenant_id=? and order_no=?",TENANT,change.orderNo());
+        assertFalse(project(change));projection.reconcile();
+        assertEquals("FROZEN",jdbc.queryForObject("select status from custody_withdrawal where id=?",String.class,change.id()));
+        assertEquals(0,events());assertEquals(0,entries(change));
+        assertEquals("PENDING_REVIEW",jdbc.queryForObject("select status from withdrawal_order where tenant_id=? and order_no=?",String.class,TENANT,change.orderNo()));
+    }
+
     private boolean project(Projection change) {
         return projection.project(change.tenantId(), change.id());
     }

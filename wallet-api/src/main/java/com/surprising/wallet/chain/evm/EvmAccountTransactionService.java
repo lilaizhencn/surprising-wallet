@@ -12,7 +12,7 @@ import com.surprising.wallet.service.EvmSubmissionService;
 import com.surprising.wallet.service.EvmSubmissionService.Operation;
 import com.surprising.wallet.repository.EvmTransactionRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
-import com.surprising.wallet.model.mpc.EvmSigningPayload;
+import com.surprising.wallet.common.signing.EvmSigningPayload;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.math.BigDecimal;

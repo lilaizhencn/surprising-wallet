@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Objects;
 import org.bitcoinj.base.Address;
 import org.bitcoinj.base.Coin;
+import org.bitcoinj.base.LegacyAddress;
+import org.bitcoinj.base.SegwitAddress;
 import org.bitcoinj.base.Sha256Hash;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
@@ -54,6 +56,17 @@ public final class MpcUtxoTransactionCodec {
         }
     }
     public record Signed(String transactionHex, String txId, long feeAtomic, long weight, long vBytes) { }
+
+    public static String address(String chain,BitcoinLikeNetwork network,String publicKeyHex) {
+        if(publicKeyHex==null || !publicKeyHex.matches("0[23][0-9a-f]{64}"))throw new IllegalArgumentException("joint UTXO public key must be compressed secp256k1");
+        var key=ECKey.fromPublicOnly(HEX.parseHex(publicKeyHex));
+        if(segwit(chain))return SegwitAddress.fromKey(network.parameters(chain),key).toString();
+        var legacy=LegacyAddress.fromKey(network.parameters(chain),key);
+        return chain.equals("BCH")?BitcoinCashAddressCodec.fromLegacy(legacy,((BitcoinCashNetworkParameters)network.parameters(chain)).cashPrefix()):legacy.toString();
+    }
+    public static String outputScriptHex(String chain,BitcoinLikeNetwork network,String address) {
+        return HEX.formatHex(ScriptBuilder.createOutputScript(paymentAddress(chain,network,address)).program());
+    }
 
     /** Maximum canonical signature size, with the actual output scripts and compact-size counts. */
     public static long estimateVBytes(String chain, BitcoinLikeNetwork network, List<Input> inputs, List<String> outputs) {
@@ -181,14 +194,17 @@ public final class MpcUtxoTransactionCodec {
                 new TransactionOutPoint(input.outputIndex(), Sha256Hash.wrap(input.txId())), Coin.valueOf(input.valueAtomic()))
                 .withSequence(segwit(chain) ? 0xfffffffdL : 0xffffffffL));
         for (var output : outputs) {
-            Address address = chain.equals("BCH") && (output.address().contains(":")
-                    || output.address().startsWith("q") || output.address().startsWith("p"))
-                    ? BitcoinCashAddressCodec.toLegacy((BitcoinCashNetworkParameters) parameters,
-                            ((BitcoinCashNetworkParameters) parameters).cashPrefix(), output.address())
-                    : Address.fromString(parameters, output.address());
+            Address address = paymentAddress(chain,network,output.address());
             transaction.addOutput(Coin.valueOf(output.valueAtomic()), address);
         }
         return transaction;
+    }
+
+    private static Address paymentAddress(String chain,BitcoinLikeNetwork network,String value) {
+        var parameters=network.parameters(chain);
+        return chain.equals("BCH") && (value.contains(":") || value.startsWith("q") || value.startsWith("p"))
+                ? BitcoinCashAddressCodec.toLegacy((BitcoinCashNetworkParameters)parameters,((BitcoinCashNetworkParameters)parameters).cashPrefix(),value)
+                : Address.fromString(parameters,value);
     }
 
     private static long estimate(String chain, Transaction transaction, List<Input> inputs) {

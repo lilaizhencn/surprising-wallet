@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.sdk.signing.cardano.CardanoAssetUnit;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

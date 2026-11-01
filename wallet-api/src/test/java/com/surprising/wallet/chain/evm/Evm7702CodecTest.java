@@ -1,5 +1,9 @@
 package com.surprising.wallet.chain.evm;
 
+import com.surprising.wallet.sdk.signing.evm7702.Evm7702CollectionRequest;
+import com.surprising.wallet.sdk.signing.evm7702.Evm7702OperationSigner;
+import com.surprising.wallet.sdk.signing.evm7702.Evm7702ContractCodec;
+
 import org.junit.jupiter.api.Test;
 import org.web3j.crypto.AuthorizationTuple;
 import org.web3j.crypto.Credentials;

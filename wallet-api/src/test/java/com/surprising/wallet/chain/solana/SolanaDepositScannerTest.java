@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.sdk.signing.solana.MpcSolanaTransactionCodec;
+
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;

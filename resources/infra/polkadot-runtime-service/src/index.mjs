@@ -64,6 +64,28 @@ app.post('/v1/polkadot/payment-info', route(async (api, body) => {
   const fee = await call.paymentInfo(from);
   return { feePlanck: fee.partialFee.toString(), nativeDecimals: api.registry.chainDecimals[0] };
 }));
+// Independent approval reads canonical reference membership and the actual current execution metadata.
+// It returns public facts only and never submits an extrinsic.
+app.post('/v1/polkadot/signing-facts', route(async (api, body) => {
+  const owner=address(body.address), to=address(body.to), amount=positive(body.amountAtomic);
+  const id=body.assetId==null?null:assetId(body.assetId), reference=hash32(body.blockHash), number=height(body.blockHeight);
+  if(typeof body.keepAlive!=='boolean' || !Number.isSafeInteger(body.nonce) || body.nonce<0 || body.nonce>0xffffffff
+      || !Number.isSafeInteger(body.eraPeriod) || body.eraPeriod<4 || body.eraPeriod>4096 || (body.eraPeriod&(body.eraPeriod-1))!==0)
+    throw new RangeError('invalid fixed payment nonce/era/call');
+  const finalized=await api.rpc.chain.getFinalizedHead(), latest=(await api.rpc.chain.getHeader(finalized)).number.toNumber();
+  if(number>latest || number+body.eraPeriod<=latest || (await api.rpc.chain.getBlockHash(number)).toHex()!==reference)
+    throw new Error('original payment reference is not canonical/finalized or has expired');
+  const keep=id==null?api.tx.balances.transferKeepAlive:api.tx.assets.transferKeepAlive;
+  const death=id==null?api.tx.balances.transferAllowDeath:api.tx.assets.transfer;
+  const call=id==null?(body.keepAlive?keep(to,amount):death(to,amount)):(body.keepAlive?keep(id,to,amount):death(id,to,amount));
+  const era=api.registry.createType('ExtrinsicEra',{current:number,period:body.eraPeriod});
+  const [fee,nonce,token]=await Promise.all([call.paymentInfo(owner,{nonce:body.nonce,era}),api.rpc.system.accountNextIndex(owner),id==null?null:api.query.assets.metadata(id)]);
+  return {genesisHash:api.genesisHash.toHex(),blockHash:reference,blockHeight:number,finalizedHeight:latest,nonce:nonce.toNumber(),
+    specVersion:api.runtimeVersion.specVersion.toNumber(),transactionVersion:api.runtimeVersion.transactionVersion.toNumber(),...signingDomain(api),
+    callIndices:{keepAlive:u8aToHex(keep.callIndex),allowDeath:u8aToHex(death.callIndex)},
+    decimals:token==null?api.registry.chainDecimals[0]:token.decimals.toNumber(),nativeDecimals:api.registry.chainDecimals[0],
+    existentialDeposit:api.consts.balances.existentialDeposit.toString(),feePlanck:fee.partialFee.toString(),assetId:id};
+}));
 app.post('/v1/polkadot/broadcast-signed', route(async (api, body) => {
   const raw = hex(body.extrinsicHex, 16384);
   return { txHash: (await api.rpc.author.submitExtrinsic(raw)).toHex() };

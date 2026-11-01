@@ -95,6 +95,7 @@ class CustodySecurityIntegrationTest {
                 () -> new com.surprising.wallet.gateway.CustodyWebhookHttpClient(context.getBean(CustodyCryptoService.class), "dev"));
         context.registerBean(CustodyWebhookService.class);
         context.registerBean(CustodyTenantService.class);
+        context.registerBean(CustodyTenantUserService.class);
         context.refresh();
         keys = context.getBean(CustodyApiKeyService.class);
         security = context.getBean(CustodySecurityService.class);
@@ -361,6 +362,60 @@ class CustodySecurityIntegrationTest {
                  where table_schema = 'public' and table_name in ('custody_api_key', 'custody_webhook_endpoint')
                    and column_name = 'secret_version'
                 """, Integer.class));
+    }
+
+    @Test
+    void subaccountsHaveSeparatePermissionsAndRoleChangesRevokeExistingSessions() throws Exception {
+        var members = context.getBean(CustodyTenantUserService.class);
+        var member = members.create(admin, new CustodyTenantUserService.CreateMember(
+                "review-" + UUID.randomUUID() + "@example.test", "Reviewer", PASSWORD, "APPROVER"), "127.0.0.1");
+        String token = "cs_" + crypto.randomSecret(32);
+        context.getBean(CustodySessionRepository.class).insert(UUID.randomUUID(), member.id(), tenantId,
+                crypto.sha256(token), "127.0.0.1", "member test", Instant.now().plusSeconds(300));
+        var auth = context.getBean(CustodyAuthService.class);
+        var reviewer = auth.requireSession(token, false);
+        assertTrue(reviewer.hasScope("approvals:review"));
+        assertFalse(reviewer.hasScope("withdrawals:write"));
+        members.update(admin, member.id(), new CustodyTenantUserService.UpdateMember("Observer", "VIEWER", "ACTIVE"), "127.0.0.1");
+        assertThrows(CustodyUnauthorizedException.class, () -> auth.requireSession(token, false));
+        members.resetPassword(admin, member.id(), "new-test-password-123456", "127.0.0.1");
+        assertThrows(CustodyUnauthorizedException.class, () -> auth.tenantLogin(member.email(), PASSWORD, "127.0.0.1", "test"));
+        assertNotNull(auth.tenantLogin(member.email(), "new-test-password-123456", "127.0.0.1", "test"));
+        members.update(admin, member.id(), new CustodyTenantUserService.UpdateMember("Observer", "VIEWER", "DISABLED"), "127.0.0.1");
+        assertThrows(CustodyForbiddenException.class, () -> auth.tenantLogin(member.email(), "new-test-password-123456", "127.0.0.1", "test"));
+        assertFalse(mapper.writeValueAsString(members.list(admin)).contains("password"));
+    }
+
+    @Test
+    void subaccountManagementCannotCrossTenantsPromoteAdministratorsOrUseApiCredentials() {
+        var members = context.getBean(CustodyTenantUserService.class);
+        var member = members.create(admin, new CustodyTenantUserService.CreateMember(
+                "operator-" + UUID.randomUUID() + "@example.test", "Operator", PASSWORD, "OPERATOR"), "127.0.0.1");
+        assertThrows(CustodyForbiddenException.class, () -> members.list(principal(tenantId, member.id(), "OPERATOR", Set.of("*"))));
+        assertThrows(CustodyForbiddenException.class, () -> members.list(new CustodyPrincipal(ActorType.API_KEY, userId, tenantId, "test", "TENANT_ADMIN", Set.of("*"))));
+        assertThrows(IllegalArgumentException.class, () -> members.create(admin, new CustodyTenantUserService.CreateMember(
+                "invalid@example.test", "Invalid", PASSWORD, "TENANT_ADMIN"), "127.0.0.1"));
+        assertThrows(CustodyForbiddenException.class, () -> members.update(admin, userId,
+                new CustodyTenantUserService.UpdateMember("Admin", "VIEWER", "DISABLED"), "127.0.0.1"));
+        UUID otherTenant = UUID.randomUUID(), otherUser = UUID.randomUUID();
+        context.getBean(CustodyTenantTableRepository.class).insert(otherTenant, "other-" + otherTenant, "Other");
+        context.getBean(CustodyTenantUserRepository.class).insertTenantAdmin(otherUser, otherTenant, "other-" + otherUser + "@example.test", "Other", context.getBean(CustodyPasswordService.class).hash(PASSWORD));
+        var foreign = principal(otherTenant, otherUser, "TENANT_ADMIN", Set.of("*"));
+        var duplicate = assertThrows(IllegalArgumentException.class, () -> members.create(foreign,
+                new CustodyTenantUserService.CreateMember(member.email(), "Duplicate", PASSWORD, "OPERATOR"), "127.0.0.1"));
+        assertEquals("email is unavailable", duplicate.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> members.update(foreign, member.id(),
+                new CustodyTenantUserService.UpdateMember("Foreign", "VIEWER", "DISABLED"), "127.0.0.1"));
+        assertEquals("ACTIVE", context.getBean(CustodyTenantUserRepository.class).findView(tenantId, member.id()).orElseThrow().status());
+    }
+
+    @Test
+    void subaccountCreationRollsBackWhenItsMandatoryAuditCannotCommit() {
+        var members = context.getBean(CustodyTenantUserService.class);
+        int before = members.list(admin).size();
+        withoutAudit(() -> assertThrows(RuntimeException.class, () -> members.create(admin,
+                new CustodyTenantUserService.CreateMember("rollback@example.test", "Rollback", PASSWORD, "VIEWER"), "127.0.0.1")));
+        assertEquals(before, members.list(admin).size());
     }
 
     private CustodyApiKeyService.CreatedApiKey key() {

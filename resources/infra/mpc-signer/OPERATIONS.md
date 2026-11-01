@@ -116,3 +116,13 @@ Monero daemon 的原高度与 tip 保持一致；恢复后先领取原未领取 
 在隔离 Ubuntu24.04 / x86_64 上构建的发布包通过全部6项原生 CTest（139.77秒，Monero118.70秒）、包内容摘要核对、systemd unit 静态验证，以及从归档解出的程序再次进行真实三进程三算法/全两方组合验收。构建器已删除，没有启动数据库或激活生产服务。归档 SHA256 为 `41dbec17ad4717813db45a8d2aabb9a4748a0c0fcf971cb97b950105f5b39e15`。
 
 该验收平台为 glibc2.39，实际 ELF 所需最高符号为 GLIBC2.38、GLIBCXX3.4.32、CXXABI1.3.13。部署机需满足这些运行库条件，或在目标发行版重新构建。cb-mpc、patched OpenSSL 均静态链接，动态依赖不指向构建目录，也不加载系统 libssl/libcrypto。该验收二进制构建于本分支提交前的工作区，manifest 保留当时的 dirty 记录；运行时代码与当前验收版本一致，归档是验收产物，不是已经批准的生产版本。原节点配置、秘密和份额不包含在包中。
+
+### Independent approval gate (feature integration in progress)
+
+The approval branch requires `authorizationPublicKeys` on every holder and independent proofs on `SIGN`/`MONERO_RELAY`. Existing Wallet Java call sites still need the new authority grant integration, so deploying only the new holder binary will stop payment signing. Deploy the completed authority, Wallet integration and all holders together only after end-to-end acceptance; this development branch is not ready for production.
+
+Keep prior authorization verification public keys until every originally admitted signing/relay session using them has finished or been safely reconciled. Original-session recovery retains the exact original authorization proof even after expiry; removing its trust key can block recovery. Keep immutable authorization-ID/session receipts in node backups alongside the original requests, results and share epochs. Never clear them to retry a payment. A fresh expired proof is rejected, and partial multi-holder admission must be reconciled through the original states rather than extending/replacing the proof silently.
+
+Rollback must preserve the independent authorization gate, database facts, node receipts and original transaction/spend domain. If the new flow fails, stop creating new payment signatures and recover existing sessions; do not restore an older ungated signer as an operational workaround.
+
+Admission evidence is persisted before grant/session/request receipts. A node that crashed between these writes reports INTERRUPTED rather than ABSENT, and retains the exact descriptor/proof for original-session recovery. Freshness is evaluated under the same node lock as negative receipt queries, using the current clock rather than the time the HTTP request arrived. Keep admission records with all other immutable node state. A test-only crash-injection executable verifies this boundary and is never installed in the Runtime package.

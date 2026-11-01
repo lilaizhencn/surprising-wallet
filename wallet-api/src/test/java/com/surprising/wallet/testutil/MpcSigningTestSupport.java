@@ -59,7 +59,7 @@ public final class MpcSigningTestSupport {
         var attempts = new WalletMpcSignAttemptRepository(jdbc, json);
         var crypto = new CustodyCryptoService(config);
         signing = spy(new MpcSigningService(new CustodyTenantTableRepository(jdbc), keys, epochs,
-                requests, attempts, crypto, json, manager));
+                requests, attempts, crypto, json, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.forBoundaryTests(jdbc,json,manager)));
         nodes = mock(MpcNodes.class);
         when(nodes.parties()).thenReturn(PARTIES);
         when(nodes.online()).thenReturn(PARTIES.subList(0, 2));
@@ -125,6 +125,20 @@ public final class MpcSigningTestSupport {
                             "preimageHex", command.preimageHex(), "signatureHex", HexFormat.of().formatHex(signature),
                             "authenticatedParties", List.of(attempts.find(tenant, request.currentAttemptId()).orElseThrow().request().online().getFirst()));
                     attempts.complete(tenant, request.currentAttemptId(), crypto.encrypt(json.writeValueAsString(bound)), Map.of());
+                    // This DB-only fixture substitutes the whole native boundary. Admit its original reservation atomically
+                    // with the synthetic selected signature. It is not an independent authorization/native acceptance test.
+                    String owner=command.reservationOwner(),chain=command.chain().name();
+                    if(command.chain().isEvm()) {
+                        var allocations=jdbc.query("select address,pending_nonce from evm_nonce where chain=? and pending_owner=?",
+                                (r,n)->Map.entry(r.getString(1),r.getBigDecimal(2).toBigIntegerExact()),chain,owner);
+                        var counter=new EvmNonceRepository(jdbc);
+                        for(var allocation:allocations)if(!counter.admit(chain,allocation.getKey(),allocation.getValue(),owner))throw new IllegalStateException("fixture nonce admission raced");
+                    } else if(java.util.Set.of("APTOS","TON","XRP","NEAR","DOT").contains(chain)) {
+                        var allocations=jdbc.query("select address,pending_sequence from account_sequence where chain=? and pending_owner=?",
+                                (r,n)->Map.entry(r.getString(1),r.getLong(2)),chain,owner);
+                        var counter=new AccountSequenceRepository(jdbc);
+                        for(var allocation:allocations)if(!counter.admit(chain,allocation.getKey(),allocation.getValue(),owner))throw new IllegalStateException("fixture sequence admission raced");
+                    }
                     requests.recordState(tenant, id, request.currentAttemptId(), MpcSignRequest.State.COMPLETED);
                 }
                 return signing.signature(tenant, id).orElseThrow();

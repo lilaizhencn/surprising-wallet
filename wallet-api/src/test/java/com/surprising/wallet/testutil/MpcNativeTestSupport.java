@@ -66,7 +66,7 @@ public final class MpcNativeTestSupport implements AutoCloseable {
         crypto = new CustodyCryptoService(security);
         signing = new MpcSigningService(new CustodyTenantTableRepository(jdbc), new WalletMpcKeyRepository(jdbc),
                 new WalletMpcKeyEpochRepository(jdbc, json), requests, new WalletMpcSignAttemptRepository(jdbc, json),
-                crypto, json, manager);
+                crypto, json, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,manager));
     }
 
     public ChainAddressRecord address(ChainType chain, long userId, long index, String role) {

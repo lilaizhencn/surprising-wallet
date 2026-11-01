@@ -1,5 +1,8 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.sdk.signing.sui.SuiHex;
+import com.surprising.wallet.sdk.signing.sui.SuiCoin;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -355,7 +358,5 @@ public class SuiRpcClient {
             String target = endpoint.replaceAll("/+$", "");
             return new Endpoint(target, target.endsWith(":443"));
         }
-    }
-    public record SuiCoin(String objectId, String version, String digest, BigDecimal balance) {
     }
 }

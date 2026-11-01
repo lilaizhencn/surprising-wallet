@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.hypercore;
 
+import com.surprising.wallet.sdk.signing.hypercore.MpcHyperCoreActionCodec;
+
 import java.math.BigDecimal;
 import tools.jackson.databind.JsonNode;
 

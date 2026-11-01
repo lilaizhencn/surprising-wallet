@@ -6,9 +6,9 @@ import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.model.mpc.EvmSigningPayload;
+import com.surprising.wallet.common.signing.EvmSigningPayload;
 import com.surprising.wallet.model.mpc.MpcPendingException;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.sdk.signing.MpcEvmTransactionCodec;
@@ -89,7 +89,7 @@ public class EvmSubmissionService {
         String publicAddress = MpcPublicAddressCodec.encode(AccountChainProfile.builder().chain(chain).network("unused").build(),
                 HexFormat.of().parseHex(key.publicKeyHex()));
         require(publicAddress.equalsIgnoreCase(owner.sender()), "EVM sender does not match its joint public key");
-        var nonce = nonces.reserve(chain, sender.getAddress().toLowerCase(Locale.ROOT), chainNonce);
+        var nonce = nonces.reserve(chain, sender.getAddress().toLowerCase(Locale.ROOT), chainNonce,MpcSignCommand.reservationOwner(operation.tenantId(),MpcSignCommand.BusinessType.valueOf(operation.kind().name()),operation.reference()));
         var unsigned = factory.create(nonce);
         require(unsigned.raw().getNonce().equals(nonce)
                         && unsigned.chainId() == profiles.findAccountByChain(chain).orElseThrow().getChainId(),

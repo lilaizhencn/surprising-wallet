@@ -1,12 +1,21 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.NearOperation.Kind;
+
+import com.surprising.wallet.common.signing.NearRegistrationPayload;
+
+import com.surprising.wallet.common.signing.NearOperation;
+
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+import com.surprising.wallet.common.signing.NearSigningPayload;
+
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.chain.near.*;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
-import com.surprising.wallet.service.NearSubmissionService.*;
+
 import com.surprising.wallet.testutil.*;
 import java.math.BigDecimal;
 import java.util.*;
@@ -65,7 +74,7 @@ class NearSubmissionIntegrationTest {
         createOrder(REFERENCE,"NEAR");
     }
     @AfterEach void close(){if(context!=null)context.close();}
-    private record RegistrationFixture(Operation op,ChainAddressRecord gas,NearRegistrationPayload payload) { }
+    private record RegistrationFixture(NearOperation op,ChainAddressRecord gas,NearRegistrationPayload payload) { }
     private RegistrationFixture registrationFixture() {
         createOrder("TOKEN","USDC");var op=op("TOKEN");
         var gas=fixture.address(jdbc,TENANT,ChainType.NEAR,90,1,"SYSTEM_GAS");UUID custody=UUID.randomUUID();
@@ -132,8 +141,8 @@ class NearSubmissionIntegrationTest {
         assertEquals("SIGNING",orders.find("NEAR","TOKEN",TENANT).orElseThrow().getStatus());
         assertEquals("RESERVED",new CustodyGasUsageRepository(jdbc).find(TENANT,"ADDRESS_PREPARATION",registrations().intent(f.op()).orElseThrow().id()).orElseThrow().status());
     }
-    private Operation op(){return op(REFERENCE);}
-    private Operation op(String reference){return new Operation(TENANT,reference,Kind.WITHDRAWAL);}
+    private NearOperation op(){return op(REFERENCE);}
+    private NearOperation op(String reference){return new NearOperation(TENANT,reference,Kind.WITHDRAWAL);}
     private void createOrder(String reference,String symbol){
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,total_balance) values (?,'NEAR',?,?,5,5) on conflict(chain,asset_symbol,account_id) do nothing",TENANT,symbol,ACCOUNT);
         orders.createForTenant(TENANT,reference,42,"NEAR",symbol,source.getAddress(),ACCOUNT,recipient,BigDecimal.ONE,new BigDecimal("0.1"));
@@ -141,14 +150,14 @@ class NearSubmissionIntegrationTest {
         orders.updateStatus(TENANT,"NEAR",reference,"FROZEN",source.getAddress(),null,null);
         assertEquals(1,orders.claimSigningDurable(TENANT,"NEAR",reference,source.getAddress()));
     }
-    private NearSigningPayload draft(Operation op,String symbol){
+    private NearSigningPayload draft(NearOperation op,String symbol){
         int decimals=24;String contract=null;
         if(!symbol.equals("NEAR")){var token=new TokenConfigRepository(jdbc).findDefinition("NEAR","testnet",symbol).orElseThrow();contract=token.getContractAddress();decimals=token.getDecimals();}
         return new NearSigningPayload(symbol,BigDecimal.ONE,op.kind()==Kind.COLLECTION?BigDecimal.ZERO:new BigDecimal("0.1"),decimals,
                 new MpcNearTransactionCodec.Unsigned("testnet",GENESIS,source.getAddress(),7,recipient,BigDecimal.ONE.movePointRight(decimals).toBigIntegerExact(),contract,contract==null?0:30_000_000_000_000L,contract==null?null:op.reference(),100,200,GENESIS,service.publicKey(source)));
     }
-    private MpcNearTransactionCodec.Signed prepared(Operation op,String symbol){var request=service.reserve(op,source,draft(op,symbol));service.sign(op,request.id());return service.commit(op,request.id());}
-    private NearExecutionReceipt.Proof receipt(Operation op,MpcNearTransactionCodec.Signed signed,boolean paid,long fee){return NearReceiptTestSupport.payment(service.payload(service.intent(op).orElseThrow()).unsigned(),signed,paid,fee);}
+    private MpcNearTransactionCodec.Signed prepared(NearOperation op,String symbol){var request=service.reserve(op,source,draft(op,symbol));service.sign(op,request.id());return service.commit(op,request.id());}
+    private NearExecutionReceipt.Proof receipt(NearOperation op,MpcNearTransactionCodec.Signed signed,boolean paid,long fee){return NearReceiptTestSupport.payment(service.payload(service.intent(op).orElseThrow()).unsigned(),signed,paid,fee);}
     @Test void nonceAndIntentCommitTogetherBeforeMpcAndSelectedWireBeforeNetwork(){
         var request=service.reserve(op(),source,draft(op(),"NEAR"));String digest=MpcNearTransactionCodec.transactionHash(service.payload(request).unsigned());
         assertEquals("SIGNING",transactions.find(digest).orElseThrow().getStatus());assertNull(transactions.find(digest).orElseThrow().getRawPayload());
@@ -184,7 +193,7 @@ class NearSubmissionIntegrationTest {
         }
         assertEquals(1,jdbc.queryForObject("select count(*) from near_transaction",Integer.class));
     }
-    private int reserveResult(Operation op){try{service.reserve(op,source,draft(op,"NEAR"));return 1;}catch(IllegalStateException expected){return 0;}}
+    private int reserveResult(NearOperation op){try{service.reserve(op,source,draft(op,"NEAR"));return 1;}catch(IllegalStateException expected){return 0;}}
     @Test void laterBusinessReservesANewNonceEvenIfTheRpcObservationIsStale(){
         var signed=prepared(op(),"NEAR");service.restoreSent(op(),signed.txHash());assertTrue(service.settle(op(),receipt(op(),signed,true,1_500_000),123,1));
         createOrder("NEXT","NEAR");var request=service.reserve(op("NEXT"),source,draft(op("NEXT"),"NEAR"));
@@ -238,7 +247,7 @@ class NearSubmissionIntegrationTest {
         var rpc=mock(NearRpcClient.class);when(rpc.forNetwork("testnet")).thenReturn(rpc);when(rpc.status()).thenReturn(json.createObjectNode().put("chain_id","testnet").put("genesis_hash",GENESIS));when(rpc.genesisConfig()).thenReturn(json.createObjectNode().put("chain_id","testnet").put("transaction_validity_period",100));
         when(rpc.accessKey(anyString(),anyString())).thenReturn(json.createObjectNode().put("permission","FullAccess").put("nonce",6).put("block_height",100).put("block_hash",GENESIS));
         var block=json.createObjectNode();block.putObject("header").put("hash",GENESIS).put("height",100);when(rpc.block(anyString())).thenReturn(block);when(rpc.latestFinalBlockHeight()).thenReturn(100L);
-        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new NearTransactionService(rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),runtime);
+        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new NearTransactionService(mock(com.surprising.wallet.service.MpcAuthorizationService.class),rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),runtime);
         var accepted=new java.util.concurrent.atomic.AtomicBoolean();
         when(rpc.knownTransaction(anyString(),anyString())).thenAnswer(call->{if(!accepted.get())throw new IllegalStateException("UNKNOWN_TRANSACTION");var value=json.createObjectNode();value.putObject("transaction").put("hash",call.getArgument(0,String.class));return value;});
         when(rpc.sendTransaction(anyString())).thenAnswer(call->{
@@ -253,7 +262,7 @@ class NearSubmissionIntegrationTest {
     @Test void expiredUnknownIntentCannotReplaceNonceOrReleasePrincipal(){
         var signed=prepared(op(),"NEAR");service.unknown(op(),"offline before response");
         var rpc=mock(NearRpcClient.class);when(rpc.forNetwork("testnet")).thenReturn(rpc);when(rpc.status()).thenReturn(json.createObjectNode().put("chain_id","testnet").put("genesis_hash",GENESIS));when(rpc.knownTransaction(anyString(),anyString())).thenThrow(new IllegalStateException("UNKNOWN_TRANSACTION"));when(rpc.latestFinalBlockHeight()).thenReturn(201L);
-        var transfers=new NearTransactionService(rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),mock(WalletRuntimeConfigService.class));
+        var transfers=new NearTransactionService(mock(com.surprising.wallet.service.MpcAuthorizationService.class),rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),mock(WalletRuntimeConfigService.class));
         assertThrows(IllegalStateException.class,()->transfers.recover(op()));verify(rpc,never()).sendTransaction(anyString());assertEquals(0,service.releaseUnsigned(op()));assertEquals(signed.txHash(),orders.findTxHash("NEAR",REFERENCE,TENANT).orElseThrow());
         assertEquals(0,new BigDecimal("1.1").compareTo(new LedgerBalanceRepository(jdbc).find(TENANT,"NEAR","NEAR",ACCOUNT).orElseThrow().getLockedBalance()));
     }
@@ -266,7 +275,7 @@ class NearSubmissionIntegrationTest {
         var collections=new CollectionRecordRepository(jdbc);UUID custodyId=UUID.randomUUID();
         new CustodyAddressRepository(jdbc).insert(custodyId,TENANT,source.getId(),"NEAR","testnet",source.getAddress(),null,"near-source",null,"{}","CONSOLE",42,0,1,null);
         String reference="NEAR-COLLECTION";collections.create(TENANT,custodyId,reference,"NEAR","NEAR",source.getAddress(),recipient,BigDecimal.ONE,BigDecimal.ZERO,null);
-        collections.claimSigningDurable(TENANT,"NEAR",reference);var operation=new Operation(TENANT,reference,Kind.COLLECTION);
+        collections.claimSigningDurable(TENANT,"NEAR",reference);var operation=new NearOperation(TENANT,reference,Kind.COLLECTION);
         assertThrows(RuntimeException.class,()->service.reserve(operation,source,draft(operation,"NEAR")));
         var collector=fixture.address(jdbc,TENANT,ChainType.NEAR,0,2,"HOT");recipient=collector.getAddress();
         jdbc.update("update collection_record set to_address=? where tenant_id=? and collection_no=?",recipient,TENANT,reference);

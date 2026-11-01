@@ -1,5 +1,8 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.sdk.signing.sui.SuiPtbTransactionBuilder;
+import com.surprising.wallet.sdk.signing.sui.SuiCoin;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -18,7 +21,7 @@ class SuiPtbTransactionBuilderTest {
     void matchesSuiCliTransactionDataBcs() {
         String sender = "0xb1dd7ca2c37b738349ee47736224d840f61a00eefd88b686cfd2245af8865f51";
         String recipient = "0x4740d23e696837e19d7cdcacf780d446dbd64d2083d0b9fc0e20d30dac494e40";
-        SuiRpcClient.SuiCoin gas = new SuiRpcClient.SuiCoin(
+        SuiCoin gas = new SuiCoin(
                 "0x092cefbe8c5ee7b2ba23000fa9197e3aae34c9ee17fdd220f473c36d164b362e",
                 "3", "55wJucoQLEgJ7ykgWDYR27dy62p2KNSoN9VBNTyoZELi", new BigDecimal("29997999987122120"));
 

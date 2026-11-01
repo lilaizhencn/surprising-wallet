@@ -8,7 +8,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.signing.MpcClient;
 import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.model.mpc.MpcKey;
-import com.surprising.wallet.model.mpc.MpcSignCommand;
+import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.model.mpc.MpcSignRequest;
 import com.surprising.wallet.repository.CustodyTenantTableRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -72,7 +72,7 @@ public final class MpcSigningNativeProbe {
         java.util.Arrays.fill(master, (byte) 0);
         var crypto = new CustodyCryptoService(security);
         crypto.validateConfiguration();
-        var service = new MpcSigningService(tenants, keys, epochs, requests, attempts, crypto, json, manager);
+        var service = new MpcSigningService(tenants, keys, epochs, requests, attempts, crypto, json, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,manager));
         UUID tenant = UUID.fromString(config.path("tenantId").asText());
         tenants.insert(tenant, "native-mpc-probe", "Isolated native MPC probe");
         int namespace = tenants.findById(tenant).orElseThrow().derivationNamespace();
@@ -202,7 +202,7 @@ public final class MpcSigningNativeProbe {
                     // A recreated application object loads only committed metadata and ciphertext.
                     var restarted = new MpcSigningService(tenants, new WalletMpcKeyRepository(jdbc),
                             new WalletMpcKeyEpochRepository(jdbc, json), new WalletMpcSignRequestRepository(jdbc),
-                            new WalletMpcSignAttemptRepository(jdbc, json), new CustodyCryptoService(security), json, manager);
+                            new WalletMpcSignAttemptRepository(jdbc, json), new CustodyCryptoService(security), json, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,manager));
                     byte[] signature = restarted.signature(tenant, request.id()).orElseThrow();
                     var signedFact = attempts.find(tenant, request.currentAttemptId()).orElseThrow();
                     require(signedFact.signatureCiphertext().startsWith("v1:"), "Wallet result is not encrypted");

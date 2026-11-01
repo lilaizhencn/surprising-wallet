@@ -1,6 +1,7 @@
 #include <wallet_mpc/engine.h>
 #include <wallet_mpc/store.h>
 #include <wallet_mpc/monero.h>
+#include <wallet_mpc/authorization.h>
 
 #include <httplib.h>
 #include <json.hpp>
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <deque>
 #include <fcntl.h>
 #include <fstream>
@@ -191,6 +193,9 @@ class Node {
       parties_[i++] = parsed.identity;
     }
     require(i == 3 && peers_.count(identity_), "local certificate must be one of three registered peers");
+    authorization_keys_ = config_.at("authorizationPublicKeys").get<std::vector<std::string>>();
+    require(!authorization_keys_.empty() && authorization_keys_.size() <= 3, "independent authorization trust keys required");
+    for (const auto& key : authorization_keys_) require(unhex(key).size() == 32, "invalid independent authorization public key");
     timeout_seconds_ = config_.value("sessionTimeoutSeconds", 30);
     require(timeout_seconds_ >= 5 && timeout_seconds_ <= 120, "session timeout is outside limits");
     server_.set_payload_max_length(10 * 1024 * 1024);
@@ -205,9 +210,12 @@ class Node {
       reply(response, Json{{"status", "UP"}, {"partyId", identity_}});
     });
     server_.Post("/v1/sessions", [&](const auto& request, auto& response) {
-      const auto descriptor = Json::parse(request.body);
+      auto descriptor = Json::parse(request.body);
+      const auto proof = descriptor.value("authorization", Json());
+      descriptor.erase("authorization");
+      require(descriptor.is_object() && descriptor.size() == 8, "native request fields differ");
       authorize(authenticated_party(request), descriptor, descriptor.at("operation"));
-      reply(response, submit(descriptor));
+      reply(response, submit(descriptor, proof));
     });
     server_.Post("/v1/results", [&](const auto& request, auto& response) {
       const auto query = Json::parse(request.body);
@@ -275,6 +283,7 @@ class Node {
 
  private:
   Json config_;
+  std::vector<std::string> authorization_keys_;
   EncryptedStore store_;
   httplib::SSLServer server_;
   std::string identity_;
@@ -407,10 +416,12 @@ class Node {
       }
       return Json{{"state", "INTERRUPTED"}, {"sessionId", id}};
     }
+    // An admission interrupted before request persistence is still evidence that must fence a payment.
+    if (store_.get("admission-" + id, aad)) return Json{{"state", "INTERRUPTED"}, {"sessionId", id}};
     return Json{{"state", "ABSENT"}, {"sessionId", id}};
   }
 
-  Json submit(const Json& descriptor) {
+  Json submit(const Json& descriptor, const Json& proof) {
     const auto id = uuid(descriptor, "sessionId");
     const auto aad = context(descriptor);
     key_record(descriptor, "share-");
@@ -436,11 +447,35 @@ class Node {
       if (monero) require(message.size() > 0 && message.size() <= 4096, "invalid native Monero signing policy size");
       else require(algorithm(descriptor.at("algorithm")) == Algorithm::Ed25519 || message.size() == 32, "signing digest must be 32 bytes");
     }
+    const bool needs_authorization = operation == "SIGN" || operation == "MONERO_RELAY";
+    Json authorization;
+    if (needs_authorization) authorization = verify_authorization(proof, descriptor, authorization_keys_, 0, false);
     std::lock_guard<std::mutex> lock(mutex_);
+    bool admitted = false;
+    if (needs_authorization) {
+      const auto grant_id = "approval-" + uuid(authorization, "authorizationId");
+      if (auto pending = store_.get("admission-" + id, aad)) {
+        require(pending->to_string() == Json{{"descriptor", descriptor}, {"authorization", proof}}.dump(), "original admission differs");
+        admitted = true;
+      }
+      if (auto original = store_.get(grant_id, "SW-MPC-AUTHORIZATION-V1")) {
+        require(original->to_string() == proof.dump(), "authorization was already bound to another execution");
+        require(admitted, "authorization receipt is missing original admission evidence");
+      }
+      if (!admitted) {
+        const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        verify_authorization(proof, descriptor, authorization_keys_, now, true);
+      }
+    }
     bool recover_monero = false;
     bool recover_refresh = false;
     if (auto previous = store_.get("request-" + id, aad)) {
       require(previous->to_string() == descriptor.dump(), "session identity conflicts with existing request");
+      if (needs_authorization) {
+        require(admitted, "existing signing session has no independent authorization receipt");
+        const auto original = store_.get("session-approval-" + id, aad);
+        require(original && original->to_string() == proof.dump(), "original session authorization differs");
+      }
       if (auto recovered = store_.get("recovered-result-" + id, aad)) return Json::parse(recovered->to_string());
       std::optional<Json> outcome;
       if (auto saved = store_.get("result-" + id, aad)) {
@@ -487,6 +522,21 @@ class Node {
       require(!store_.get(key_record(descriptor, "key-"), aad), "refresh target epoch already exists");
       // The fence precedes acceptance/crypto and survives crashes and missing replies.
       store_.put(key_record(source, "refresh-fence-"), aad, mem_t(descriptor.dump()));
+    }
+    if (needs_authorization) {
+      // Admission and ABSENT reads share mutex_: an expired queued request cannot appear after a negative audit.
+      if (!admitted) {
+        const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        verify_authorization(proof, descriptor, authorization_keys_, now, true);
+      }
+      // This first durable marker makes every crash point report INTERRUPTED, never a misleading ABSENT.
+      store_.put("admission-" + id, aad, mem_t(Json{{"descriptor", descriptor}, {"authorization", proof}}.dump()));
+#ifdef WALLET_MPC_TEST_FAILPOINTS
+      if (std::getenv("WALLET_MPC_TEST_EXIT_AFTER_ADMISSION")) _exit(86);
+#endif
+      // No crypto begins before both one-time use and original-session binding are durable.
+      store_.put("approval-" + uuid(authorization, "authorizationId"), "SW-MPC-AUTHORIZATION-V1", mem_t(proof.dump()));
+      store_.put("session-approval-" + id, aad, mem_t(proof.dump()));
     }
     store_.put("request-" + id, aad, mem_t(descriptor.dump()));
     auto session = std::make_shared<Session>();

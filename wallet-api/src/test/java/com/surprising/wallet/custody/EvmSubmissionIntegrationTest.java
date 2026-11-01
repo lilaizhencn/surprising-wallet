@@ -1,5 +1,7 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.common.signing.EvmSigningPayload;
+
 import com.sun.net.httpserver.HttpServer;
 import com.surprising.wallet.chain.evm.*;
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
@@ -95,7 +97,8 @@ class EvmSubmissionIntegrationTest {
         var security = new CustodySecurityProperties(); security.setSecretMasterKey(HexFormat.of().formatHex(master));
         Arrays.fill(master, (byte)0);
         var crypto = new CustodyCryptoService(security);
-        signing = spy(new MpcSigningService(new CustodyTenantTableRepository(jdbc), keys, epochs, requests, attempts, crypto, mapper, manager));
+        com.surprising.wallet.testutil.MpcAuthorizationTestSupport.registerFixture(jdbc,mapper,TENANT,metadata.id());
+        signing = spy(new MpcSigningService(new CustodyTenantTableRepository(jdbc), keys, epochs, requests, attempts, crypto, mapper, manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.forBoundaryTests(jdbc,mapper,manager)));
         mpcNodes = mock(MpcNodes.class);
         when(mpcNodes.online()).thenReturn(parties.subList(0,2));
         doAnswer(call -> {

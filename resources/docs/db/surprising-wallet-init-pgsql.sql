@@ -21,6 +21,8 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+DROP TABLE IF EXISTS public.wallet_withdrawal_approval;
+
 ALTER TABLE IF EXISTS public.chain_address DROP CONSTRAINT IF EXISTS chain_address_mpc_key_fkey;
 ALTER TABLE IF EXISTS public.hypercore_action_record DROP CONSTRAINT IF EXISTS hypercore_action_record_request_fk;
 DROP TABLE IF EXISTS public.hypercore_ledger_cursor;
@@ -29,7 +31,7 @@ DROP TABLE IF EXISTS public.cardano_transaction;
 DROP TABLE IF EXISTS public.polkadot_transaction;
 ALTER TABLE IF EXISTS public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_request_fk;
 ALTER TABLE IF EXISTS public.monero_transaction DROP CONSTRAINT IF EXISTS monero_transaction_attempt_fk;
-DROP TABLE IF EXISTS public.wallet_mpc_sign_attempt, public.wallet_mpc_sign_request,
+DROP TABLE IF EXISTS public.wallet_mpc_relay, public.wallet_mpc_sign_attempt, public.wallet_mpc_sign_request,
     public.wallet_mpc_key_epoch, public.wallet_mpc_key;
 DROP TABLE IF EXISTS public.evm_withdrawal_batch_attempt;
 DROP TABLE IF EXISTS public.evm_withdrawal_batch_item;
@@ -442,11 +444,17 @@ CREATE TABLE public.account_sequence (
     address character varying(160) NOT NULL,
     chain_sequence bigint DEFAULT 0 NOT NULL,
     next_sequence bigint DEFAULT 0 NOT NULL,
+    pending_owner varchar(320),
+    pending_sequence bigint,
+    CHECK (chain_sequence>=0 AND next_sequence>=0),
+    CHECK ((pending_owner IS NULL AND pending_sequence IS NULL) OR (pending_owner IS NOT NULL AND length(pending_owner)>0 AND pending_sequence IS NOT NULL AND pending_sequence>=0 AND pending_sequence<next_sequence)),
     status character varying(32) DEFAULT 'ACTIVE'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+
+CREATE UNIQUE INDEX account_sequence_pending_owner_idx ON public.account_sequence(chain,pending_owner) WHERE pending_owner IS NOT NULL;
 
 --
 -- Name: account_sequence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1392,7 +1400,13 @@ CREATE TABLE public.custody_tenant_user (
     last_login_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT custody_tenant_user_role_check CHECK (((role)::text = ANY ((ARRAY['PLATFORM_ADMIN'::character varying, 'TENANT_ADMIN'::character varying, 'OPERATOR'::character varying, 'VIEWER'::character varying])::text[]))),
+    approval_revocation_sequence bigint NOT NULL DEFAULT 0 CHECK (approval_revocation_sequence BETWEEN 0 AND 1000000000000000),
+    approval_revocation_delivered bigint NOT NULL DEFAULT 0 CHECK (approval_revocation_delivered BETWEEN 0 AND approval_revocation_sequence),
+    approval_revocation_actor uuid,
+    approval_revoked_at timestamptz,
+    CHECK ((approval_revocation_sequence=0 AND approval_revocation_actor IS NULL AND approval_revoked_at IS NULL)
+        OR (approval_revocation_sequence>0 AND tenant_id IS NOT NULL AND approval_revocation_actor IS NOT NULL AND approval_revoked_at IS NOT NULL)),
+    CONSTRAINT custody_tenant_user_role_check CHECK (((role)::text = ANY ((ARRAY['PLATFORM_ADMIN'::character varying, 'TENANT_ADMIN'::character varying, 'OPERATOR'::character varying, 'APPROVER'::character varying, 'VIEWER'::character varying])::text[]))),
     CONSTRAINT custody_tenant_user_scope_check CHECK (((((role)::text = 'PLATFORM_ADMIN'::text) AND (tenant_id IS NULL)) OR (((role)::text <> 'PLATFORM_ADMIN'::text) AND (tenant_id IS NOT NULL)))),
     CONSTRAINT custody_tenant_user_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'DISABLED'::character varying])::text[])))
 );
@@ -1401,6 +1415,9 @@ CREATE TABLE public.custody_tenant_user (
 --
 -- Name: custody_webhook_delivery; Type: TABLE; Schema: public; Owner: -
 --
+
+CREATE INDEX custody_tenant_user_approval_revocation_pending_idx ON public.custody_tenant_user(approval_revoked_at,id)
+    WHERE approval_revocation_sequence>approval_revocation_delivered;
 
 CREATE TABLE public.custody_webhook_delivery (
     id uuid NOT NULL,
@@ -1562,11 +1579,16 @@ CREATE TABLE public.evm_nonce (
     address character varying(128) NOT NULL,
     chain_nonce numeric(78,0) DEFAULT 0 NOT NULL,
     reserved_nonce numeric(78,0) DEFAULT 0 NOT NULL,
+    pending_owner varchar(320),
+    pending_nonce numeric(78,0),
+    CHECK ((pending_owner IS NULL AND pending_nonce IS NULL) OR (pending_owner IS NOT NULL AND length(pending_owner)>0 AND pending_nonce IS NOT NULL AND pending_nonce>=0 AND pending_nonce<reserved_nonce)),
     status character varying(32) DEFAULT 'ACTIVE'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+
+CREATE UNIQUE INDEX evm_nonce_pending_owner_idx ON public.evm_nonce(chain,pending_owner) WHERE pending_owner IS NOT NULL;
 
 --
 -- Name: evm_nonce_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -5502,7 +5524,6 @@ INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "valu
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.withdraw.enabled', 'true', 'boolean', true, 'Global withdrawal switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.collection.enabled', 'true', 'boolean', true, 'Global collection switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.transfer.enabled', 'true', 'boolean', true, 'Global internal transfer switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
-INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('withdrawal.admin.approval.required', 'false', 'boolean', true, 'When true, wallet app withdrawals freeze user ledger balance and wait in PENDING_REVIEW until wallet admin approval moves the order to FROZEN for signing.', '2026-07-03 01:20:00+08', '2026-07-03 01:20:00+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('near.token.account.activation.yocto', '50000000000000000000000', 'bigint', true, 'NEAR native amount sent from the default NEAR hot wallet before preparing a NEP-141 token deposit address. Default is 0.05 NEAR.', '2026-06-28 13:20:00+08', '2026-06-28 13:20:00+08');
 
 
@@ -6711,6 +6732,7 @@ CREATE TRIGGER chain_address_mpc_immutable BEFORE UPDATE ON public.chain_address
 
 CREATE TABLE public.wallet_mpc_key_epoch (
     request jsonb NOT NULL,
+    approval_registration jsonb CHECK (approval_registration IS NULL OR jsonb_typeof(approval_registration)='object'),
     tenant_id uuid GENERATED ALWAYS AS ((request->>'tenantId')::uuid) STORED NOT NULL,
     key_id uuid GENERATED ALWAYS AS ((request->>'keyId')::uuid) STORED NOT NULL,
     epoch integer GENERATED ALWAYS AS ((request->>'epoch')::integer) STORED NOT NULL CHECK (epoch BETWEEN 1 AND 1000000),
@@ -6747,29 +6769,42 @@ CREATE TABLE public.wallet_mpc_sign_request (
     key_id uuid NOT NULL,
     key_epoch integer NOT NULL CHECK (key_epoch > 0),
     chain varchar(32) NOT NULL,
-    business_type varchar(32) NOT NULL CHECK (business_type IN ('WITHDRAWAL','COLLECTION','RECOVERY','FUNDING','DEV_FAUCET')),
+    business_type varchar(32) NOT NULL CHECK (business_type IN ('WITHDRAWAL','COLLECTION','RECOVERY','FUNDING','ADDRESS_PREPARATION','DEV_FAUCET')),
     business_reference varchar(192) NOT NULL CHECK (length(btrim(business_reference)) > 0),
+    business_references text[] NOT NULL CHECK (cardinality(business_references) BETWEEN 1 AND 100 AND array_ndims(business_references)=1 AND array_position(business_references,NULL) IS NULL),
     signing_slot varchar(96) NOT NULL CHECK (length(btrim(signing_slot)) > 0),
     signing_purpose varchar(48) NOT NULL CHECK (signing_purpose IN ('TRANSACTION','EIP7702_AUTHORIZATION','EIP7702_OPERATION')),
     payload_encoding varchar(48) NOT NULL CHECK (payload_encoding ~ '^[A-Z][A-Z0-9_]{0,47}$'),
     payload_hex text NOT NULL CHECK (payload_hex ~ '^[0-9a-f]+$' AND length(payload_hex) % 2 = 0),
     preimage_hex text NOT NULL CHECK (preimage_hex ~ '^[0-9a-f]*$' AND length(preimage_hex) % 2 = 0),
     preimage_hash text GENERATED ALWAYS AS (encode(sha256(decode(preimage_hex,'hex')),'hex')) STORED NOT NULL,
-    state varchar(24) NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','SIGNING','COMPLETED','INDETERMINATE')),
+    state varchar(24) NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','SIGNING','COMPLETED','INDETERMINATE','CANCELLED')),
     current_attempt_id uuid,
+    cancellation_receipt jsonb,
+    cancelled_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     FOREIGN KEY (tenant_id,key_id,key_epoch) REFERENCES public.wallet_mpc_key_epoch(tenant_id,key_id,epoch),
     UNIQUE (tenant_id,chain,business_type,business_reference,signing_slot),
     UNIQUE (tenant_id,id,key_id,key_epoch,preimage_hash),
-    CHECK ((state = 'PENDING') = (current_attempt_id IS NULL))
+    CHECK ((state IN ('PENDING','CANCELLED') OR current_attempt_id IS NOT NULL) AND (state<>'PENDING' OR current_attempt_id IS NULL)),
+    CHECK ((state='CANCELLED' AND cancelled_at IS NOT NULL AND cancellation_receipt IS NOT NULL
+        AND jsonb_typeof(cancellation_receipt)='object' AND cancellation_receipt->>'status' IN ('REJECTED','EXPIRED')
+        AND cancellation_receipt->>'signingStarted'='false' AND cancellation_receipt->'intent'->>'tenantId'=tenant_id::text)
+        OR (state<>'CANCELLED' AND cancelled_at IS NULL AND cancellation_receipt IS NULL))
 );
 CREATE INDEX wallet_mpc_sign_request_pending_idx ON public.wallet_mpc_sign_request(state,created_at,id)
-    WHERE state <> 'COMPLETED';
+    WHERE state NOT IN ('COMPLETED','CANCELLED');
+
+CREATE INDEX wallet_mpc_sign_request_business_members_idx ON public.wallet_mpc_sign_request USING gin(business_references);
 
 CREATE TABLE public.wallet_mpc_sign_attempt (
     request_id uuid NOT NULL,
     request jsonb NOT NULL,
+    authorization_proof jsonb CHECK (authorization_proof IS NULL OR ((jsonb_typeof(authorization_proof)='object'
+        AND (authorization_proof->>'payloadHex') ~ '^[0-9a-f]+$' AND length(authorization_proof->>'payloadHex') BETWEEN 2 AND 8192
+        AND length(authorization_proof->>'payloadHex') % 2=0 AND (authorization_proof->>'signatureHex') ~ '^[0-9a-f]{128}$') IS TRUE)),
+    automatic_operation jsonb CHECK (automatic_operation IS NULL OR (jsonb_typeof(automatic_operation)='object' AND authorization_proof IS NOT NULL)),
     id uuid GENERATED ALWAYS AS ((request->>'sessionId')::uuid) STORED PRIMARY KEY,
     tenant_id uuid GENERATED ALWAYS AS ((request->>'tenantId')::uuid) STORED NOT NULL,
     key_id uuid GENERATED ALWAYS AS ((request->>'keyId')::uuid) STORED NOT NULL,
@@ -6812,23 +6847,26 @@ ALTER TABLE public.wallet_mpc_sign_request ADD CONSTRAINT wallet_mpc_current_att
 -- Application code may advance state, but cannot replace accepted signing intent.
 CREATE OR REPLACE FUNCTION public.wallet_mpc_sign_request_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'MPC signing receipts are permanent'; END IF;
     IF ROW(NEW.id,NEW.tenant_id,NEW.key_id,NEW.key_epoch,NEW.chain,NEW.business_type,
-           NEW.business_reference,NEW.signing_slot,NEW.signing_purpose,NEW.payload_encoding,NEW.payload_hex,NEW.preimage_hex)
+           NEW.business_reference,NEW.business_references,NEW.signing_slot,NEW.signing_purpose,NEW.payload_encoding,NEW.payload_hex,NEW.preimage_hex)
        IS DISTINCT FROM
        ROW(OLD.id,OLD.tenant_id,OLD.key_id,OLD.key_epoch,OLD.chain,OLD.business_type,
-           OLD.business_reference,OLD.signing_slot,OLD.signing_purpose,OLD.payload_encoding,OLD.payload_hex,OLD.preimage_hex)
-       OR (OLD.state = 'COMPLETED' AND ROW(NEW.state,NEW.current_attempt_id) IS DISTINCT FROM ROW(OLD.state,OLD.current_attempt_id)) THEN
+           OLD.business_reference,OLD.business_references,OLD.signing_slot,OLD.signing_purpose,OLD.payload_encoding,OLD.payload_hex,OLD.preimage_hex)
+       OR (OLD.state IN ('COMPLETED','CANCELLED') AND ROW(NEW.state,NEW.current_attempt_id,NEW.cancellation_receipt,NEW.cancelled_at)
+           IS DISTINCT FROM ROW(OLD.state,OLD.current_attempt_id,OLD.cancellation_receipt,OLD.cancelled_at)) THEN
         RAISE EXCEPTION 'MPC accepted signing intent or completed result is immutable';
     END IF;
     RETURN NEW;
 END $$;
-CREATE TRIGGER wallet_mpc_sign_request_immutable BEFORE UPDATE ON public.wallet_mpc_sign_request
+CREATE TRIGGER wallet_mpc_sign_request_immutable BEFORE UPDATE OR DELETE ON public.wallet_mpc_sign_request
     FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_sign_request_immutable();
 
 CREATE OR REPLACE FUNCTION public.wallet_mpc_sign_attempt_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF ROW(NEW.request_id,NEW.request,NEW.replay_actor,NEW.replay_reason)
        IS DISTINCT FROM ROW(OLD.request_id,OLD.request,OLD.replay_actor,OLD.replay_reason)
+       OR (OLD.authorization_proof IS NOT NULL AND ROW(NEW.authorization_proof,NEW.automatic_operation) IS DISTINCT FROM ROW(OLD.authorization_proof,OLD.automatic_operation))
        OR (OLD.state = 'INDETERMINATE' AND NEW.state NOT IN ('INDETERMINATE','COMPLETED'))
        OR (OLD.state = 'COMPLETED' AND ROW(NEW.state,NEW.signature_ciphertext)
            IS DISTINCT FROM ROW(OLD.state,OLD.signature_ciphertext)) THEN
@@ -6839,10 +6877,42 @@ END $$;
 CREATE TRIGGER wallet_mpc_sign_attempt_immutable BEFORE UPDATE ON public.wallet_mpc_sign_attempt
     FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_sign_attempt_immutable();
 
+-- Native Monero relay is a durable original operation, never a fresh payment or an unsigned side channel.
+CREATE TABLE public.wallet_mpc_relay (
+    tenant_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    sign_session_id uuid NOT NULL,
+    holder varchar(64) NOT NULL CHECK (holder ~ '^[0-9a-f]{64}$'),
+    request jsonb NOT NULL CHECK (jsonb_typeof(request)='object'),
+    authorization_proof jsonb CHECK (authorization_proof IS NULL OR jsonb_typeof(authorization_proof)='object'),
+    session_id uuid GENERATED ALWAYS AS ((request->>'sessionId')::uuid) STORED,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id,request_id,holder),
+    UNIQUE (tenant_id,session_id),
+    FOREIGN KEY (tenant_id,request_id,sign_session_id) REFERENCES public.wallet_mpc_sign_attempt(tenant_id,request_id,id),
+    CHECK ((request->>'tenantId'=tenant_id::text AND request->>'operation'='MONERO_RELAY'
+        AND request->>'algorithm'='MONERO_NATIVE_2_OF_3' AND jsonb_array_length(request->'online')=1
+        AND request->'online'->>0=holder) IS TRUE)
+);
+CREATE OR REPLACE FUNCTION public.wallet_mpc_relay_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'original Monero relay receipts are permanent' USING ERRCODE='23514'; END IF;
+    IF ROW(NEW.tenant_id,NEW.request_id,NEW.sign_session_id,NEW.holder,NEW.request,NEW.created_at)
+        IS DISTINCT FROM ROW(OLD.tenant_id,OLD.request_id,OLD.sign_session_id,OLD.holder,OLD.request,OLD.created_at)
+        OR (OLD.authorization_proof IS NOT NULL AND NEW.authorization_proof IS DISTINCT FROM OLD.authorization_proof) THEN
+        RAISE EXCEPTION 'original Monero relay descriptor/proof is immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER wallet_mpc_relay_immutable BEFORE UPDATE OR DELETE ON public.wallet_mpc_relay
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_mpc_relay_immutable();
+
 CREATE OR REPLACE FUNCTION public.wallet_mpc_key_epoch_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF ROW(NEW.request,NEW.refresh_actor,NEW.refresh_reason)
        IS DISTINCT FROM ROW(OLD.request,OLD.refresh_actor,OLD.refresh_reason)
+       OR (OLD.approval_registration IS NOT NULL AND NEW.approval_registration IS DISTINCT FROM OLD.approval_registration)
        OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED')
        OR (OLD.state='ACTIVE' AND NEW.state NOT IN ('ACTIVE','RETIRED'))
        OR (OLD.state IN ('ACTIVE','RETIRED') AND NEW.node_results IS DISTINCT FROM OLD.node_results) THEN
@@ -7013,3 +7083,369 @@ CREATE TRIGGER evm_collection_batch_claim_immutable BEFORE UPDATE ON public.evm_
     FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_evm_batch_claim();
 CREATE TRIGGER evm_withdrawal_batch_claim_immutable BEFORE UPDATE ON public.evm_withdrawal_batch
     FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_evm_batch_claim();
+
+
+-- Independent approval authority. Wallet application roles must have no privileges on this schema.
+-- No foreign keys into wallet business tables: enrollment and authorization trust are independent.
+DROP SCHEMA IF EXISTS approval CASCADE;
+CREATE SCHEMA approval;
+REVOKE ALL ON SCHEMA approval FROM PUBLIC;
+CREATE TABLE approval.tenant (
+    id uuid PRIMARY KEY,
+    slug varchar(96) NOT NULL UNIQUE,
+    status varchar(16) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DISABLED')),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE approval.member (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    email varchar(254) NOT NULL,
+    display_name varchar(120) NOT NULL,
+    password_hash text NOT NULL,
+    role varchar(24) NOT NULL CHECK (role IN ('TENANT_ADMIN','APPROVER')),
+    status varchar(16) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DISABLED','INVITED','RESET_REQUIRED')),
+    failed_attempts integer NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+    locked_until timestamptz,
+    activation_token_hash varchar(64),
+    activation_expires_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CHECK ((activation_token_hash IS NULL AND activation_expires_at IS NULL AND status IN ('ACTIVE','DISABLED'))
+        OR (activation_token_hash IS NOT NULL AND activation_token_hash ~ '^[0-9a-f]{64}$' AND activation_expires_at IS NOT NULL AND status IN ('INVITED','RESET_REQUIRED'))),
+    UNIQUE (tenant_id,id)
+);
+CREATE UNIQUE INDEX approval_member_email_idx ON approval.member(lower(email));
+CREATE UNIQUE INDEX approval_member_activation_idx ON approval.member(activation_token_hash) WHERE activation_token_hash IS NOT NULL;
+CREATE INDEX approval_member_tenant_page_idx ON approval.member(tenant_id,created_at,id);
+CREATE TABLE approval.member_revocation (
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    member_id uuid NOT NULL,
+    sequence bigint NOT NULL CHECK (sequence BETWEEN 1 AND 1000000000000000),
+    descriptor_hash varchar(64) NOT NULL CHECK (descriptor_hash ~ '^[0-9a-f]{64}$'),
+    descriptor jsonb NOT NULL CHECK (jsonb_typeof(descriptor)='object'),
+    PRIMARY KEY (tenant_id,member_id),
+    CHECK (descriptor ?& ARRAY['tenantId','memberId','sequence','actorId','revokedAt']
+        AND descriptor->>'tenantId'=tenant_id::text AND descriptor->>'memberId'=member_id::text
+        AND jsonb_typeof(descriptor->'sequence')='number' AND (descriptor->>'sequence')::bigint=sequence
+        AND jsonb_typeof(descriptor->'actorId')='string' AND jsonb_typeof(descriptor->'revokedAt')='string')
+);
+CREATE FUNCTION approval.enforce_member_revocation_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'member revocation fences are permanent' USING ERRCODE='23514'; END IF;
+    IF NEW.tenant_id<>OLD.tenant_id OR NEW.member_id<>OLD.member_id OR NEW.sequence<=OLD.sequence THEN
+        RAISE EXCEPTION 'member revocation sequence must strictly advance' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER approval_member_revocation_fence BEFORE UPDATE OR DELETE ON approval.member_revocation
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_member_revocation_fence();
+CREATE TABLE approval.policy (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    single_amount numeric(84,24) CHECK (single_amount > 0),
+    rolling_24h_amount numeric(84,24) CHECK (rolling_24h_amount > 0),
+    all_withdrawals boolean NOT NULL DEFAULT true,
+    new_recipient boolean NOT NULL DEFAULT true,
+    console_withdrawal boolean NOT NULL DEFAULT true,
+    required_reviewers integer NOT NULL DEFAULT 1 CHECK (required_reviewers BETWEEN 1 AND 2),
+    expiry_seconds integer NOT NULL DEFAULT 3600 CHECK (expiry_seconds BETWEEN 900 AND 86400),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id,chain,network,asset_symbol), UNIQUE (tenant_id,id)
+);
+CREATE TABLE approval.request (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    business_reference varchar(192) NOT NULL,
+    intent_hash varchar(64) NOT NULL CHECK (intent_hash ~ '^[0-9a-f]{64}$'),
+    intent jsonb NOT NULL,
+    asset_snapshot jsonb NOT NULL CHECK (jsonb_typeof(asset_snapshot)='object'),
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    recipient varchar(256) NOT NULL,
+    amount numeric(84,24) NOT NULL CHECK (amount > 0),
+    source varchar(16) NOT NULL CHECK (source IN ('API','CONSOLE')),
+    initiator_id uuid NOT NULL,
+    policy_id uuid NOT NULL,
+    policy_version bigint NOT NULL CHECK (policy_version > 0),
+    reasons jsonb NOT NULL CHECK (jsonb_typeof(reasons) = 'array'),
+    required_reviewers integer NOT NULL CHECK (required_reviewers BETWEEN 0 AND 2),
+    status varchar(16) NOT NULL CHECK (status IN ('PENDING','APPROVED','REJECTED','EXPIRED')),
+    signing_transaction_id uuid,
+    created_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    UNIQUE (tenant_id,id), UNIQUE (tenant_id,chain,network,business_reference),
+    FOREIGN KEY (tenant_id,policy_id) REFERENCES approval.policy(tenant_id,id),
+    CHECK (expires_at > created_at),
+    CHECK (signing_transaction_id IS NULL OR status='APPROVED')
+);
+CREATE INDEX approval_request_pending_idx ON approval.request(tenant_id,status,created_at,id);
+CREATE INDEX approval_request_rolling_idx ON approval.request(tenant_id,chain,network,asset_symbol,created_at);
+CREATE TABLE approval.decision (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    reviewer_id uuid NOT NULL,
+    decision varchar(8) NOT NULL CHECK (decision IN ('APPROVE','REJECT')),
+    reason varchar(1000) NOT NULL,
+    created_at timestamptz NOT NULL,
+    FOREIGN KEY (tenant_id,request_id) REFERENCES approval.request(tenant_id,id),
+    FOREIGN KEY (tenant_id,reviewer_id) REFERENCES approval.member(tenant_id,id),
+    UNIQUE (tenant_id,request_id,reviewer_id)
+);
+CREATE TABLE approval.audit (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    actor_type varchar(24) NOT NULL CHECK (actor_type IN ('SERVICE','MEMBER','SYSTEM')),
+    actor_id varchar(192) NOT NULL,
+    action varchar(64) NOT NULL,
+    entity_id varchar(192) NOT NULL,
+    detail jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX approval_audit_tenant_page_idx ON approval.audit(tenant_id,created_at DESC,id DESC);
+CREATE INDEX approval_audit_action_page_idx ON approval.audit(tenant_id,action,created_at DESC,id DESC);
+REVOKE ALL ON ALL TABLES IN SCHEMA approval FROM PUBLIC;
+
+CREATE TABLE approval.session (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    member_id uuid NOT NULL,
+    token_hash varchar(64) NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    csrf_token varchar(64) NOT NULL,
+    expires_at timestamptz NOT NULL,
+    revoked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id,member_id) REFERENCES approval.member(tenant_id,id)
+);
+CREATE INDEX approval_session_expiry_idx ON approval.session(expires_at);
+REVOKE ALL ON approval.session FROM PUBLIC;
+CREATE TABLE approval.key (
+    key_id uuid NOT NULL,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    key_group varchar(32) NOT NULL,
+    algorithm varchar(32) NOT NULL CHECK (algorithm IN ('ECDSA_SECP256K1','ED25519','SCHNORR_BIP340','MONERO_NATIVE_2_OF_3')),
+    epoch integer NOT NULL CHECK (epoch BETWEEN 1 AND 1000000),
+    public_key_hex varchar(128) NOT NULL CHECK (public_key_hex ~ '^[0-9a-f]+$'),
+    public_address varchar(256),
+    state varchar(16) NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE','DISABLED')),
+    ceremony_request jsonb NOT NULL,
+    observations jsonb NOT NULL CHECK (jsonb_typeof(observations)='array'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id,key_id)
+);
+REVOKE ALL ON approval.key FROM PUBLIC;
+
+-- Permanent authorization receipts. Never delete these to retry an unknown signature or payment.
+CREATE TABLE approval.signing_transaction (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    business_type varchar(24) NOT NULL CHECK (business_type IN ('WITHDRAWAL','COLLECTION','RECOVERY','FUNDING','ADDRESS_PREPARATION','DEV_FAUCET')),
+    business_reference varchar(192) NOT NULL,
+    spend_domain varchar(512) NOT NULL,
+    business_hash varchar(64) NOT NULL CHECK (business_hash ~ '^[0-9a-f]{64}$'),
+    created_at timestamptz NOT NULL,
+    UNIQUE (tenant_id,id),
+    UNIQUE (tenant_id,chain,network,business_type,business_reference),
+    UNIQUE (tenant_id,chain,network,spend_domain)
+);
+ALTER TABLE approval.request ADD FOREIGN KEY (tenant_id,signing_transaction_id) REFERENCES approval.signing_transaction(tenant_id,id);
+CREATE TABLE approval.signing_version (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    transaction_id uuid NOT NULL,
+    version_hash varchar(64) NOT NULL CHECK (version_hash ~ '^[0-9a-f]{64}$'),
+    payload_encoding varchar(48) NOT NULL,
+    payload_hex text NOT NULL CHECK (payload_hex ~ '^([0-9a-f]{2})+$' AND length(payload_hex)<=2097152),
+    chain_evidence jsonb CHECK (chain_evidence IS NULL OR jsonb_typeof(chain_evidence)='object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id,transaction_id) REFERENCES approval.signing_transaction(tenant_id,id),
+    UNIQUE (tenant_id,id), UNIQUE (tenant_id,transaction_id,version_hash),
+    CHECK (payload_encoding NOT IN ('EVM_TX_JSON','UTXO_MPC_JSON_V1','SOLANA_TX_JSON','TON_V4R2_PAYMENT_JSON','TRON_TX_JSON','XRPL_TX_JSON',
+        'NEAR_BORSH_PAYMENT_JSON','NEAR_STORAGE_REGISTRATION_JSON','HYPERCORE_JSON','SUI_PTB_PAYMENT_JSON','CARDANO_PAYMENT_JSON','POLKADOT_SCALE_PAYMENT_JSON','EIP7702_SIGNING_JSON') OR chain_evidence IS NOT NULL)
+);
+CREATE TABLE approval.spend_lock (
+    tenant_id uuid NOT NULL,
+    transaction_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    tx_id varchar(64) NOT NULL CHECK (tx_id ~ '^[0-9a-f]{64}$'),
+    output_index integer NOT NULL CHECK (output_index>=0),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id,chain,network,tx_id,output_index),
+    FOREIGN KEY (tenant_id,transaction_id) REFERENCES approval.signing_transaction(tenant_id,id)
+);
+CREATE INDEX approval_spend_lock_transaction_idx ON approval.spend_lock(tenant_id,transaction_id);
+CREATE TABLE approval.signing_slot (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    version_id uuid NOT NULL,
+    slot_name varchar(96) NOT NULL,
+    candidate_hash varchar(64) NOT NULL CHECK (candidate_hash ~ '^[0-9a-f]{64}$'),
+    candidate jsonb NOT NULL CHECK (jsonb_typeof(candidate)='object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id,version_id) REFERENCES approval.signing_version(tenant_id,id),
+    UNIQUE (tenant_id,id), UNIQUE (tenant_id,version_id,slot_name)
+);
+CREATE TABLE approval.signing_grant (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    slot_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    proof jsonb NOT NULL CHECK (jsonb_typeof(proof)='object'),
+    execution jsonb NOT NULL CHECK (jsonb_typeof(execution)='object'),
+    replay_actor varchar(192),
+    replay_reason varchar(512),
+    issued_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL CHECK (expires_at>issued_at AND expires_at<=issued_at+interval '5 minutes'),
+    FOREIGN KEY (tenant_id,slot_id) REFERENCES approval.signing_slot(tenant_id,id),
+    UNIQUE (tenant_id,slot_id,session_id), UNIQUE (tenant_id,session_id),
+    CHECK ((execution->>'sessionId'=session_id::text AND execution->>'tenantId'=tenant_id::text) IS TRUE),
+    CHECK ((replay_actor IS NULL AND replay_reason IS NULL) OR (replay_actor IS NOT NULL AND replay_reason IS NOT NULL
+        AND length(btrim(replay_actor))>0 AND length(btrim(replay_reason))>=5))
+);
+CREATE TABLE approval.fee_reservation (
+    tenant_id uuid NOT NULL,
+    transaction_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    network_identity varchar(256) NOT NULL,
+    native_symbol varchar(32) NOT NULL,
+    native_decimals integer NOT NULL CHECK (native_decimals BETWEEN 0 AND 36),
+    maximum_fee_atomic numeric(120,0) NOT NULL CHECK (maximum_fee_atomic>=0),
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (tenant_id,transaction_id),
+    FOREIGN KEY (tenant_id,transaction_id) REFERENCES approval.signing_transaction(tenant_id,id)
+);
+CREATE INDEX approval_fee_reservation_rolling_idx ON approval.fee_reservation(tenant_id,chain,network,created_at);
+-- Independent host-installed operating rules admit automatic payments separately from human decisions.
+-- Lifetime expenditure never disappears when a rolling window advances or a rule is replaced.
+CREATE TABLE approval.automatic_operation (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES approval.tenant(id),
+    transaction_id uuid,
+    rule_id uuid NOT NULL,
+    rule_fingerprint varchar(64) NOT NULL CHECK (rule_fingerprint ~ '^[0-9a-f]{64}$'),
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    network_identity varchar(256) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    asset_identifier varchar(512),
+    asset_decimals integer NOT NULL CHECK (asset_decimals BETWEEN 0 AND 36),
+    native_symbol varchar(32) NOT NULL,
+    native_decimals integer NOT NULL CHECK (native_decimals BETWEEN 0 AND 36),
+    business_type varchar(24) NOT NULL CHECK (business_type IN ('COLLECTION','RECOVERY','FUNDING','ADDRESS_PREPARATION','DEV_FAUCET')),
+    business_reference varchar(192) NOT NULL,
+    source_key_ids jsonb NOT NULL CHECK (jsonb_typeof(source_key_ids)='array'),
+    parent_operation_id uuid,
+    parent_scope varchar(48),
+    amount_atomic numeric(120,0) NOT NULL CHECK (amount_atomic>0 OR (amount_atomic=0 AND business_type='ADDRESS_PREPARATION' AND chain='XRP' AND asset_identifier IS NOT NULL)),
+    maximum_fee_atomic numeric(120,0) NOT NULL CHECK (maximum_fee_atomic>=0),
+    receipt jsonb NOT NULL CHECK (jsonb_typeof(receipt)='object'),
+    preparation_plan jsonb CHECK (preparation_plan IS NULL OR jsonb_typeof(preparation_plan)='object'),
+    preparation_evidence jsonb CHECK (preparation_evidence IS NULL OR jsonb_typeof(preparation_evidence)='object'),
+    created_at timestamptz NOT NULL,
+    UNIQUE (tenant_id,id),
+    UNIQUE (tenant_id,transaction_id),
+    UNIQUE (tenant_id,chain,network,business_type,business_reference),
+    UNIQUE (tenant_id,parent_operation_id,parent_scope),
+    FOREIGN KEY (tenant_id,transaction_id) REFERENCES approval.signing_transaction(tenant_id,id),
+    CHECK ((parent_operation_id IS NULL)=(parent_scope IS NULL)),
+    CHECK ((preparation_plan IS NULL)=(preparation_evidence IS NULL)),
+    CHECK (transaction_id IS NOT NULL OR (business_type='COLLECTION' AND preparation_plan IS NOT NULL))
+);
+CREATE INDEX approval_automatic_operation_budget_idx ON approval.automatic_operation(tenant_id,chain,network,asset_symbol,created_at);
+REVOKE ALL ON ALL TABLES IN SCHEMA approval FROM PUBLIC;
+
+CREATE FUNCTION approval.enforce_permanent_signing_receipt() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'independent signing receipts are permanent and immutable' USING ERRCODE='23514';
+END;
+$$;
+CREATE TRIGGER approval_signing_transaction_immutable BEFORE UPDATE OR DELETE ON approval.signing_transaction
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_permanent_signing_receipt();
+CREATE TRIGGER approval_signing_version_immutable BEFORE UPDATE OR DELETE ON approval.signing_version
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_permanent_signing_receipt();
+CREATE TRIGGER approval_signing_slot_immutable BEFORE UPDATE OR DELETE ON approval.signing_slot
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_permanent_signing_receipt();
+CREATE TRIGGER approval_signing_grant_immutable BEFORE UPDATE OR DELETE ON approval.signing_grant
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_permanent_signing_receipt();
+CREATE TRIGGER approval_fee_reservation_immutable BEFORE UPDATE OR DELETE ON approval.fee_reservation
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_permanent_signing_receipt();
+CREATE TRIGGER approval_spend_lock_immutable BEFORE UPDATE OR DELETE ON approval.spend_lock
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_permanent_signing_receipt();
+CREATE FUNCTION approval.enforce_automatic_operation_binding() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'independent operating receipts are permanent' USING ERRCODE='23514'; END IF;
+    IF (to_jsonb(NEW)-'transaction_id') IS DISTINCT FROM (to_jsonb(OLD)-'transaction_id')
+        OR OLD.transaction_id IS NOT NULL OR NEW.transaction_id IS NULL THEN
+        RAISE EXCEPTION 'only the first original transaction may bind a prepared operating receipt' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER approval_automatic_operation_immutable BEFORE UPDATE OR DELETE ON approval.automatic_operation
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_automatic_operation_binding();
+CREATE FUNCTION approval.enforce_request_signing_binding() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.signing_transaction_id IS NOT NULL AND ROW(NEW.signing_transaction_id,NEW.status) IS DISTINCT FROM ROW(OLD.signing_transaction_id,OLD.status) THEN
+        RAISE EXCEPTION 'original independent signing binding cannot be cleared, replaced or cancelled' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER approval_request_signing_binding_immutable BEFORE UPDATE ON approval.request
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_request_signing_binding();
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA approval FROM PUBLIC;
+
+-- Wallet's permanent admission receipt is committed with the original principal/Gas freeze.
+CREATE TABLE public.wallet_withdrawal_approval (
+    tenant_id uuid NOT NULL,
+    withdrawal_id uuid NOT NULL,
+    order_id bigint NOT NULL,
+    approval_request_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    network varchar(128) NOT NULL,
+    business_reference varchar(192) NOT NULL,
+    intent_hash varchar(64) NOT NULL CHECK (intent_hash ~ '^[0-9a-f]{64}$'),
+    intent jsonb NOT NULL CHECK (jsonb_typeof(intent)='object'),
+    state varchar(24) NOT NULL DEFAULT 'QUEUED' CHECK (state IN ('QUEUED','PENDING','APPROVED','AUTHORIZED','REJECTED','EXPIRED')),
+    receipt jsonb CHECK (receipt IS NULL OR jsonb_typeof(receipt)='object'),
+    terminal_cleanup_complete boolean NOT NULL DEFAULT false,
+    CHECK (not terminal_cleanup_complete OR (state IN ('REJECTED','EXPIRED') AND receipt->>'signingStarted'='false')),
+    last_checked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id,withdrawal_id),
+    UNIQUE (tenant_id,approval_request_id), UNIQUE (tenant_id,chain,business_reference),
+    FOREIGN KEY (tenant_id,withdrawal_id) REFERENCES public.custody_withdrawal(tenant_id,id),
+    FOREIGN KEY (tenant_id,order_id) REFERENCES public.withdrawal_order(tenant_id,id),
+    CHECK ((state='QUEUED')=(receipt IS NULL)),
+    CHECK ((intent->>'id'=approval_request_id::text AND intent->>'tenantId'=tenant_id::text
+        AND intent->>'chain'=chain AND intent->>'network'=network AND intent->>'businessReference'=business_reference) IS TRUE)
+);
+CREATE INDEX wallet_withdrawal_approval_poll_idx ON public.wallet_withdrawal_approval(last_checked_at,created_at)
+    WHERE state IN ('QUEUED','PENDING','APPROVED') OR (state IN ('REJECTED','EXPIRED') AND not terminal_cleanup_complete);
+CREATE OR REPLACE FUNCTION public.wallet_enforce_withdrawal_approval_intent() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' OR ROW(NEW.tenant_id,NEW.withdrawal_id,NEW.order_id,NEW.approval_request_id,NEW.chain,NEW.network,NEW.business_reference,NEW.intent_hash,NEW.intent)
+        IS DISTINCT FROM ROW(OLD.tenant_id,OLD.withdrawal_id,OLD.order_id,OLD.approval_request_id,OLD.chain,OLD.network,OLD.business_reference,OLD.intent_hash,OLD.intent) THEN
+        RAISE EXCEPTION 'original withdrawal approval intent is permanent and immutable' USING ERRCODE='23514';
+    END IF;
+    IF (OLD.terminal_cleanup_complete AND NOT NEW.terminal_cleanup_complete)
+        OR (OLD.state IN ('AUTHORIZED','REJECTED','EXPIRED') AND NEW.state<>OLD.state) THEN
+        RAISE EXCEPTION 'terminal approval state and completed cleanup cannot be reset' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER wallet_withdrawal_approval_intent_immutable BEFORE UPDATE OR DELETE ON public.wallet_withdrawal_approval
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_withdrawal_approval_intent();

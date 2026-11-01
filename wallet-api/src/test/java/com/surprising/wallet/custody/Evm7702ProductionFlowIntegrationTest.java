@@ -253,7 +253,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 objectMapper,
                 com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
                 new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
-                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc), new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.poolFunding(jdbc));
+                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc), new com.surprising.wallet.repository.CustodyTenantTableRepository(jdbc), new com.surprising.wallet.repository.ChainAddressRepository(jdbc), new com.surprising.wallet.repository.CustodyReorgDeficitRepository(jdbc), new com.surprising.wallet.repository.CustodyIdempotencyRepository(jdbc), new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc), new com.surprising.wallet.repository.CustodyAuditRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.poolFunding(jdbc), new com.surprising.wallet.repository.WalletWithdrawalApprovalRepository(jdbc,objectMapper));
         transactionContext = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
         transactionContext.register(Transactions.class);
         transactionContext.registerBean(org.springframework.transaction.PlatformTransactionManager.class,
@@ -678,7 +678,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 new com.surprising.wallet.repository.WalletMpcKeyRepository(jdbc),
                 new com.surprising.wallet.repository.WalletMpcKeyEpochRepository(jdbc,json),
                 new com.surprising.wallet.repository.WalletMpcSignRequestRepository(jdbc),
-                new com.surprising.wallet.repository.WalletMpcSignAttemptRepository(jdbc,json),mpcSupport.crypto,json,mpcSupport.manager);
+                new com.surprising.wallet.repository.WalletMpcSignAttemptRepository(jdbc,json),mpcSupport.crypto,json,mpcSupport.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,mpcSupport.manager));
         mpc7702=new com.surprising.wallet.service.Evm7702SigningService(
                 new com.surprising.wallet.repository.WalletMpcSignRequestRepository(jdbc),new ChainAddressRepository(jdbc),
                 new com.surprising.wallet.repository.EvmNonceRepository(jdbc),new com.surprising.wallet.repository.EvmCollectionBatchRepository(jdbc),
@@ -842,7 +842,7 @@ class Evm7702ProductionFlowIntegrationTest {
             String encrypted=jdbc.queryForObject("select signed_tx_ciphertext from "+table+" where tenant_id=? and batch_id=? and tx_hash=?",String.class,tenant,batch,hash);
             assertTrue(raw.equals(crypto.decrypt(encrypted)),"wire must equal the committed encrypted selection");
             var operation=new com.surprising.wallet.service.Evm7702SigningService.Operation(tenant,batch,chain,
-                    payout?com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.WITHDRAWAL:com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.COLLECTION);
+                    payout?com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.WITHDRAWAL:com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.COLLECTION);
             mpc7702.verifySelectedRaw(operation,raw,hash);
             assertEquals("RESERVED",jdbc.queryForObject("select status from custody_gas_usage where tenant_id=? and operation_type=? and operation_id=?",String.class,tenant,payout?"WITHDRAWAL_BATCH":"COLLECTION_BATCH",batch));
             assertEquals(0,jdbc.queryForObject("select count(*) from wallet_mpc_sign_request where business_reference=? and state<>'COMPLETED'",Integer.class,operation.reference()));

@@ -78,7 +78,7 @@ if(WALLET_MPC_BUILD_SERVER)
     "${CMAKE_BINARY_DIR}/headers/json.hpp"
     EXPECTED_HASH SHA256=aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63
     TLS_VERIFY ON TIMEOUT 90)
-  add_executable(wallet-mpc-signer src/server.cpp src/monero.cpp)
+  add_executable(wallet-mpc-signer src/server.cpp src/monero.cpp src/authorization.cpp)
   target_include_directories(wallet-mpc-signer SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
   target_compile_definitions(wallet-mpc-signer PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT
     CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES)
@@ -94,7 +94,22 @@ if(WALLET_MPC_BUILD_SERVER)
   target_include_directories(wallet_mpc_monero_policy_test SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
   target_compile_options(wallet_mpc_monero_policy_test PRIVATE -Wall -Wextra -Werror)
   add_test(NAME mpc_monero_reviewed_policy COMMAND wallet_mpc_monero_policy_test)
+  # Isolated crash injection binary is test-only and never installed in a Runtime package.
+  add_executable(wallet_mpc_admission_crash_test_node src/server.cpp src/monero.cpp src/authorization.cpp)
+  target_include_directories(wallet_mpc_admission_crash_test_node SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
+  target_compile_definitions(wallet_mpc_admission_crash_test_node PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT
+    CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES WALLET_MPC_TEST_FAILPOINTS)
+  target_compile_options(wallet_mpc_admission_crash_test_node PRIVATE -Wall -Wextra -Werror)
+  target_link_libraries(wallet_mpc_admission_crash_test_node PRIVATE wallet_mpc_engine
+    "${CBMPC_OPENSSL_ROOT}/lib/libssl.a" "${CBMPC_OPENSSL_ROOT}/lib/libcrypto.a")
   find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME mpc_authorization_admission_crash
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/authorization_admission_crash_test.py"
+      $<TARGET_FILE:wallet-mpc-signer> $<TARGET_FILE:wallet_mpc_admission_crash_test_node>)
+  set_tests_properties(mpc_authorization_admission_crash PROPERTIES TIMEOUT 90)
+  add_test(NAME mpc_independent_authorization
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/authorization_test.py" $<TARGET_FILE:wallet-mpc-signer>)
+  set_tests_properties(mpc_independent_authorization PROPERTIES TIMEOUT 180)
   add_test(NAME mpc_independent_nodes
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node_test.py" $<TARGET_FILE:wallet-mpc-signer>)
   set_tests_properties(mpc_independent_nodes PROPERTIES TIMEOUT 660)

@@ -1,7 +1,10 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.sdk.signing.sui.MpcSuiTransactionCodec;
+import com.surprising.wallet.sdk.signing.sui.SuiCoin;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.model.mpc.SuiSigningPayload;
+import com.surprising.wallet.common.signing.SuiSigningPayload;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
 import com.surprising.wallet.service.SuiSubmissionService.Operation;
@@ -46,15 +49,15 @@ public class SuiTransactionService {
             long amount=payment.amount().movePointRight(decimals).longValueExact();
             long budget=Math.max(1,profile.getDefaultFee());long price=rpc.referenceGasPrice();
             var gas=select(source.getAddress(),SuiRpcClient.SUI_COIN_TYPE,BigDecimal.valueOf(budget).add("SUI".equals(payment.symbol())?BigDecimal.valueOf(amount):BigDecimal.ZERO));
-            var inputs="SUI".equals(payment.symbol())?List.<SuiRpcClient.SuiCoin>of():select(source.getAddress(),type,BigDecimal.valueOf(amount));
+            var inputs="SUI".equals(payment.symbol())?List.<SuiCoin>of():select(source.getAddress(),type,BigDecimal.valueOf(amount));
             var unsigned=new MpcSuiTransactionCodec.Unsigned(profile.getNetwork(),rpc.serviceInfo().chainIdentifier(),source.getAddress(),payment.recipient(),amount,type,inputs,gas,price,budget,submissions.publicKey(source));
             draft=new SuiSigningPayload(payment.symbol(),payment.amount(),payment.customerFee(),decimals,unsigned);
         }
         var request=submissions.reserve(op,source,draft);submissions.sign(op,request.id());
         var signed=submissions.commit(op,request.id());return broadcast(op,signed,submissions.payload(request));
     }
-    private List<SuiRpcClient.SuiCoin> select(String owner,String type,BigDecimal required) {
-        var selected=new ArrayList<SuiRpcClient.SuiCoin>();BigDecimal total=BigDecimal.ZERO;
+    private List<SuiCoin> select(String owner,String type,BigDecimal required) {
+        var selected=new ArrayList<SuiCoin>();BigDecimal total=BigDecimal.ZERO;
         for(var coin:rpc.coins(owner,type,128)) {
             if(coin.balance().signum()<=0)continue;
             selected.add(coin);total=total.add(coin.balance());if(total.compareTo(required)>=0)return selected;

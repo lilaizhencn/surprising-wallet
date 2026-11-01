@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.sdk.signing.aptos.AptosHex;
 import com.surprising.wallet.common.chain.TokenDefinition;
 /**
  * Aptos Fungible Asset (FA) 标准工具类。

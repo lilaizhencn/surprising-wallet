@@ -1,0 +1,15 @@
+# Install this profile on the independently managed approval host, outside Wallet Java access.
+# Replace public SPKI identities and paths. Never copy the Wallet transport private key here.
+approval:
+  native-nodes:
+    ca-file: /etc/surprising-wallet-approval/native-ca.pem
+    certificate-file: /etc/surprising-wallet-approval/native-read.pem
+    private-key-file: /etc/surprising-wallet-approval/native-read.key
+    call-timeout: 3s
+    nodes:
+      - party-id: REPLACE_WITH_NODE_1_SHA256_SPKI
+        endpoint: https://node1.internal.example:8443
+      - party-id: REPLACE_WITH_NODE_2_SHA256_SPKI
+        endpoint: https://node2.internal.example:8443
+      - party-id: REPLACE_WITH_NODE_3_SHA256_SPKI
+        endpoint: https://node3.internal.example:8443

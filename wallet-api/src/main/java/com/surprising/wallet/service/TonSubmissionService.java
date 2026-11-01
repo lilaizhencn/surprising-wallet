@@ -1,5 +1,10 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.sdk.signing.ton.MpcTonTransactionCodec;
+import com.surprising.wallet.common.signing.TonSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.chain.signing.MpcNodes;
@@ -104,7 +109,7 @@ public class TonSubmissionService {
             var collector = addresses.findEnabledByTenantAndAddress(op.tenantId(), "TON", "TON", owner.recipient()).orElseThrow();
             require(collector.getMpcKeyId() != null && canonical(collector.getAddress()).equals(u.recipient()), "TON collector has no owned joint key");
         }
-        long sequence = sequences.reserve("TON", u.sender(), u.sequence());
+        long sequence = sequences.reserve("TON", u.sender(), u.sequence(),MpcSignCommand.reservationOwner(op.tenantId(),MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference()));
         var fixed = new TonSigningPayload(draft.symbol(), draft.amount(), draft.customerFee(), draft.decimals(), draft.sourceAddress(),
                 new MpcTonTransactionCodec.Unsigned(u.network(), u.sender(), u.recipient(), u.amountAtomic(), u.jettonMaster(),
                         u.sourceJettonWallet(), u.recipientJettonWallet(), sequence, u.validUntil(), u.queryId(), u.memo(), u.publicKeyHex()));

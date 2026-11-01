@@ -1,6 +1,7 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
+import com.surprising.wallet.model.custody.PublicWithdrawalStatus;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyLedgerEntryRepository;
 import com.surprising.wallet.repository.CustodyWithdrawalRepository;
@@ -60,7 +61,7 @@ public class CustodyWithdrawalReconciliationService {
                         .stream().collect(Collectors.toMap(WithdrawalOrderRepository.HistoryOrder::id, row -> row));
                 for (var row : tenant.getValue()) {
                     var order = current.get(row.withdrawalOrderId());
-                    if (order != null && row.status().equals(order.status())) continue;
+                    if (order != null && row.status().equals(PublicWithdrawalStatus.of(order.status()))) continue;
                     try { project(row.tenantId(), row.id()); }
                     catch (RuntimeException error) {
                         log.warn("custody withdrawal projection failed: withdrawalId={} error={}", row.id(), error.getMessage());
@@ -78,15 +79,16 @@ public class CustodyWithdrawalReconciliationService {
             var order = orders.find(row.chain(), row.orderNo(), tenantId)
                     .orElseThrow(() -> new IllegalStateException("custody withdrawal order is missing"));
             if (row.withdrawalOrderId() != order.getId()) throw new IllegalStateException("custody withdrawal order identity mismatch");
-            if (row.status().equals(order.getStatus())) return false;
-            if (withdrawals.transitionStatus(tenantId, withdrawalId, row.status(), order.getStatus()) != 1) return false;
+            String outward=PublicWithdrawalStatus.of(order.getStatus());
+            if (row.status().equals(outward)) return false;
+            if (withdrawals.transitionStatus(tenantId, withdrawalId, row.status(), outward) != 1) return false;
             if ("CONFIRMED".equals(order.getStatus())) {
                 entries.insertIfAbsent(UUID.randomUUID(), tenantId, row.custodyAddressId(), row.chain(),
                         order.getAssetSymbol(), order.getDebitAccountId(), "WITHDRAWAL", "DEBIT",
                         order.getAmount().add(order.getFee()), "WITHDRAWAL", row.id().toString());
             }
             gas.reconcileWithdrawal(tenantId, withdrawalId);
-            String eventType = eventType(order.getStatus());
+            String eventType = eventType(outward);
             if (eventType != null) {
                 UUID eventId = UUID.randomUUID();
                 events.publish(eventId, tenantId, eventType, "WITHDRAWAL", row.orderNo(),
@@ -119,9 +121,9 @@ public class CustodyWithdrawalReconciliationService {
         data.put("toAddress", order.getToAddress());
         data.put("amount", order.getAmount());
         data.put("fee", order.getFee());
-        data.put("status", order.getStatus());
+        data.put("status", PublicWithdrawalStatus.of(order.getStatus()));
         data.put("txHash", order.getTxHash());
-        data.put("errorMessage", order.getErrorMessage());
+        data.put("errorMessage", PublicWithdrawalStatus.message(order.getStatus(),order.getErrorMessage()));
         try {
             return mapper.writeValueAsString(Map.of("id", eventId, "type", eventType,
                     "createdAt", Instant.now(), "data", data));

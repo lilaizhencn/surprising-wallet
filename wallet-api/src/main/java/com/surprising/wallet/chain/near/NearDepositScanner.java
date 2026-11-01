@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.sdk.signing.near.MpcNearTransactionCodec;
+
 import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.repository.*;

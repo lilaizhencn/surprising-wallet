@@ -107,6 +107,16 @@ public final class MpcClient implements AutoCloseable {
         return invoke("/v1/sessions", request, canonical(request));
     }
 
+    /** An independent authority proof is verified and consumed by every receiving holder. */
+    public Result submit(Request request, com.surprising.wallet.common.approval.SigningAuthorization.Proof proof) {
+        Objects.requireNonNull(proof, "independent signing authorization is required");
+        require(request.operation() == Operation.SIGN || request.operation() == Operation.MONERO_RELAY,
+                "payment authorization requires a signing or original Monero relay operation");
+        var body = new TreeMap<String, Object>(canonical(request));
+        body.put("authorization", proof);
+        return invoke("/v1/sessions", request, body);
+    }
+
     public Result result(Request request) {
         return invoke("/v1/results", request, Map.of("sessionId", request.sessionId().toString(),
                 "tenantId", request.tenantId().toString(), "keyId", request.keyId().toString()));

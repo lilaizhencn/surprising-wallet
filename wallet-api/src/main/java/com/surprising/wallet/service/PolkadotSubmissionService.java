@@ -1,8 +1,13 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec;
+import com.surprising.wallet.common.signing.PolkadotSigningPayload;
+
+import com.surprising.wallet.common.signing.MpcSignCommand;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.polkadot.*;
-import com.surprising.wallet.chain.polkadot.MpcPolkadotTransactionCodec.Role;
+import com.surprising.wallet.sdk.signing.polkadot.MpcPolkadotTransactionCodec.Role;
 import com.surprising.wallet.chain.signing.MpcNodes;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;
@@ -76,7 +81,7 @@ public class PolkadotSubmissionService {
         if(op.kind()==Kind.COLLECTION || op.kind()==Kind.FUNDING)require(addresses.findEnabledByTenantAndAddress(op.tenantId(),"DOT",u.recipient()).orElseThrow().getMpcKeyId()!=null,"DOT target has no owned joint key");
         require(!transactions.hasPendingSender(u.role().name(),u.sender()),"DOT sender already has a pending payment in this role");
         // The same AccountId32 has independent nonces in relay and Asset Hub.
-        long nonce=sequences.reserve("DOT",u.role().name()+":"+u.sender(),u.nonce());
+        long nonce=sequences.reserve("DOT",u.role().name()+":"+u.sender(),u.nonce(),MpcSignCommand.reservationOwner(op.tenantId(),MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference()));
         var fixed=new PolkadotSigningPayload(draft.symbol(),draft.amount(),draft.customerFee(),draft.decimals(),draft.nativeDecimals(),draft.feeBudget(),draft.existentialDeposit(),
                 new MpcPolkadotTransactionCodec.Unsigned(u.network(),u.role(),u.genesisHash(),u.specVersion(),u.transactionVersion(),u.sender(),u.publicKeyHex(),u.recipient(),u.amountAtomic(),u.assetId(),nonce,u.eraPeriod(),u.blockHeight(),u.blockHash(),u.extensions(),u.callIndices(),u.keepAlive()));
         var request=signing.reserveSignature(new MpcSignCommand(op.tenantId(),key.id(),key.activeEpoch(),ChainType.DOT,MpcSignCommand.BusinessType.valueOf(op.kind().name()),op.reference(),SLOT,

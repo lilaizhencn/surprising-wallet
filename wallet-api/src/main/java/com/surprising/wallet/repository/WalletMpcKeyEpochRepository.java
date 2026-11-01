@@ -36,6 +36,15 @@ public class WalletMpcKeyEpochRepository {
                 (rs, row) -> map(rs), tenant, key, epoch).stream().findFirst();
     }
 
+    public Optional<tools.jackson.databind.JsonNode> registration(UUID tenant,UUID key,int epoch) {
+        return jdbc.query("select approval_registration::text from wallet_mpc_key_epoch where tenant_id=? and key_id=? and epoch=? and approval_registration is not null",
+                (r,n)->json.readTree(r.getString(1)),tenant,key,epoch).stream().findFirst();
+    }
+    public int register(UUID tenant,UUID key,int epoch,tools.jackson.databind.JsonNode receipt) {
+        return jdbc.update("update wallet_mpc_key_epoch set approval_registration=?::jsonb,updated_at=now() where tenant_id=? and key_id=? and epoch=? and state in ('ACTIVE','RETIRED') and approval_registration is null",
+                json.writeValueAsString(receipt),tenant,key,epoch);
+    }
+
     public int observations(UUID tenant, UUID key, int epoch, MpcKeyEpoch.State state, Map<String, MpcObservation> observations) {
         return jdbc.update("""
                 update wallet_mpc_key_epoch set state=?,node_results=?::jsonb,updated_at=now()

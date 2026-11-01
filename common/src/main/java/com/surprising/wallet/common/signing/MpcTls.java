@@ -28,10 +28,11 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
 
 /** TLS credentials only; no wallet seeds or MPC shares enter this class. */
-final class MpcTls {
+public final class MpcTls {
     private MpcTls() { }
 
-    static SSLContext context(String partyId, Path ca, Path certificate, Path privateKey) {
+    /** Pinned mutual TLS for Wallet-to-holder and Wallet-to-independent-authority clients. */
+    public static SSLContext context(String partyId, Path ca, Path certificate, Path privateKey) {
         try {
             if (!Files.isRegularFile(privateKey, LinkOption.NOFOLLOW_LINKS)
                     || !Files.getPosixFilePermissions(privateKey, LinkOption.NOFOLLOW_LINKS)

@@ -1,5 +1,8 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.sdk.signing.tron.MpcTronTransactionCodec;
+import com.surprising.wallet.sdk.signing.tron.TronAddressCodec;
+
 import com.surprising.wallet.chain.MpcPublicAddressCodec;
 import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import com.surprising.wallet.chain.signing.MpcNodes;
@@ -69,7 +72,7 @@ public final class MpcTronBusinessNativeProbe {
                 require(!TransactionSynchronizationManager.isActualTransactionActive(),"TRON RPC held a business transaction");
                 Chain.Transaction raw=broadcast.getArgument(0);String hash=TronTransactionService.txId(raw);
                 var intent=requests.findBusiness(tenant,ChainType.TRON,
-                        com.surprising.wallet.model.mpc.MpcSignCommand.BusinessType.valueOf(current[0].kind().name()),current[0].reference(),"transaction").orElseThrow();
+                        com.surprising.wallet.common.signing.MpcSignCommand.BusinessType.valueOf(current[0].kind().name()),current[0].reference(),"transaction").orElseThrow();
                 require(intent.state()==MpcSignRequest.State.COMPLETED,"TRON RPC preceded durable MPC result");
                 String ownerHash=current[0].kind()==TronSubmissionService.Kind.WITHDRAWAL
                         ? orders.find("TRON",current[0].reference(),tenant).orElseThrow().getTxHash()
@@ -218,7 +221,7 @@ public final class MpcTronBusinessNativeProbe {
         });
         var unsigned=new TronTrc20Service().prepareTransfer(observer,source.getAddress(),contract,recipient,BigDecimal.ONE,6,30_000_000L);
         unsigned=unsigned.toBuilder().setRawData(unsigned.getRawData().toBuilder().setData(com.google.protobuf.ByteString.copyFrom(TronSubmissionService.memo(current[0])))).build();
-        var payload=new com.surprising.wallet.model.mpc.TronSigningPayload("USDT",BigDecimal.ONE,new BigDecimal("0.1"),6,
+        var payload=new com.surprising.wallet.common.signing.TronSigningPayload("USDT",BigDecimal.ONE,new BigDecimal("0.1"),6,
                 MpcTronTransactionCodec.prepare(unsigned,source.getAddress(),recipient,BigInteger.valueOf(1_000_000),contract,30_000_000L));
         var intent=submissions.reserve(current[0],source,payload);submissions.sign(current[0],intent.id());var signed=submissions.commit(current[0],intent.id());
         BigInteger before=balance(observer,contract,recipient),original=balance(observer,contract,source.getAddress());

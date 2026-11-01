@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.model;
 
+import com.surprising.wallet.common.chain.ChainScanPoint;
+
 import java.math.BigInteger;
 import java.util.UUID;
 
