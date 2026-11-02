@@ -247,6 +247,22 @@ class ApprovalWorkflowIntegrationTest {
         assertTrue(context.getBean(ApprovalMemberRepository.class).active(tenant,reviewer).isEmpty());
     }
 
+    @Test void administratorSeesAllStatesAssistsAsOneDistinctReviewerAndHistoryStaysTenantScoped() {
+        policy(BigDecimal.ONE,null,false,false,2);
+        var request=service.submit(intent("10"),"wallet-client");
+        assertEquals("PENDING",service.decide(tenant,request.intent().id(),reviewer,"APPROVE","First independent check",request.intentHash()).status());
+        assertEquals(1,service.history(tenant,admin,request.intent().id()).size());
+        assertEquals(reviewer,service.history(tenant,admin,request.intent().id()).getFirst().reviewerId());
+        assertEquals("APPROVED",service.decide(tenant,request.intent().id(),admin,"APPROVE","Administrator independent check",request.intentHash()).status());
+        assertEquals(2,service.history(tenant,admin,request.intent().id()).size());
+        assertEquals(1,service.list(tenant,admin,"",20,0).total());
+        assertEquals(0,service.list(tenant,admin,"PENDING",20,0).total());
+        assertThrows(SecurityException.class,()->service.history(other,admin,request.intent().id()));
+        assertThrows(IllegalArgumentException.class,()->service.decide(tenant,request.intent().id(),admin,"REJECT","Cannot overwrite",request.intentHash()));
+        var self=service.submit(intent("10","0x1111111111111111111111111111111111111111","CONSOLE",admin),"wallet-client");
+        assertThrows(IllegalArgumentException.class,()->service.decide(tenant,self.intent().id(),admin,"APPROVE","Cannot approve own request",self.intentHash()));
+    }
+
     private void policy(BigDecimal single,BigDecimal rolling,boolean newAddress,boolean console,int reviews) {
         long version=context.getBean(ApprovalPolicyRepository.class).find(tenant,"ETH","eip155:11155111","USDC").map(p->p.version()).orElse(0L);
         service.configure(tenant,admin,new ApprovalWorkflowService.PolicySettings("ETH","eip155:11155111","USDC",version,single,rolling,false,newAddress,console,reviews,3600));

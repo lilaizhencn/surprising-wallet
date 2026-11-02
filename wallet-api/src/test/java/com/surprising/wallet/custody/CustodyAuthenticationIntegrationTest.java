@@ -64,6 +64,8 @@ class CustodyAuthenticationIntegrationTest {
         context.registerBean(CustodyPasswordService.class);
         context.registerBean(CustodyCryptoService.class);
         context.registerBean(CustodyAuthService.class);
+        context.registerBean(com.surprising.wallet.service.CustodyVerificationMailService.class);
+        context.registerBean(com.surprising.wallet.service.CustodyLoginSecurityService.class);
         context.refresh();
         auth = context.getBean(CustodyAuthService.class);
         crypto = context.getBean(CustodyCryptoService.class);
@@ -78,6 +80,166 @@ class CustodyAuthenticationIntegrationTest {
     @AfterEach
     void close() {
         if (context != null) context.close();
+    }
+
+    private com.surprising.wallet.service.CustodyLoginSecurityService security() {
+        return context.getBean(com.surprising.wallet.service.CustodyLoginSecurityService.class);
+    }
+
+    @Test
+    void requiredAuthenticatorEnrollmentCannotAccessBusinessUntilConfirmedAndRotatesTheCookie() {
+        var original=login();
+        var actor=auth.requireSession(original.token(),false);
+        security().policy(actor,userId,false,true,"127.0.0.1");
+        assertThrows(CustodyUnauthorizedException.class,()->auth.requireSession(original.token(),false));
+        var pending=login();
+        assertTrue(pending.verificationRequired());
+        assertTrue(pending.totpSetupRequired());
+        assertThrows(CustodyUnauthorizedException.class,()->auth.requireSession(pending.token(),false));
+        var setup=security().setup(pending.token(),null,false,"127.0.0.1");
+        assertTrue(setup.uri().startsWith("otpauth://totp/"));
+        var repeated=security().setup(pending.token(),null,false,"127.0.0.1");
+        assertEquals(setup.secret(),repeated.secret());
+        long step=Instant.now().getEpochSecond()/30;
+        var finalLogin=security().verify(pending.token(),null,com.surprising.wallet.common.security.Totp.atStep(setup.secret(),step),"127.0.0.1");
+        assertFalse(finalLogin.verificationRequired());
+        assertNotEquals(pending.token(),finalLogin.token());
+        assertThrows(CustodyUnauthorizedException.class,()->auth.requireSession(pending.token(),false));
+        assertEquals(userId,auth.requireSession(finalLogin.token(),false).actorId());
+        String stored=jdbc.queryForObject("select totp_ciphertext from custody_tenant_user where id=?",String.class,userId);
+        assertFalse(stored.contains(setup.secret()));
+        assertFalse(jdbc.queryForObject("select string_agg(details::text,',') from custody_audit_log",String.class).contains(setup.secret()));
+        var second=login();
+        assertTrue(second.verificationRequired());
+        assertFalse(second.totpSetupRequired());
+        assertThrows(CustodyUnauthorizedException.class,()->security().verify(second.token(),null,com.surprising.wallet.common.security.Totp.atStep(setup.secret(),step),"127.0.0.1"));
+        var next=security().verify(second.token(),null,com.surprising.wallet.common.security.Totp.atStep(setup.secret(),step+1),"127.0.0.1");
+        assertFalse(next.verificationRequired());
+        assertThrows(CustodyForbiddenException.class,()->security().unbind(next.token(),PASSWORD,"000000","127.0.0.1"));
+    }
+
+    @Test
+    void optionalBindingStillRequiresTotpAndRepeatedBadCodesCommitAttemptsAndLockTheAccount() {
+        var initial=login();
+        var setup=security().setup(initial.token(),PASSWORD,true,"127.0.0.1");
+        String code=com.surprising.wallet.common.security.Totp.atStep(setup.secret(),Instant.now().getEpochSecond()/30);
+        security().confirm(initial.token(),code,"127.0.0.1");
+        assertTrue(security().own(auth.requireSession(initial.token(),false)).totpBound());
+        var pending=login();
+        assertTrue(pending.totpRequired());
+        for(int i=0;i<5;i++) assertThrows(CustodyUnauthorizedException.class,()->security().verify(pending.token(),null,"invalid","127.0.0.1"));
+        assertEquals(5,failures());
+        assertThrows(CustodyUnauthorizedException.class,this::login);
+        assertEquals(5,jdbc.queryForObject("select count(*) from custody_audit_log where action='AUTH.VERIFICATION_FAILED'",Integer.class));
+        assertThrows(CustodyUnauthorizedException.class,()->security().setup(pending.token(),null,false,"127.0.0.1"));
+    }
+
+    @Test
+    void emailCannotBeRequiredWhenDeliveryIsUnconfiguredAndPolicyAndResetAreTenantScoped() {
+        var initial=login();
+        var actor=auth.requireSession(initial.token(),false);
+        assertFalse(security().own(actor).emailDeliveryConfigured());
+        assertThrows(IllegalArgumentException.class,()->security().policy(actor,userId,true,false,"127.0.0.1"));
+        assertFalse(security().own(actor).emailRequired());
+        UUID otherTenant=UUID.randomUUID(),otherUser=UUID.randomUUID();
+        context.getBean(CustodyTenantTableRepository.class).insert(otherTenant,"other-"+otherTenant,"Other");
+        context.getBean(CustodyTenantUserRepository.class).insertMember(otherUser,otherTenant,"other@example.test","Other",context.getBean(CustodyPasswordService.class).hash(PASSWORD),"OPERATOR");
+        assertThrows(CustodyForbiddenException.class,()->security().policy(actor,otherUser,false,true,"127.0.0.1"));
+        assertThrows(CustodyForbiddenException.class,()->security().reset(actor,otherUser,"lost phone","127.0.0.1"));
+    }
+
+    @Test
+    void emailThenAuthenticatorIsSequentialAndEmailCodesAreBoundToTheirPendingCookie() {
+        var mail=context.getBean(com.surprising.wallet.service.CustodyVerificationMailService.class);
+        // Test mail configuration without external SMTP or delivery of real messages.
+        context.getEnvironment().getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("test-mail",java.util.Map.of(
+                "sw.wallet.custody.email-verification.enabled","true","sw.wallet.custody.email-verification.from","test@example.test","spring.mail.host","localhost")));
+        context.getBeanFactory().registerSingleton("testMailSender",new org.springframework.mail.javamail.JavaMailSenderImpl());
+        var actor=auth.requireSession(login().token(),false);
+        security().policy(actor,userId,true,true,"127.0.0.1");
+        var first=login();
+        assertThrows(IllegalArgumentException.class,()->security().setup(first.token(),null,false,"127.0.0.1"));
+        var delivery=security().prepareEmail(first.token(),"127.0.0.1");
+        assertEquals(EMAIL,delivery.recipient());
+        assertFalse(jdbc.queryForObject("select email_code_hash from custody_session where token_hash=?",String.class,crypto.sha256(first.token())).equals(delivery.code()));
+        assertThrows(IllegalArgumentException.class,()->security().prepareEmail(first.token(),"127.0.0.1"));
+        var second=login();
+        assertThrows(CustodyUnauthorizedException.class,()->security().verify(second.token(),delivery.code(),null,"127.0.0.1"));
+        var emailVerified=security().verify(first.token(),delivery.code(),null,"127.0.0.1");
+        assertTrue(emailVerified.verificationRequired());assertTrue(emailVerified.emailVerified());
+        assertThrows(CustodyUnauthorizedException.class,()->auth.requireSession(first.token(),false));
+        var setup=security().setup(first.token(),null,false,"127.0.0.1");
+        var complete=security().verify(first.token(),null,com.surprising.wallet.common.security.Totp.atStep(setup.secret(),Instant.now().getEpochSecond()/30),"127.0.0.1");
+        assertFalse(complete.verificationRequired());assertNotNull(auth.requireSession(complete.token(),false));
+    }
+
+    @Test
+    void pendingCookieIsRejectedByTheActualBusinessAuthenticationFilter() throws Exception {
+        var actor=auth.requireSession(login().token(),false);
+        security().policy(actor,userId,false,true,"127.0.0.1");
+        String pending=login().token();
+        var filter=new com.surprising.wallet.filter.CustodyConsoleAuthenticationFilter(auth,new tools.jackson.databind.ObjectMapper());
+        var request=new org.springframework.mock.web.MockHttpServletRequest("GET","/custody/console/v1/withdrawals");
+        request.setCookies(new jakarta.servlet.http.Cookie(com.surprising.wallet.model.CustodySessionCookie.NAME,pending));
+        var response=new org.springframework.mock.web.MockHttpServletResponse();
+        var reached=new java.util.concurrent.atomic.AtomicBoolean();
+        filter.doFilter(request,response,(r,s)->reached.set(true));
+        assertEquals(401,response.getStatus());assertFalse(reached.get());
+        var verify=new org.springframework.mock.web.MockHttpServletRequest("POST","/custody/console/v1/auth/verify");
+        filter.doFilter(verify,new org.springframework.mock.web.MockHttpServletResponse(),(r,s)->reached.set(true));
+        assertTrue(reached.get());
+    }
+
+    @Test
+    void administratorResetsOnlyOwnedSubaccountsAndKeepsTheirMandatoryBindingPolicy() {
+        var admin=auth.requireSession(login().token(),false);
+        UUID member=UUID.randomUUID();
+        context.getBean(CustodyTenantUserRepository.class).insertMember(member,tenantId,"member@security.test","Member",context.getBean(CustodyPasswordService.class).hash(PASSWORD),"OPERATOR");
+        var initial=auth.tenantLogin("member@security.test",PASSWORD,"127.0.0.1","test");
+        var operator=auth.requireSession(initial.token(),false);
+        assertThrows(CustodyForbiddenException.class,()->security().policy(operator,member,false,true,"127.0.0.1"));
+        security().policy(admin,member,false,true,"127.0.0.1");
+        var pending=auth.tenantLogin("member@security.test",PASSWORD,"127.0.0.1","test");
+        var setup=security().setup(pending.token(),null,false,"127.0.0.1");
+        var complete=security().verify(pending.token(),null,com.surprising.wallet.common.security.Totp.atStep(setup.secret(),Instant.now().getEpochSecond()/30),"127.0.0.1");
+        assertThrows(IllegalArgumentException.class,()->security().reset(admin,member," ","127.0.0.1"));
+        security().reset(admin,member,"Lost device; identity checked","127.0.0.1");
+        assertThrows(CustodyUnauthorizedException.class,()->auth.requireSession(complete.token(),false));
+        var again=auth.tenantLogin("member@security.test",PASSWORD,"127.0.0.1","test");
+        assertTrue(again.totpSetupRequired()); assertTrue(again.verificationRequired());
+        assertEquals(1,jdbc.queryForObject("select count(*) from custody_audit_log where action='SECURITY.TOTP_RESET' and resource_id=?",Integer.class,member.toString()));
+    }
+
+    @Test
+    void onlyPlatformAuthorityCanRecoverATenantAdministratorsAuthenticator() {
+        var admin=auth.requireSession(login().token(),false);
+        assertThrows(CustodyForbiddenException.class,()->security().recoverAdministrator(admin,tenantId,userId,"lost phone","127.0.0.1"));
+        security().policy(admin,userId,false,true,"127.0.0.1");
+        var pending=login();var setup=security().setup(pending.token(),null,false,"127.0.0.1");
+        var complete=security().verify(pending.token(),null,com.surprising.wallet.common.security.Totp.atStep(setup.secret(),Instant.now().getEpochSecond()/30),"127.0.0.1");
+        jdbc.update("delete from custody_tenant_user where tenant_id is null and email='admin@local.test'");
+        properties.getPlatformAdmin().setEmail("recovery@platform.test");properties.getPlatformAdmin().setPassword(PASSWORD);auth.bootstrapPlatformAdmin();
+        var platform=auth.requireSession(auth.platformLogin("recovery@platform.test",PASSWORD,"127.0.0.1","test").token(),true);
+        assertThrows(IllegalArgumentException.class,()->security().recoverAdministrator(platform,tenantId,userId," ","127.0.0.1"));
+        security().recoverAdministrator(platform,tenantId,userId,"Identity verified for lost device","127.0.0.1");
+        assertThrows(CustodyUnauthorizedException.class,()->auth.requireSession(complete.token(),false));
+        assertTrue(login().totpSetupRequired());
+        assertEquals(1,jdbc.queryForObject("select count(*) from custody_audit_log where action='SECURITY.ADMIN_TOTP_RESET' and tenant_id=?",Integer.class,tenantId));
+    }
+
+    @Test
+    void authenticatorAndVerificationStateRollbackTogetherWhenMandatoryAuditFails() {
+        var admin=auth.requireSession(login().token(),false);
+        security().policy(admin,userId,false,true,"127.0.0.1");
+        var pending=login();var setup=security().setup(pending.token(),null,false,"127.0.0.1");
+        String code=com.surprising.wallet.common.security.Totp.atStep(setup.secret(),Instant.now().getEpochSecond()/30);
+        jdbc.execute("create function reject_security_audit() returns trigger language plpgsql as $$ begin if NEW.action='SECURITY.TOTP_BOUND' then raise exception 'synthetic audit failure'; end if; return NEW; end $$");
+        jdbc.execute("create trigger reject_security_audit before insert on custody_audit_log for each row execute function reject_security_audit()");
+        assertThrows(org.springframework.dao.DataAccessException.class,()->security().verify(pending.token(),null,code,"127.0.0.1"));
+        assertNull(jdbc.queryForObject("select totp_ciphertext from custody_tenant_user where id=?",String.class,userId));
+        assertFalse(jdbc.queryForObject("select verified from custody_session where token_hash=?",Boolean.class,crypto.sha256(pending.token())));
+        jdbc.execute("drop trigger reject_security_audit on custody_audit_log");jdbc.execute("drop function reject_security_audit()");
+        assertFalse(security().verify(pending.token(),null,code,"127.0.0.1").verificationRequired());
     }
 
     @Test

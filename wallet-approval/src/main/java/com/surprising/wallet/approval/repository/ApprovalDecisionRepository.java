@@ -23,5 +23,9 @@ public class ApprovalDecisionRepository {
     public long approvals(UUID tenant,UUID request) {
         return jdbc.queryForObject("select count(*) from approval.decision where tenant_id=? and request_id=? and decision='APPROVE'",Long.class,tenant,request);
     }
+    public List<com.surprising.wallet.approval.model.ApprovalDecisionView> history(UUID tenant, UUID request) {
+        return jdbc.query("select reviewer_id,decision,reason,created_at from approval.decision where tenant_id=? and request_id=? order by created_at,id",
+                (r,n)->new com.surprising.wallet.approval.model.ApprovalDecisionView(r.getObject("reviewer_id",UUID.class),r.getString("decision"),r.getString("reason"),r.getTimestamp("created_at").toInstant()),tenant,request);
+    }
     public record Decision(String decision,String reason) { }
 }

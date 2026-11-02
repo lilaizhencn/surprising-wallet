@@ -33,8 +33,12 @@ public class ApprovalConsoleController {
                 .sameSite("Strict").maxAge(0).build().toString());return Map.of("ok",true);
     }
     @GetMapping("/requests") public ApprovalWorkflowService.RequestPage requests(HttpServletRequest request,
-            @RequestParam(defaultValue="PENDING") String status,@RequestParam(defaultValue="20") int limit,@RequestParam(defaultValue="0") int offset) {
+            @RequestParam(defaultValue="") String status,@RequestParam(defaultValue="20") int limit,@RequestParam(defaultValue="0") int offset) {
         var actor=principal(request);return workflow.list(actor.tenantId(),actor.memberId(),status,limit,offset);
+    }
+    @GetMapping("/requests/{id}/decisions")
+    public List<ApprovalDecisionView> history(@PathVariable UUID id,HttpServletRequest request) {
+        var actor=principal(request);return workflow.history(actor.tenantId(),actor.memberId(),id);
     }
     @PostMapping("/requests/{id}/decisions") public ApprovalRequest decide(@PathVariable UUID id,@RequestBody Decision command,HttpServletRequest request) {
         var actor=principal(request);return workflow.decide(actor.tenantId(),id,actor.memberId(),command.decision(),command.reason(),command.intentHash());

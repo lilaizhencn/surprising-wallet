@@ -484,3 +484,11 @@ run-monero-flow.sh 现在分别在现有本机 PG18 的三个隔离测试库中�
 - wallet_mpc_sign_request.business_references 与原命令同事务生成并永久不可改写；CANCELLED 携带真实独立终态收据，不能重新绑定尝试/证明或调度。只可由事务外新鲜读取的独立 EXPIRED/REJECTED + signingStarted=false 驱动清理；任何原证明/签名/广播记录或归属矛盾保持冻结。
 - UnsignedWithdrawalCancellationService 必须把 native/batch/UTXO/可退 Gas、其他未出款成员重排、原订单退款、投影事件/审计与 terminal_cleanup_complete 放在同一事务。已授权 Gas/注册子业务不随母单伪退款；终态未清理订单继续轮询，不得记录终态后永久失去收敛入口。
 - AccountSequenceRepository 与 EvmNonceRepository 在各自原单表保存唯一 pending_owner/值；owner 为 tenant/type/reference，7702 属整批 relayer。不同未受理 owner 不再分配后续 nonce；MpcNonceAdmissionService 与第一个真实原证明原子受理，后续槽验原证明。仅独立证明从未授权并原子取消时，才交回该 owner 的排他末端预留，不回退其他已受理交易。HyperCore timestamp 不套用连续序号规则。
+
+## Tenant Console login security
+
+- CustodyTenantUserRepository 仍仅访问 custody_tenant_user，保存邮箱 / TOTP 政策、用户绑定密文、安全版本及防重放时间步；CustodySessionRepository 仍仅访问 custody_session，保存受限会话、邮箱摘要、短期绑定及版本快照。禁止增加跨表 SQL。
+- 密码通过但二次验证未完成的 Cookie 不能授权业务接口；仅精确 POST 验证入口可接收，仍校验浏览器 Origin，响应禁止缓存。最终成功必须轮换原令牌。验证失败计数 / 锁定需要提交，审计失败必须回滚。
+- TOTP 种子以 Custody AES-GCM 加密且绑定用户 / 待绑定会话。二维码本地生成，验证过一次码才激活，禁止写入审计或前端持久存储。SMTP 默认关闭，配置不完整时不能开启强制邮箱验证，已要求的因素不能因发送失败而跳过。
+- 管理员只能设置本人和本租户非管理员子账号的政策；子账号不可自行关闭政策。强制 TOTP 不允许本人解绑；租户管理员自身丢失验证器由平台管理员填写原因恢复，子账号由租户管理员恢复。重置保留强制要求并撤销旧会话。
+- CustodyApprovalQueryService 只读本租户 wallet_withdrawal_approval，审批决定与历史仍属于独立审批域。Console 账号安全设置不得借机管理独立审批凭据，管理员协助审批仍受禁止自审和不同人计票约束。

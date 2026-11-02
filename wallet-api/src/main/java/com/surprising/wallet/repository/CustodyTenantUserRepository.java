@@ -189,6 +189,30 @@ public class CustodyTenantUserRepository {
                 """, CustodyTenantUserRepository::mapView, tenantId, userId).stream().findFirst();
     }
 
+    public TenantUserRecord lockById(UUID id) {
+        return jdbc.query("select id,tenant_id,email,display_name,password_hash,role,status,failed_login_count,locked_until from custody_tenant_user where id=? for update",
+                CustodyTenantUserRepository::mapUser, id).stream().findFirst().orElseThrow();
+    }
+
+    public SecurityState security(UUID id) {
+        return jdbc.queryForObject("select email_verification_required,totp_required,totp_ciphertext,totp_last_step,security_version from custody_tenant_user where id=?",
+                (r,n) -> new SecurityState(r.getBoolean(1),r.getBoolean(2),r.getString(3),r.getLong(4),r.getLong(5)), id);
+    }
+
+    public void setLoginPolicy(UUID id, boolean email, boolean totp) {
+        jdbc.update("update custody_tenant_user set email_verification_required=?,totp_required=?,security_version=security_version+1,updated_at=now() where id=?",email,totp,id);
+    }
+
+    public void setTotp(UUID id, String encrypted, long step) {
+        jdbc.update("update custody_tenant_user set totp_ciphertext=?,totp_last_step=?,security_version=security_version+1,updated_at=now() where id=?",encrypted,step,id);
+    }
+
+    public boolean acceptTotp(UUID id, long step) {
+        return jdbc.update("update custody_tenant_user set totp_last_step=? where id=? and totp_last_step<?",step,id,step)==1;
+    }
+
+    public record SecurityState(boolean emailRequired, boolean totpRequired, String ciphertext, long lastStep, long version) { }
+
     private static TenantUserRecord mapUser(ResultSet rs, int rowNum) throws SQLException {
         Timestamp locked = rs.getTimestamp("locked_until");
         return new TenantUserRecord(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),

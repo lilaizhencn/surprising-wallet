@@ -216,3 +216,14 @@ Wallet 在同一子账号状态/角色、会话撤销和审计事务中，向 `c
 这条路径仅覆盖独立服务确认从未授权的交易。已授权、签名/广播未知、短有效期原命令过期或 7702 部分失败，仍需原交易的安全恢复/链上对账，不能借此退款、换 nonce 或重新支付。取消与并发预留回归覆盖真实 authority 竞争、证明丢回包、投影回滚、批次成员、counter admission、旧任务/旧 session 和多租户边界；范围与证据见 [审批验收记录](approval-validation.md)。
 
 TRON 原 wire 的 `raw_data.data` 只允许空值或 32 字节的业务 memo；实际独立授权必须精确匹配共享 SDK 的 tenant/businessType/businessReference 摘要。不同业务不能通过替换 memo 复用另一原付款，未知 protobuf 字段继续拒绝。TON 的 memo 与 Jetton queryId 由共享 SDK 按 tenant/businessType/businessReference 确定；NEAR Token memo 必须等于原业务 reference。独立端在实际 wire 上逐项校验，不能接受调用方自选附加指令。原生授权用途白名单与 Java 同步包含 XRP `ADDRESS_PREPARATION`，仍须独立签名证明才能受理。
+
+## Console 登录、绑定、恢复和审计
+
+1. 管理员在「团队成员 → 登录安全」设置邮箱验证 / 谷歌验证器要求；本人可从右上角昵称点击「账号安全」管理绑定。启用邮箱前必须完成邮件配置。
+2. 密码校验失败提交失败计数和 `AUTH.LOGIN_FAILED` 审计。密码正确且需要二次验证时，写入五分钟 `verified=false` 的会话，只记录 `AUTH.PASSWORD_VERIFIED`；业务过滤器继续拒绝访问。
+3. `POST /custody/console/v1/auth/email-code` 先保存绑定原令牌的验证码摘要和用户级发送限流记录，再由 Controller 委托独立邮件服务在事务外发送。`POST /auth/verify` 验证邮箱验证码；仍需 TOTP 时返回受限状态，不发放完整权限。
+4. 必需的 TOTP 尚未绑定时，经 `POST /auth/totp/setup` 取得 otpauth URI 与短期种子，浏览器本地显示二维码。已有完整会话的主动绑定入口为 `/account-security/totp/setup`，需要当前密码。确认有效六位码后才保存用户绑定；仅显示二维码不会激活绑定。
+5. 最后一个因素通过后，保存 TOTP 已使用时间步、轮换会话原令牌、清除短期秘密、延长会话，并记录 `AUTH.LOGIN`。未完成、过期、旧安全版本或失败超限的会话不能进入 Console 业务。
+6. 策略更改和管理员重置撤销全部旧会话。本人主动绑定 / 合规解绑保留当前完整会话并撤销其他会话。子账号遗失验证器由租户管理员填写原因后重置；租户管理员自身由平台管理员在租户详情中重置，保留原强制验证要求。
+7. 账号政策、绑定开始 / 完成 / 解绑 / 重置、登录成功 / 失败、验证失败、邮件发送请求 / 失败和退出均写入租户审计。事件不保存密码、验证码、种子、Cookie 原令牌或 SMTP 凭据；审计异常令关联业务变更回滚。
+8. 「审批管理」默认列出本租户全部提币申请的审批状态。本地状态为 QUEUED / PENDING / APPROVED / AUTHORIZED / REJECTED / EXPIRED，链上执行结果仍在提现记录中查看。独立审批站点展示审批人、意见、时间和通过票数；管理员可作为一名独立审批人参与，但不能自审或覆盖既有意见。

@@ -115,6 +115,13 @@ public class ApprovalWorkflowService {
         return new RequestPage(requests.list(tenant,state,size,start),requests.count(tenant,state),size,start);
     }
 
+    @Transactional(readOnly=true)
+    public List<com.surprising.wallet.approval.model.ApprovalDecisionView> history(UUID tenant,UUID member,UUID request) {
+        requireMember(tenant,member,false);
+        requests.find(tenant,request).orElseThrow(()->new IllegalArgumentException("approval request not found"));
+        return decisions.history(tenant,request);
+    }
+
     private ApprovalRequest expire(ApprovalRequest current) {
         if(!current.signingStarted() && !clock.instant().isBefore(current.expiresAt())
                 && List.of("PENDING","APPROVED").contains(current.status())) {

@@ -66,6 +66,10 @@ public class CustodyAuthService {
     public CustodyPrincipal requireSession(String token, boolean platformRoute) {
         requireSessionToken(token);
         String tokenHash = crypto.sha256(token);
+        var verification = sessions.authState(tokenHash, false);
+        if (!verification.verified() || users.security(verification.userId()).version() != verification.version()) {
+            throw new CustodyUnauthorizedException("additional login verification required");
+        }
         SessionRecord session = findActiveSession(tokenHash)
                 .orElseThrow(() -> new CustodyUnauthorizedException("session expired or invalid"));
         if (!"ACTIVE".equals(session.userStatus()) || !"ACTIVE".equals(session.tenantStatus())) {
@@ -87,9 +91,13 @@ public class CustodyAuthService {
                 consoleScopes(session.role()));
     }
 
+    @Transactional(rollbackFor=Throwable.class)
     public void logout(String token) {
         requireSessionToken(token);
+        var state=sessions.authState(crypto.sha256(token),false);
         sessions.revoke(crypto.sha256(token));
+        audits.insert(UUID.randomUUID(),state.tenantId(),state.tenantId()==null ? "PLATFORM_USER" : "TENANT_USER",state.userId().toString(),
+                "AUTH.LOGOUT","SESSION",state.id().toString(),null,"{}");
     }
 
     public boolean sessionCookieSecure() {
@@ -129,16 +137,26 @@ public class CustodyAuthService {
                     ? now.plus(LOCK_DURATION)
                     : null;
             users.recordLoginFailure(user.id(), lockedUntil);
+            audits.insert(UUID.randomUUID(), user.tenantId(), actorType.name(), user.id().toString(),
+                    "AUTH.LOGIN_FAILED", "USER", user.id().toString(), sourceIp, "{}");
             throw new CustodyUnauthorizedException("invalid credentials");
         }
 
-        users.recordLoginSuccess(user.id());
+        // Serialize password login with security policy changes and TOTP resets.
+        var security = users.security(user.id());
+        boolean emailRequired = user.tenantId() != null && security.emailRequired();
+        boolean totpRequired = user.tenantId() != null && (security.totpRequired() || security.ciphertext() != null);
+        boolean pending = emailRequired || totpRequired;
+        if (!pending) users.recordLoginSuccess(user.id());
         String rawToken = "cs_" + crypto.randomSecret(32);
-        Instant expiresAt = now.plus(validatedSessionTtl());
-        sessions.insert(UUID.randomUUID(), user.id(), user.tenantId(), crypto.sha256(rawToken),
+        Instant expiresAt = now.plus(pending ? Duration.ofMinutes(5) : validatedSessionTtl());
+        UUID sessionId = UUID.randomUUID();
+        sessions.insert(sessionId, user.id(), user.tenantId(), crypto.sha256(rawToken),
                 sourceIp, userAgent, expiresAt);
+        if (pending) sessions.restrict(sessionId, security.version(), emailRequired, totpRequired);
+        else sessions.setVersion(sessionId, security.version());
         audits.insert(UUID.randomUUID(), user.tenantId(), actorType.name(), user.id().toString(),
-                "AUTH.LOGIN", "SESSION", null, sourceIp, "{}");
+                pending ? "AUTH.PASSWORD_VERIFIED" : "AUTH.LOGIN", "SESSION", null, sourceIp, "{}");
         return new LoginResult(
                 rawToken,
                 expiresAt,
@@ -148,7 +166,7 @@ public class CustodyAuthService {
                 user.email(),
                 user.displayName(),
                 user.role(),
-                consoleScopes(user.role()));
+                consoleScopes(user.role()), pending, emailRequired, false, totpRequired, totpRequired && security.ciphertext() == null);
     }
 
     private Duration validatedSessionTtl() {
@@ -160,7 +178,7 @@ public class CustodyAuthService {
         return ttl;
     }
 
-    private static Set<String> consoleScopes(String role) {
+    static Set<String> consoleScopes(String role) {
         return switch (role) {
             case "PLATFORM_ADMIN", "TENANT_ADMIN" -> Set.of("*");
             case "OPERATOR" -> Set.of(
@@ -186,11 +204,11 @@ public class CustodyAuthService {
     private Optional<AuthUser> findTenantUser(String email) {
         var user = users.findByEmail(email, false).orElse(null);
         if (user == null) return Optional.empty();
-        return tenants.findById(user.tenantId()).map(tenant -> toAuthUser(user, tenant));
+        return tenants.findById(user.tenantId()).map(tenant -> toAuthUser(users.lockById(user.id()), tenant));
     }
 
     private Optional<AuthUser> findPlatformUser(String email) {
-        return users.findByEmail(email, true).map(user -> toAuthUser(user, null));
+        return users.findByEmail(email, true).map(user -> toAuthUser(users.lockById(user.id()), null));
     }
 
     private Optional<SessionRecord> findActiveSession(String tokenHash) {
@@ -220,7 +238,12 @@ public class CustodyAuthService {
             String email,
             String displayName,
             String role,
-            Set<String> scopes
+            Set<String> scopes,
+            boolean verificationRequired,
+            boolean emailRequired,
+            boolean emailVerified,
+            boolean totpRequired,
+            boolean totpSetupRequired
     ) {
     }
 }

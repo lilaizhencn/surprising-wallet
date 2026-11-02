@@ -62,5 +62,11 @@ public class WalletWithdrawalApprovalRepository {
         return new WithdrawalApprovalRecord(r.getObject("tenant_id",UUID.class),r.getObject("withdrawal_id",UUID.class),r.getLong("order_id"),
                 json.readValue(r.getString("intent"),WithdrawalIntent.class),r.getString("state"),receipt==null?null:json.readValue(receipt,ApprovalRequest.class));
     }
+    public List<WithdrawalApprovalRecord> list(UUID tenant,String state,int limit,int offset) {
+        return jdbc.query("select * from wallet_withdrawal_approval where tenant_id=? and (?='' or state=?) order by created_at desc,withdrawal_id desc limit ? offset ?",(r,n)->map(r),tenant,state,state,limit,offset);
+    }
+    public long count(UUID tenant,String state) {
+        return jdbc.queryForObject("select count(*) from wallet_withdrawal_approval where tenant_id=? and (?='' or state=?)",Long.class,tenant,state,state);
+    }
     public record Identity(UUID tenantId,UUID withdrawalId) { }
 }

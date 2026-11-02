@@ -26,12 +26,18 @@ import com.surprising.wallet.model.CustodySessionCookie;
 public class CustodyConsoleAuthController {
     /** 控制台鉴权服务，提供租户登录、登出、会话管理。 */
     private final CustodyAuthService auth;
+    private final com.surprising.wallet.service.CustodyLoginSecurityService security;
+    private final com.surprising.wallet.service.CustodyVerificationMailService mail;
 
     /**
      * 注入鉴权服务。
      */
-    public CustodyConsoleAuthController(CustodyAuthService auth) {
+    public CustodyConsoleAuthController(CustodyAuthService auth,
+            com.surprising.wallet.service.CustodyLoginSecurityService security,
+            com.surprising.wallet.service.CustodyVerificationMailService mail) {
         this.auth = auth;
+        this.security = security;
+        this.mail = mail;
     }
 
     /**
@@ -48,6 +54,29 @@ public class CustodyConsoleAuthController {
                 auth.sessionCookieSecure());
         return result;
     }
+
+    @PostMapping("/email-code")
+    public Map<String,Boolean> emailCode(HttpServletRequest request) {
+        String token=CustodySessionCookie.read(request.getCookies());
+        String ip=CustodyRequestSupport.clientIp(request);
+        var delivery=security.prepareEmail(token,ip);
+        try { mail.send(delivery.recipient(),delivery.code()); }
+        catch(RuntimeException e) { security.deliveryFailed(token,ip); throw e; }
+        return Map.of("ok",true);
+    }
+
+    @PostMapping("/totp/setup")
+    public com.surprising.wallet.service.CustodyLoginSecurityService.Setup setup(HttpServletRequest request) {
+        return security.setup(CustodySessionCookie.read(request.getCookies()),null,false,CustodyRequestSupport.clientIp(request));
+    }
+
+    @PostMapping("/verify")
+    public CustodyAuthService.LoginResult verify(@RequestBody Verification body,HttpServletRequest request,HttpServletResponse response) {
+        var result=security.verify(CustodySessionCookie.read(request.getCookies()),body.emailCode(),body.totpCode(),CustodyRequestSupport.clientIp(request));
+        CustodySessionCookie.set(response,result.token(),java.time.Duration.between(java.time.Instant.now(),result.expiresAt()),auth.sessionCookieSecure());
+        return result;
+    }
+    public record Verification(String emailCode,String totpCode) { }
 
     /**
      * 返回当前会话的租户身份信息。

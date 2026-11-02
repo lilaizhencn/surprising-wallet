@@ -15,6 +15,19 @@ logging:
     default: INFO
 
 spring:
+  # 邮件发送预留配置。填写 SMTP 后，再将 custody.email-verification.enabled 改为 true。
+  mail:
+    host: ""
+    port: 587
+    username: ""
+    password: ""
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   application:
     # Spring 应用名，用于日志、指标和未来配置中心标识。
     name: wallet-api
@@ -159,6 +172,9 @@ sw:
       # 初始化目标网络名，必须和 chain_profile 一致。
       network: ${SW_WALLET_DEV_EIP7702_NETWORK:devtest}
     custody:
+      email-verification:
+        enabled: false
+        from: ""
       # 测试环境托管敏感字段加密主密钥（64 位十六进制）；上线必须迁移 KMS。
       secret-master-key: ${SW_CUSTODY_SECRET_MASTER_KEY:}
       # Console 会话有效期。

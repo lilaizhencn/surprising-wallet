@@ -53,7 +53,8 @@ public class CustodyConsoleAuthenticationFilter extends OncePerRequestFilter {
         }
         boolean console = path.startsWith("/custody/console/v1/");
         boolean platform = path.startsWith("/custody/platform/v1/");
-        return (!console && !platform) || path.endsWith("/auth/login");
+        return (!console && !platform) || path.endsWith("/auth/login") || (console && "POST".equals(request.getMethod()) && java.util.Set.of(
+                "/custody/console/v1/auth/email-code", "/custody/console/v1/auth/totp/setup", "/custody/console/v1/auth/verify").contains(path));
     }
 
     /**

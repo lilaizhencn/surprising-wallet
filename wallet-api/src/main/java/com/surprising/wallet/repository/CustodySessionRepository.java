@@ -56,6 +56,48 @@ public class CustodySessionRepository {
                 rs.getTimestamp("expires_at").toInstant()), tokenHash).stream().findFirst();
     }
 
+    public void setVersion(UUID id, long version) {
+        jdbc.update("update custody_session set security_version=? where id=?",version,id);
+    }
+    public void restrict(UUID id, long version, boolean email, boolean totp) {
+        jdbc.update("update custody_session set verified=false,security_version=?,email_required=?,totp_required=?,expires_at=now()+interval '5 minutes' where id=?",version,email,totp,id);
+    }
+
+    public AuthState authState(String hash, boolean lock) {
+        return jdbc.query("select * from custody_session where token_hash=? and revoked_at is null and expires_at>now()"+(lock ? " for update" : ""),
+            (r,n) -> new AuthState(r.getObject("id",UUID.class),r.getObject("tenant_user_id",UUID.class),r.getObject("tenant_id",UUID.class),
+                r.getBoolean("verified"),r.getLong("security_version"),r.getBoolean("email_required"),r.getBoolean("email_verified"),r.getBoolean("totp_required"),
+                r.getInt("verification_attempts"),r.getString("email_code_hash"),instant(r.getTimestamp("email_code_expires_at")),instant(r.getTimestamp("email_sent_at")),
+                r.getString("enrollment_ciphertext"),instant(r.getTimestamp("enrollment_expires_at")),r.getTimestamp("expires_at").toInstant()),hash)
+            .stream().findFirst().orElseThrow(() -> new com.surprising.wallet.exception.CustodyUnauthorizedException("session expired or invalid"));
+    }
+
+    public boolean emailRecentlySent(UUID user) {
+        return !jdbc.queryForList("select id from custody_session where tenant_user_id=? and email_sent_at>now()-interval '60 seconds' limit 1",UUID.class,user).isEmpty();
+    }
+    public void emailCode(UUID id, String hash) {
+        jdbc.update("update custody_session set email_code_hash=?,email_code_expires_at=now()+interval '5 minutes',email_sent_at=now() where id=?",hash,id);
+    }
+    public void emailVerified(UUID id) {
+        jdbc.update("update custody_session set email_verified=true,email_code_hash=null,email_code_expires_at=null where id=?",id);
+    }
+    public void failedVerification(UUID id) {
+        jdbc.update("update custody_session set verification_attempts=verification_attempts+1,revoked_at=case when verification_attempts>=4 then now() else revoked_at end where id=?",id);
+    }
+    public void enrollment(UUID id, String ciphertext) {
+        jdbc.update("update custody_session set enrollment_ciphertext=?,enrollment_expires_at=now()+interval '5 minutes' where id=?",ciphertext,id);
+    }
+    public void finish(UUID id, String hash, long version, Instant expiry) {
+        jdbc.update("update custody_session set token_hash=?,verified=true,security_version=?,expires_at=?,email_code_hash=null,email_code_expires_at=null,enrollment_ciphertext=null,enrollment_expires_at=null where id=?",hash,version,Timestamp.from(expiry),id);
+    }
+    public void retainOnly(UUID user, UUID current, long version) {
+        jdbc.update("update custody_session set revoked_at=now() where tenant_user_id=? and id<>? and revoked_at is null",user,current);
+        jdbc.update("update custody_session set security_version=?,enrollment_ciphertext=null,enrollment_expires_at=null where id=?",version,current);
+    }
+    private static Instant instant(Timestamp value) { return value == null ? null : value.toInstant(); }
+    public record AuthState(UUID id,UUID userId,UUID tenantId,boolean verified,long version,boolean emailRequired,boolean emailVerified,
+        boolean totpRequired,int attempts,String emailHash,Instant emailExpiry,Instant emailSent,String enrollment,Instant enrollmentExpiry,Instant expiresAt) { }
+
     /** 统计租户当前有效会话。 */
     public long countActive(UUID tenantId) {
         Long count = jdbc.queryForObject("""

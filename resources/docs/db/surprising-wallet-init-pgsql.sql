@@ -1363,7 +1363,18 @@ CREATE TABLE public.custody_session (
     expires_at timestamp with time zone NOT NULL,
     last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
     revoked_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    security_version bigint NOT NULL DEFAULT 0,
+    verified boolean NOT NULL DEFAULT true,
+    email_required boolean NOT NULL DEFAULT false,
+    email_verified boolean NOT NULL DEFAULT false,
+    totp_required boolean NOT NULL DEFAULT false,
+    verification_attempts integer NOT NULL DEFAULT 0 CHECK (verification_attempts BETWEEN 0 AND 5),
+    email_code_hash varchar(64),
+    email_code_expires_at timestamptz,
+    email_sent_at timestamptz,
+    enrollment_ciphertext text,
+    enrollment_expires_at timestamptz
 );
 
 
@@ -1423,6 +1434,11 @@ CREATE TABLE public.custody_tenant_user (
     last_login_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    email_verification_required boolean NOT NULL DEFAULT false,
+    totp_required boolean NOT NULL DEFAULT false,
+    totp_ciphertext text,
+    totp_last_step bigint NOT NULL DEFAULT -1,
+    security_version bigint NOT NULL DEFAULT 0,
     approval_revocation_sequence bigint NOT NULL DEFAULT 0 CHECK (approval_revocation_sequence BETWEEN 0 AND 1000000000000000),
     approval_revocation_delivered bigint NOT NULL DEFAULT 0 CHECK (approval_revocation_delivered BETWEEN 0 AND approval_revocation_sequence),
     approval_revocation_actor uuid,

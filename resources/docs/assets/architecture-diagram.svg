@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="4327" viewBox="0 0 1200 4327">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="4527" viewBox="0 0 1200 4527">
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#475569"/></marker></defs>
 <style>text{font-family:Arial,"Noto Sans SC",sans-serif;fill:#0f172a}.title{font-size:24px;font-weight:bold}.label{font-size:17px;font-weight:bold}.body{font-size:14px}.arrow{stroke:#475569;stroke-width:2;marker-end:url(#arrow)}</style>
 <rect width="1200" height="100%" fill="#f8fafc"/>
@@ -125,4 +125,11 @@
 <text x="55" y="4230" class="body">原 32 字节 DEK → 锁页内存 StorageKey → EncryptedStore；明文不落文件，释放前清零</text>
 <text x="55" y="4256" class="body">IAM / TLS / 完整性 / 锁页失败即停止；API 无解密权限；原 MPC 签名与账务状态不变</text>
 <text x="55" y="4282" class="body">恢复：原 wrappedKey + 原 KMS 版本解密能力 + 原加密记录；禁止随机更换 DEK</text></g>
+<g id="console-login-security"><rect x="35" y="4332" width="1130" height="175" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
+<text x="55" y="4361" class="label">Console：密码 → 受限 Cookie → 邮箱验证 → TOTP / 扫码确认 → 轮换完整会话</text>
+<text x="55" y="4389" class="body">custody_tenant_user / custody_session 单表仓储；用户锁、政策版本、五次锁定、TOTP 时间步防重放</text>
+<text x="55" y="4415" class="body">种子加密并绑定用户 / 会话；二维码本地生成；SMTP 默认关闭，发送在事务外，失败不放行业务</text>
+<text x="55" y="4441" class="body">子账号由租户管理员恢复；租户管理员由平台恢复；政策 / 绑定 / 恢复与审计、会话撤销同事务</text>
+<text x="55" y="4467" class="body">Console 只读本租户审批原件；独立站默认全部状态、决定历史 / 票数，管理员独立计票并禁止自审</text>
+<text x="55" y="4493" class="body">精确 Origin、响应 no-store；密码 / 验证码 / 种子不进入审计或浏览器持久存储</text></g>
 </svg>

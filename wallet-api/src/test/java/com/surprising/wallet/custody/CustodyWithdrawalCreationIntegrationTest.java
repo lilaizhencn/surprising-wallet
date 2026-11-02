@@ -138,6 +138,15 @@ class CustodyWithdrawalCreationIntegrationTest {
             assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->jdbc.update("update wallet_withdrawal_approval set intent='{}' where withdrawal_id=?",accepted.id()));
             assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->jdbc.update("delete from wallet_withdrawal_approval where withdrawal_id=?",accepted.id()));
         }
+        var query=new CustodyApprovalQueryService(approvalRows());
+        assertEquals(2,query.list(principal,"",20,0).total());
+        assertEquals(2,query.list(principal,"QUEUED",20,0).total());
+        assertEquals(0,query.list(principal,"PENDING",20,0).total());
+        assertEquals(0,query.list(CustodyTestSupport.tenantAdmin(UUID.randomUUID()),"",20,0).total());
+        var viewer=new com.surprising.wallet.model.CustodyPrincipal(com.surprising.wallet.model.CustodyPrincipal.ActorType.TENANT_USER,
+                UUID.randomUUID(),tenant,"tenant","VIEWER",java.util.Set.of("withdrawals:read"));
+        assertThrows(com.surprising.wallet.exception.CustodyForbiddenException.class,()->query.list(viewer,"",20,0));
+
     }
     @Test void independentAdmissionOccursAfterCommitAndApprovalReleasesOnlyPreparationHold() {
         var accepted=create("127.0.0.1");var pending=independent(accepted.id(),"PENDING",false);
