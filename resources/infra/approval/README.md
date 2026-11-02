@@ -22,7 +22,7 @@ Wallet、独立审批和三个 MPC 持有者分别使用独立操作系统身份
 
 维护人员在指定目标库初始化后审阅并执行 `database-roles.sql`。可通过 psql 变量选择四个不同的角色名，默认是 `sw_wallet_owner`、`sw_approval_owner`、`sw_wallet_runtime`、`sw_approval_runtime`。脚本撤销 PUBLIC 对应用表/函数以及 PGMQ 的访问，再分别授予 Wallet public/PGMQ 访问和独立审批 approval 访问；该操作需要专用钱包数据库，不能不经审阅套用到其他应用共用的数据库。LOGIN 密码通过主机上的 psql `\password` 交互设置，不写入 SQL、命令参数或仓库。
 
-`DatabaseRoleIsolation` 在两个可执行应用启动时检查真实有效权限。独立审批必须无法读取/写入 approval 之外的应用关系，不能执行外部可调用的 SECURITY DEFINER 函数或创建应用对象；Wallet 必须完全无法访问 approval schema/关系。两者都检查 PostgreSQL 18、非管理/非数据库 owner 角色和无角色成员资格。未满足即启动失败，没有生产绕过开关。应用只读系统目录，不在启动时更改授权。权限判断使用 [PostgreSQL 18 权限查询函数](https://www.postgresql.org/docs/18/functions-info.html)；拒绝角色成员资格也覆盖 [SET ROLE 所提供的切换能力](https://www.postgresql.org/docs/18/role-membership.html)。
+`DatabaseRoleIsolation` 在两个可执行应用启动时检查真实有效权限。独立审批必须无法读取/写入 approval 之外的应用关系，不能执行外部可调用的 SECURITY DEFINER 函数或创建应用对象；Wallet 必须完全无法访问 approval schema/关系。两者都检查 PostgreSQL 17 及以上、非管理/非数据库 owner 角色和无角色成员资格；Wallet 还检查 PGMQ 的队列与租约接口。未满足即启动失败，没有生产绕过开关。应用只读系统目录，不在启动时更改授权。权限判断使用 [PostgreSQL 权限查询函数](https://www.postgresql.org/docs/17/functions-info.html)；拒绝角色成员资格也覆盖 [SET ROLE 所提供的切换能力](https://www.postgresql.org/docs/17/role-membership.html)。
 
 ## 配置、证书与网络
 

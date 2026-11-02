@@ -108,13 +108,13 @@ The Java dependency direction is `wallet-api → common, chain-sdks`. The API ca
 - JDK 27
 - Maven 3.9+
 - Spring Boot 4.1.2 / Spring Cloud 2025.1.4（统一由根 `pom.xml` 管理）
-- PostgreSQL 18
-- PGMQ 1.11.1 extension installed on the PostgreSQL server
+- PostgreSQL 17 or newer (local integration tests use the installed PostgreSQL 18)
+- PGMQ extension with `send` headers, `read_ct`, `archive`, and `set_vt` APIs (including Supabase's PGMQ 1.5.1)
 - Node.js only for the Polkadot runtime bridge and selected test infrastructure
 
 ### Local development or a disposable test database
 
-The repository has one canonical database file. It is destructive by design and must be used only with a new or disposable database. Install PGMQ 1.11.1 on the existing PostgreSQL server first (commands below); initialize as a database administrator.
+The repository has one canonical database file. It is destructive by design and must be used only with a new or disposable database. The file enables and validates the available PGMQ extension before dropping application tables. Initialize as a database administrator, then provision separate restricted Wallet and approval runtime roles.
 
 ```bash
 createdb -h 127.0.0.1 -p 5432 surprising_wallet_test_local
@@ -139,7 +139,7 @@ Configure `SW_MPC_CA_FILE`, `SW_MPC_CLIENT_CERTIFICATE_FILE`, `SW_MPC_CLIENT_PRI
 
 The repository includes the API unit under `resources/infra/systemd/`. The native holder has a separate executable and configuration as described in its operations guide.
 
-1. Provision PostgreSQL 18 with PGMQ 1.11.1. Install the extension files on the existing database host before running the initialization SQL:
+1. Provision PostgreSQL 17 or newer with a compatible PGMQ extension. On a self-managed PostgreSQL server, install the extension files before running the initialization SQL (this example uses PGMQ 1.11.1):
 
    ```bash
    git clone --depth 1 --branch v1.11.1 https://github.com/pgmq/pgmq.git /tmp/wallet-pgmq
@@ -147,6 +147,7 @@ The repository includes the API unit under `resources/infra/systemd/`. The nativ
    make -C /tmp/wallet-pgmq/pgmq-extension install
    ```
 2. Initialize a new database with `resources/docs/db/surprising-wallet-init-pgsql.sql`.
+   On Supabase, use a new dedicated project/database: the baseline deletes existing application tables and the role provisioning script changes schema owners and grants. Validate that the project permits those role changes before storing wallet funds.
 3. Install `/etc/surprising-wallet/wallet.env` with API configuration and the authorized MPC transport identity.
 4. Configure the three independent native holders, keeping each holder's secrets and storage separate.
 5. Install `surprising-wallet.service`, which runs `current/wallet-server.jar`, and validate the API and MPC configuration in an isolated environment before activation.

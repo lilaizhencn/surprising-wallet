@@ -13,7 +13,6 @@ UNIT_FILE="/etc/systemd/system/$UNIT"
 HEALTH_URL=http://127.0.0.1:8002/actuator/health
 [[ -s "$STAGING/wallet-server.jar" && -f "$ENV_FILE" ]]
 /usr/bin/java -version 2>&1 | grep -Eq 'version "27([.\"]|$)'
-systemctl is-active --quiet postgresql.service
 # Only database credentials are passed to psql; never print environment contents.
 set -a
 source "$ENV_FILE"
@@ -39,7 +38,12 @@ DO $$ BEGIN
             AND ((column_name IN ('request', 'signed_transaction', 'attempts') AND data_type='jsonb')
                  OR (column_name IN ('tenant_id', 'signing_request_id')
                      AND data_type='uuid' AND is_generated='ALWAYS'))) <> 5
-     OR NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgmq' AND extversion='1.11.1') THEN
+     OR NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgmq')
+     OR current_setting('server_version_num')::integer < 170000
+     OR to_regprocedure('pgmq.send(text,jsonb,jsonb)') IS NULL
+     OR to_regprocedure('pgmq.read(text,integer,integer,jsonb)') IS NULL
+     OR to_regprocedure('pgmq.archive(text,bigint)') IS NULL
+     OR to_regprocedure('pgmq.set_vt(text,bigint,integer)') IS NULL THEN
     RAISE EXCEPTION 'wallet database prerequisites are missing';
   END IF;
 END $$;

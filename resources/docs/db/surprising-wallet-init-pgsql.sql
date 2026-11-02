@@ -21,6 +21,29 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+-- Validate the queue API before the destructive fresh-database baseline begins.
+DO $$ BEGIN
+    IF current_setting('server_version_num')::integer < 170000 THEN
+        RAISE EXCEPTION 'wallet database requires PostgreSQL 17 or newer';
+    END IF;
+END $$;
+CREATE EXTENSION IF NOT EXISTS pgmq;
+DO $$ BEGIN
+    IF to_regprocedure('pgmq.create(text)') IS NULL
+       OR to_regprocedure('pgmq.send(text,jsonb,jsonb)') IS NULL
+       OR to_regprocedure('pgmq.read(text,integer,integer,jsonb)') IS NULL
+       OR to_regprocedure('pgmq.archive(text,bigint)') IS NULL
+       OR to_regprocedure('pgmq.set_vt(text,bigint,integer)') IS NULL
+       OR NOT EXISTS (
+           SELECT 1 FROM pg_attribute
+           WHERE attrelid = (SELECT typrelid FROM pg_type WHERE oid = to_regtype('pgmq.message_record'))
+             AND attname IN ('msg_id','read_ct','message','headers')
+           GROUP BY attrelid HAVING count(*) = 4
+       ) THEN
+        RAISE EXCEPTION 'wallet database requires PGMQ queue headers and lease APIs';
+    END IF;
+END $$;
+
 DROP TABLE IF EXISTS public.wallet_withdrawal_approval;
 
 ALTER TABLE IF EXISTS public.chain_address DROP CONSTRAINT IF EXISTS chain_address_mpc_key_fkey;
@@ -6628,8 +6651,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 
--- PGMQ 1.11.1 is installed on the existing PostgreSQL 18 server before initialization.
-CREATE EXTENSION IF NOT EXISTS pgmq VERSION '1.11.1';
+-- PGMQ was validated before any application tables were dropped.
 DO $$
 DECLARE q text;
 BEGIN

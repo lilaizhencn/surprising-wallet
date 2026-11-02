@@ -9,8 +9,8 @@
 
 - JDK 27
 - Maven 3.8+
-- PostgreSQL 18
-- PGMQ 1.11.1 扩展（安装在现有 PostgreSQL 18 上）
+- PostgreSQL 17 及以上；本地集成测试使用现有 PostgreSQL 18
+- PGMQ 扩展，须支持 headers、read_ct、archive 和 set_vt（Supabase 当前项目提供的 1.5.1 包含这些接口）
 - Docker，用于 BTC/LTC/DOGE/BCH 本地 regtest 节点
 - Node.js 20.19+，用于 Console 和 EVM fork 工具
 
@@ -50,7 +50,7 @@ psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
 
 ## 3. PGMQ
 
-在现有 PostgreSQL 18 所在主机安装扩展文件，再执行唯一初始化 SQL。无需额外消息服务。
+在自建 PostgreSQL 主机安装扩展文件，再执行唯一初始化 SQL；Supabase 等托管实例通过可用扩展安装，不执行主机安装命令。无需额外消息服务。
 
 ```bash
 git clone --depth 1 --branch v1.11.1 https://github.com/pgmq/pgmq.git /tmp/wallet-pgmq

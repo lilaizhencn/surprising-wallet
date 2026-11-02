@@ -36,6 +36,17 @@ public final class DatabaseRoleIsolation {
         try(var connection=source.getConnection()) {
             restricted(connection);
             require(check(connection,"""
+                    select to_regprocedure('pgmq.create(text)') is not null
+                        and to_regprocedure('pgmq.send(text,jsonb,jsonb)') is not null
+                        and to_regprocedure('pgmq.read(text,integer,integer,jsonb)') is not null
+                        and to_regprocedure('pgmq.archive(text,bigint)') is not null
+                        and to_regprocedure('pgmq.set_vt(text,bigint,integer)') is not null
+                        and (select count(*) from pg_catalog.pg_attribute
+                             where attrelid = (select typrelid from pg_catalog.pg_type
+                                                where oid = to_regtype('pgmq.message_record'))
+                               and attname in ('msg_id','read_ct','message','headers')) = 4
+                    """),"wallet queue requires PGMQ headers and lease APIs");
+            require(check(connection,"""
                     select not exists(select 1 from pg_catalog.pg_namespace n where n.nspname='approval'
                         and (has_schema_privilege(current_user,n.oid,'USAGE') or has_schema_privilege(current_user,n.oid,'CREATE')))
                     """),"Wallet runtime must have no privileges on the independent approval schema");
@@ -48,7 +59,7 @@ public final class DatabaseRoleIsolation {
         }
     }
     private static void restricted(Connection connection) throws SQLException {
-        require(check(connection,"select current_setting('server_version_num')::integer between 180000 and 189999"),"wallet services require PostgreSQL 18");
+        require(check(connection,"select current_setting('server_version_num')::integer >= 170000"),"wallet services require PostgreSQL 17 or newer");
         require(check(connection,"""
                 select not (r.rolsuper or r.rolcreatedb or r.rolcreaterole or r.rolreplication or r.rolbypassrls)
                     and not exists(select 1 from pg_catalog.pg_auth_members m where m.member=r.oid)

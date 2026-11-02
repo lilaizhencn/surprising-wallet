@@ -150,7 +150,7 @@ wallet-api/job/
 
 ## PostgreSQL queue infrastructure
 
-- PostgreSQL 18 + PGMQ 1.11.1 is the sole general middleware dependency.
+- PostgreSQL 17 or newer with a PGMQ extension exposing queue headers and lease APIs is the sole general middleware dependency. Production roles must retain the independent Wallet/approval isolation checks.
 - `common.queue.PgmqClient` is an extension adapter for PGMQ-owned queue/archive tables, not a business Repository. It must never query wallet business tables.
 - `ChainFeeRateRepository` maps only to `chain_fee_rate`; network fee quotes are shared network metadata.
 - Initial UTXO signing enqueue, its durable request receipt on `chain_signing_transaction`, order state and UTXO locks share one transaction; no separate wallet Outbox table or dispatcher. The receipt survives queue/archive cleanup.

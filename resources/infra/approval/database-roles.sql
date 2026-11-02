@@ -1,4 +1,4 @@
--- Run as the maintenance owner, against the intended EXISTING PostgreSQL 18 database,
+-- Run as the maintenance owner, against the intended EXISTING PostgreSQL 17+ database,
 -- after the sole current init baseline. No database/server is created by this file.
 -- Passwords are deliberately absent. Set LOGIN credentials with psql \password on the host.
 \set ON_ERROR_STOP on

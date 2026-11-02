@@ -51,7 +51,7 @@ Controller 不直接依赖仓储；Job 不执行资金或链流程。Service 使
 
 ## 账务、队列与调度
 
-- PostgreSQL 18 + PGMQ 1.11.1 是唯一通用中间件。`surprising-wallet-init-pgsql.sql` 是空库目标基线；测试只使用既有本机实例内的自有临时库。
+- PostgreSQL 17 及以上版本与支持 headers、read_ct、archive、set_vt 的 PGMQ 扩展是唯一通用中间件；本机集成测试继续使用既有 PostgreSQL 18。`surprising-wallet-init-pgsql.sql` 是空库目标基线；测试只使用既有本机实例内的自有临时库。
 - UTXO 签名阶段为 `wallet_mpc_sign → wallet_sign_done`。提现、充值事件、提现事件和 RBF 使用各自既有队列。初次请求、`chain_signing_transaction` 的持久入队凭据、订单与输入锁一起提交；没有额外钱包 Outbox。
 - 队列处理在 Service；`read_ct` 栅栏保护领取。处理、下一阶段入队与归档一起提交。原生 MPC 持有者不访问数据库或队列。
 - `DepositService` 必须和 `CustodyDepositProjectionService` 在同事务提交充值、余额、租户投影、赤字恢复和事件；地址归属缺失整笔回滚。
@@ -208,7 +208,7 @@ Wallet 在同一子账号状态/角色、会话撤销和审计事务中，向 `c
 
 独立管理员邀请/重置时必须显式确认当前 Wallet 撤销代次。页面列出 walletRevocationSequence；邀请前查询同租户 fence，存在撤销时先要求独立管理员核实本人及当前 Wallet 状态并勾选恢复确认。恢复仍通过独立一次性能力和本人设置密码完成，没有 Wallet/mTLS enable/reset/enroll 路由。传播为跨进程持久重试，不能称为即时跨域原子撤销，也不能声称撤回已签发证明或先前有效审核；停用的是后续身份使用。API/业务用户仍只看到 FROZEN 等正常处理状态。
 
-`common.security.DatabaseRoleIsolation` 只读取 PostgreSQL 18 系统目录，在 Wallet 与独立审批的 ApplicationRunner 中检查真实有效权限：runtime 非管理/非 DB owner/无其他角色成员资格与 CREATE；Wallet 不得访问 approval，审批不得访问其他应用关系、创建应用对象或调用外部 SECURITY DEFINER 函数。检查没有生产旁路开关，失败即启动失败，不在启动时创建/改动角色。独立 schema 由单独 NOLOGIN owner 所有，runtime 仅获业务 DML。
+`common.security.DatabaseRoleIsolation` 只读取 PostgreSQL 17 及以上版本的系统目录，在 Wallet 与独立审批的 ApplicationRunner 中检查真实有效权限；Wallet 另校验 PGMQ 队列和租约接口：runtime 非管理/非 DB owner/无其他角色成员资格与 CREATE；Wallet 不得访问 approval，审批不得访问其他应用关系、创建应用对象或调用外部 SECURITY DEFINER 函数。检查没有生产旁路开关，失败即启动失败，不在启动时创建/改动角色。独立 schema 由单独 NOLOGIN owner 所有，runtime 仅获业务 DML。
 
 新增 `resources/infra/approval/` 仅提供可审阅部署材料：角色/授权脚本（不建库、不建表或服务）、独立 OS 用户 systemd、无已登记服务证书的公共代理、私网直连 mTLS、只读 native 身份与 issuer 分离、故障/回滚/备份说明。唯一表基线已同步上述用户字段、索引和新单表/触发器，架构边界映射同步新增仓储；没有更改生产角色或部署服务。HTTPS 验收在自己的临时库中配置互异 owner/runtime 与密码；前端、原生授权和受限角色 HTTPS 有各自验证入口，实际覆盖范围见 [审批验收记录](approval-validation.md)。无授权终止见下文；已授权短有效期/部分失败交易继续保持原绑定。
 
