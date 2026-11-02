@@ -16,6 +16,7 @@
 namespace {
 using namespace coinbase;
 using wallet_mpc::EncryptedStore;
+using wallet_mpc::StorageKey;
 
 void require(bool condition, const char* message) {
   if (!condition) throw std::runtime_error(message);
@@ -45,8 +46,8 @@ void exercise() {
   const std::string metadata = "tenant=a;key=k;epoch=1;algorithm=ed25519;party=local-identity";
   const std::string secret = "synthetic-share-material-that-must-not-appear-on-disk";
   {
-    EncryptedStore store(temporary.path, key);
-    rejects([&] { EncryptedStore duplicate(temporary.path, key); });
+    EncryptedStore store(temporary.path, StorageKey(key));
+    rejects([&] { EncryptedStore duplicate(temporary.path, StorageKey(key)); });
     require(!store.get("missing", metadata), "missing record should be absent");
     store.put("share-1", metadata, mem_t(secret));
     store.put("share-1", metadata, mem_t(secret));
@@ -82,11 +83,11 @@ void exercise() {
   {
     buf_t wrong_key(key);
     wrong_key[0] ^= 1;
-    EncryptedStore wrong_store(temporary.path, wrong_key);
+    EncryptedStore wrong_store(temporary.path, StorageKey(wrong_key));
     rejects([&] { wrong_store.get("share-1", metadata); });
   }
   {
-    EncryptedStore restarted(temporary.path, key);
+    EncryptedStore restarted(temporary.path, StorageKey(key));
     require(*restarted.get("share-1", metadata) == mem_t(secret), "share did not survive store restart");
     std::fstream change(temporary.path + "/share-1", std::ios::in | std::ios::out | std::ios::binary);
     change.seekg(22);
@@ -100,10 +101,10 @@ void exercise() {
   }
   TemporaryDirectory insecure;
   require(chmod(insecure.path.c_str(), 0755) == 0, "cannot prepare permission test");
-  rejects([&] { EncryptedStore bad(insecure.path, key); });
+  rejects([&] { EncryptedStore bad(insecure.path, StorageKey(key)); });
   require(chmod(insecure.path.c_str(), 0700) == 0, "cannot restore test directory permissions");
   std::filesystem::create_directory_symlink(insecure.path, temporary.path + "/linked-directory");
-  rejects([&] { EncryptedStore bad(temporary.path + "/linked-directory", key); });
+  rejects([&] { EncryptedStore bad(temporary.path + "/linked-directory", StorageKey(key)); });
 }
 }  // namespace
 

@@ -5,6 +5,7 @@
 #include <string>
 
 #include <cbmpc/core/buf.h>
+#include <wallet_mpc/storage_key.h>
 
 namespace wallet_mpc {
 
@@ -12,7 +13,7 @@ namespace wallet_mpc {
 // metadata including tenant, key id, epoch, algorithm and local party identity.
 class EncryptedStore {
  public:
-  EncryptedStore(const std::string& directory, coinbase::mem_t encryption_key);
+  EncryptedStore(const std::string& directory, StorageKey encryption_key);
   ~EncryptedStore();
   EncryptedStore(const EncryptedStore&) = delete;
   EncryptedStore& operator=(const EncryptedStore&) = delete;
@@ -23,7 +24,7 @@ class EncryptedStore {
 
  private:
   int directory_fd_;
-  coinbase::buf_t encryption_key_;
+  StorageKey encryption_key_;
   mutable std::mutex mutex_;
   std::optional<coinbase::buf_t> read_record(const std::string& id, const std::string& metadata) const;
 };

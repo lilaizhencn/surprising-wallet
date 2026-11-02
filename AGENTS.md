@@ -169,6 +169,14 @@ wallet-api/job/
 - XMR 经用户确认使用 Monero 原生 2-of-3 协议；其余当前接入链使用 cb-mpc 对应算法。底层密码学测试不能替代逐链交易、广播、确认、幂等及账务验证。
 - 原生底层验证使用 CMake/CTest；构建输出、上游依赖源码、临时证书和密钥保存在仓库外。数据库验证仍遵守本机 PostgreSQL 18 约束。
 
+## GCP KMS 存储密钥
+
+- 正式 MPC 节点仅接受 `storageKey.kmsKeyName/wrappedKey/caBundleFile`，不接受明文 `encryptionKeyFile` 或环境变量密钥。固定 Google metadata/KMS 地址、TLS/主机名校验和无重定向；32 字节明文及 CRC32C 必须校验，失败停止启动。
+- DEK 解包到不可复制的锁页内存并在释放前清零，不落明文文件。每个节点的 KMS AAD 绑定其证书 SPKI；三台 VM 使用独立服务账号，仅对自己的 CryptoKey 有 decrypt 权限。API 不可取得这些权限。
+- 持久保留原 wrappedKey、KMS 原版本解密能力和加密份额/协议记录，不能随机换 DEK 读取旧数据。不得在验收中覆盖已充值材料。
+- 合成密钥仅存在于不安装的 `wallet_mpc_fixture_node`，不得把测试程序作为 Runtime 发布物；真实 Google KMS 验收与 fixture 的 MPC 回归分开记录。
+- 本次不改变数据库 schema/init-sql；架构和启动数据流图文必须保持同步。
+
 ## Cloudflare tenant-demo
 
 - `resources/tenant-demo` 是用户授权部署到 Cloudflare 的独立租户演示应用；其 SQLite-backed Durable Object 是租户自身账本，不是钱包 PostgreSQL 数据库。

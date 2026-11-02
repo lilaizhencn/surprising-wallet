@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix="sw-approval-admission-crash-") as direc
         for i in (0, 1):
             require(cluster.processes[i].wait(timeout=5) == 86, "test did not crash at the exact admission persistence boundary")
         os.environ.pop("WALLET_MPC_TEST_EXIT_AFTER_ADMISSION", None)
-        cluster.binary = pathlib.Path(sys.argv[1])
+        cluster.binary = pathlib.Path(sys.argv[1]).with_name("wallet_mpc_fixture_node")
         while time.time() <= expires: time.sleep(0.05)
         for i in (0, 1):
             cluster.stop(i); cluster.start(i)

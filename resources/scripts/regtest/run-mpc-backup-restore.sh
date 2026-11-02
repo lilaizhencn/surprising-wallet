@@ -4,6 +4,8 @@ umask 077
 RESTORE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 : "${MPC_RELEASE_ARCHIVE:?set MPC_RELEASE_ARCHIVE to a fresh native package-release.sh archive}"
 : "${MPC_MONERO_BIN_DIR:?set MPC_MONERO_BIN_DIR to official Monero0.18.5.4 binaries}"
+: "${WALLET_MPC_TEST_NODE_BINARY:?set WALLET_MPC_TEST_NODE_BINARY to the matching non-installed wallet_mpc_fixture_node}"
+[[ -x "$WALLET_MPC_TEST_NODE_BINARY" ]] || { printf 'MPC fixture binary is not executable\n' >&2; exit 1; }
 source "$RESTORE_ROOT/resources/scripts/regtest/local-postgres.sh"
 local_pg_require
 RESTORE_SOURCE_DB="surprising_wallet_test_mpc_restore_source_$$"

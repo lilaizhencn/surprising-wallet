@@ -21,6 +21,12 @@
 
 Controller 不直接依赖仓储；Job 不执行资金或链流程。Service 使用构造器注入，通过单表 Repository 组合跨表用例，不写 SQL。事务由应用服务编排。
 
+## 持有者存储密钥与 GCP KMS
+
+三个持有者分别使用独立 GCE 服务账号和 KMS CryptoKey；API 与审批服务无权解密持有者 DEK。节点配置仅保存 KMS 完整资源名、绑定本节点证书 SPKI 的 wrappedKey 和系统 CA bundle。`node_storage_key → load_storage_key → Google metadata/KMS` 在监听业务接口前获取并完整性校验原 32 字节 DEK，直接移交不可复制的锁页 `StorageKey`，由 `EncryptedStore` 使用。KEK 不离开 KMS；MPC 份额及不可变会话仍在各自加密目录，签名继续使用现有 MPC，不使用 KMS 代签。KMS 不可用或 IAM/校验错误则启动失败，不随机替换密钥。
+
+正式运行不支持明文 storage key 文件或测试密钥；测试密钥仅在不安装的 fixture 程序中启用。进程关闭 core dump，密钥页禁止交换并在 Linux 排除转储，销毁前清零；宿主机仍须禁用 swap/休眠以覆盖 TLS/JSON 临时副本。恢复依赖原 wrappedKey、KMS 原版本解密能力和原加密记录。一次启动缓存 DEK，故 KMS 撤权不等价于清除运行中的节点。数据库基线无变化。
+
 ## 租户与地址
 
 `CustodyAddressService` 接受明确租户和派生主体，在持久化坐标下恢复或创建原 MPC key。`MpcSigningService` 只有取得三份一致公钥的持久完成结果，才能激活并发布地址。XMR 根和子账户由三名独立持有者的官方钱包 RPC 协同建立，Java 只接收公开绑定。

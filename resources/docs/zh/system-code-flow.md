@@ -6,6 +6,14 @@
 
 Controller 校验请求与身份后委托应用 Service；Job 只调度。所有地址、Gas、中继、余额、订单、签名意图和事件都有明确租户。仓储只访问各自业务表，跨表事务由 Service 编排。金额使用最小单位整数或 BigDecimal。
 
+## 原生节点启动密钥流
+
+1. 读取本节点公开证书 SPKI 与配置中的 KMS 资源名、wrappedKey、CA bundle，不读取明文 storage.key。
+2. 通过固定 GCE metadata 地址取得附加账号短期令牌；向 Google KMS 请求原 DEK 解包，AAD 固定绑定 SPKI。
+3. 验证响应长度与 CRC32C，再把 32 字节 DEK 移交锁页、不可复制的 `StorageKey`，供 `EncryptedStore` 使用；释放时清零。
+4. 任一身份、IAM、TLS、校验或锁页错误均停止启动，不创建替代密钥。成功后继续原业务/审批/MPC 流程，不为每笔签名重新调用 KMS。
+5. 节点重启必须解包同一 DEK 才能恢复原加密协议记录；数据库、MPC 会话和链上广播状态不因 KMS 接入而改变。
+
 ## 地址发布
 
 1. `CustodyAddressService` 校验租户、主体和链配置，固定租户派生坐标。

@@ -57,7 +57,11 @@ def free_port():
 
 class Cluster:
     def __init__(self, root, binary, tenant=None, monero_configs=None, extra_tenants=()):
-        self.root, self.binary = root, binary
+        self.root = root
+        binary = pathlib.Path(binary)
+        fixture = binary.with_name("wallet_mpc_fixture_node")
+        override = os.environ.get("WALLET_MPC_TEST_NODE_BINARY")
+        self.binary = pathlib.Path(override) if override else (fixture if binary.name == "wallet-mpc-signer" and fixture.is_file() else binary)
         self.processes, self.logs = {}, {}
         self.authorization_cache = {}
         self.authorization_lock = threading.RLock()
@@ -80,13 +84,11 @@ class Cluster:
         self.peers = [{"identity": identity, "host": "localhost", "port": port}
                       for identity, port in zip(self.identities, self.ports)]
         for i in range(3):
-            (root / f"node{i}.aes").write_bytes(os.urandom(32))
-            (root / f"node{i}.aes").chmod(0o600)
             config = {"bindHost": "127.0.0.1", "port": self.ports[i],
                       "certificateFile": str(root / f"node{i}.pem"),
                       "privateKeyFile": str(root / f"node{i}.key"),
                       "caFile": str(root / "ca.pem"),
-                      "encryptionKeyFile": str(root / f"node{i}.aes"),
+                      "testStorageKeyHex": os.urandom(32).hex(),
                       "storeDirectory": str(root / f"node{i}-store"),
                       "sessionTimeoutSeconds": 15, "peers": self.peers,
                       "authorizationPublicKeys": [self.authorization_public_key],

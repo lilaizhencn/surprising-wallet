@@ -12,13 +12,27 @@
 |---|---|
 | `bindHost` / `port` | 签名节点监听地址；限制为授权的协调器和持有者可访问的网络 |
 | `certificateFile` / `privateKeyFile` / `caFile` | 节点 mTLS 身份与信任根；证书 SPKI 是持有者身份的一部分 |
-| `encryptionKeyFile` | 该节点独有的 32 字节存储密钥，必须为当前用户的普通文件，权限 0600 |
+| `storageKey.kmsKeyName` | 本节点专属 GCP KMS 对称密钥的完整资源名 |
+| `storageKey.wrappedKey` | 原 32 字节存储密钥的 KMS Base64 密文；AAD 绑定本节点证书 SPKI |
+| `storageKey.caBundleFile` | 验证 Google HTTPS 的系统 CA bundle，如 `/etc/ssl/certs/ca-certificates.crt` |
 | `storeDirectory` | 本节点完整的加密记录目录，必须属于当前用户，权限 0700；记录不可覆盖 |
 | `peers` | 固定的三个 SPKI 身份、主机及端口；保留原登记顺序与身份 |
 | `clients` | 以协调器证书 SPKI 为键，明确列出允许的租户 UUID 和操作，不使用隐式通配授权 |
 | `sessionTimeoutSeconds` | 允许 5–120 秒，默认 30 秒；超时表示结果未知，不是付款失败证明 |
 
 Java 的 mTLS 文件使用 `SW_MPC_CA_FILE`、`SW_MPC_CLIENT_CERTIFICATE_FILE`、`SW_MPC_CLIENT_PRIVATE_KEY_FILE`；三个持有者配置为 `SW_MPC_NODE_{1,2,3}_ID` / `_URL`。部署时还须保留 Java 对已选签名结果加密使用的现有应用密钥 `SW_CUSTODY_SECRET_MASTER_KEY`；仅恢复 PostgreSQL 不能解密原结果。
+
+## GCP KMS 内存加载
+
+正式节点不再接受 `encryptionKeyFile`、明文环境变量或测试密钥。`node_storage_key → load_storage_key` 使用固定 GCE metadata 地址取得附加服务账号短期令牌，再请求固定 `cloudkms.googleapis.com`。TLS 校验证书与主机名，禁止重定向，限制超时和响应大小。密文和 AAD 都发送 CRC32C；响应必须为正确校验和的 32 字节明文，否则启动失败，不生成替代密钥。
+
+AAD 为 UTF-8 `SW-MPC-STORAGE-KEY-V1\n` 加证书公钥 SPKI 的小写 SHA256。KEK 留在 KMS；本节点 DEK 只在内存解包，交给不可复制的 `StorageKey`。其独立内存页必须成功 mlock，Linux 排除该页转储，释放前清零；进程关闭核心转储。HTTPS/JSON 处理仍会短暂产生内存副本，宿主机须禁用交换空间和休眠，不应将“锁页”当作抵御已控制主机的攻击者的保证。启动成功后不为每次签名调用 KMS，撤销 KMS 权限不会清除已运行进程缓存的 DEK。
+
+三台持有者 VM 分别附加专属服务账号，启用 cloud-platform OAuth scope，仅在自己的 CryptoKey 上赋予 `roles/cloudkms.cryptoKeyDecrypter`；不要赋予项目级解密权限。配置与密文持久备份，但无明文 storage.key。身份与权限、原密文、可解密的原 KMS 版本和原加密记录必须一起可恢复。首次创建空节点及已有数据的一次性包裹流程见 [GCP 部署说明](../gcp/README.md)。
+
+KMS 轮换 KEK 时可用新版本重新包裹原 DEK，不可直接更换 DEK 去读取旧 store。不能销毁仍用于原密文恢复的 KMS 版本。已有节点转换后须先验证原记录、重启、原会话恢复，再撤去旧明文文件；本次实现未操作既有份额或生产节点。
+
+隔离测试使用不安装的 `wallet_mpc_fixture_node` 和合成密钥。`Cluster` 在构建目录自动选择该程序；对 Runtime 归档执行夹具时需显式设置 `WALLET_MPC_TEST_NODE_BINARY` 指向对应源码构建的测试程序。归档仍只包含正式程序，不含该测试入口；此模式不能证明归档程序的 GCE 身份接入，真实 KMS 验收单独执行。
 
 ## 原生发布包与 Linux 安装
 
@@ -31,7 +45,7 @@ MPC_BUILD_DIR=/absolute/path/to/native-build \
 
 脚本重新构建节点目标，经 CMake 安装明确列出的二进制、配置样例、运行说明与 unit，再生成文件 SHA256 清单和平台/架构/依赖版本记录。输出仅包含公开程序与样例，不读取节点实际配置、份额、TLS 私钥或存储密钥。发布包必须在目标 Linux 架构构建；macOS 构建产物只能用于对应平台验收。清单记录工作区是否有未提交改动，不代表已经通过全链验收。
 
-每台持有者主机建立独立 `wallet-mpc` 系统用户，把解包后的公开程序安装到 `/opt/surprising-wallet-mpc/releases/<release>/`，由 root 管理，并令 `current` 指向该目录。将包内 `share/wallet-mpc-signer/surprising-wallet-mpc.service` 安装到 systemd，私有配置放在 `/etc/surprising-wallet-mpc/node.json`。systemd 为该用户建立 0700 的 `/var/lib/surprising-wallet-mpc`；份额目录及外部 32 字节存储密钥仍须满足前述归属和权限要求。
+每台持有者主机建立独立 `wallet-mpc` 系统用户，把解包后的公开程序安装到 `/opt/surprising-wallet-mpc/releases/<release>/`，由 root 管理，并令 `current` 指向该目录。将包内 `share/wallet-mpc-signer/surprising-wallet-mpc.service` 安装到 systemd，私有配置放在 `/etc/surprising-wallet-mpc/node.json`。systemd 为该用户建立 0700 的 `/var/lib/surprising-wallet-mpc`；份额目录仍须满足前述归属和权限要求；存储密钥由本节点的 KMS 密文解包到内存。
 
 `config/node.example.json` 只列默认 cb-mpc 权限，所有 `REPLACE_WITH_*` 必须替换。样例默认监听 loopback；跨主机部署须选择受保护的内网监听地址，确认服务器证书 SAN、固定三个 peers 的原顺序、原 SPKI 和可达端口。只给指定租户授权；REFRESH 及 Monero 操作应按需显式增加。XMR 的 `monero` 配置按上一节补充，并单独部署同主机的官方私有钱包进程；本 unit 不启动数据库、Monero daemon 或 wallet-rpc。
 
@@ -105,7 +119,7 @@ Java 只运行 surprising-wallet.service，不选择 API/签名混合模式。�
 
 ## 本机完整冷恢复验收（通过）
 
-入口为 `MPC_RELEASE_ARCHIVE=/absolute/path/release.tar.gz MPC_MONERO_BIN_DIR=/absolute/path/official-monero-0.18.5.4 bash resources/scripts/regtest/run-mpc-backup-restore.sh`。仅复用本机 PG18，创建并清理自有两个临时测试库。26 项相邻 Java 检查通过；恢复使用原 mTLS SPKI、各方 AES 密钥、所有加密协议记录、Monero 私有钱包、应用结果加密密钥和事务一致数据库 dump。三个持有者、协调器、网络及测试外部付款人分别形成受保护归档；这只是隔离夹具，生产备份仍须分开保管秘密与解密能力。
+入口为 `WALLET_MPC_TEST_NODE_BINARY=/absolute/path/build/wallet_mpc_fixture_node MPC_RELEASE_ARCHIVE=/absolute/path/release.tar.gz MPC_MONERO_BIN_DIR=/absolute/path/official-monero-0.18.5.4 bash resources/scripts/regtest/run-mpc-backup-restore.sh`。仅复用本机 PG18，创建并清理自有两个临时测试库。26 项相邻 Java 检查通过；恢复使用原 mTLS SPKI、各方原存储密钥的 KMS 密文及对应 KMS 版本解密能力、所有加密协议记录、Monero 私有钱包、应用结果加密密钥和事务一致数据库 dump。三个持有者、协调器、网络及测试外部付款人分别形成受保护归档；这只是隔离夹具，生产备份仍须分开保管秘密与解密能力。
 
 实际恢复核对 276 个文件的字节与权限、143 项数据库表/序列状态；随后删除原测试目录与源测试库。另一个 Java JVM 读取 9 个原加密签名、领取 3 个原已完成但未领取的签名，再以原 epoch2 在 AB/AC/BC 完成 9 个新签名。三个算法的旧 epoch 新 SIGN 均被拒绝，191 个原不可变协议文件保持摘要不变，错误应用加密密钥无法解密原结果。
 

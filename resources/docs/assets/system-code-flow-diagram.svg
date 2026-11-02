@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="4272" viewBox="0 0 1200 4272">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="4457" viewBox="0 0 1200 4457">
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#475569"/></marker></defs>
 <style>text{font-family:Arial,"Noto Sans SC",sans-serif;fill:#0f172a}.title{font-size:24px;font-weight:bold}.label{font-size:17px;font-weight:bold}.body{font-size:14px}.arrow{stroke:#475569;stroke-width:2;marker-end:url(#arrow)}</style>
 <rect width="1200" height="100%" fill="#f8fafc"/>
@@ -126,4 +126,10 @@
 <text x="55" y="3985" class="body">条件退款 + Gas 投影 + 普通事件 + 审计 + terminal_cleanup_complete 同事务；未知/已授权继续冻结</text>
 <text x="55" y="4029" class="body">owner 事务锁 + UPSERT → 排他预留 → 真证明与 nonce 受理同事务 → 开放下一业务</text>
 <text x="55" y="4073" class="body">无授权取消仅交回自己的末端预留；7702 属整批。原证明/签名/广播未知不得借此退款或换 nonce</text>
+<g id="gcp-kms-storage-key"><rect x="35" y="4277" width="1130" height="160" rx="12" fill="#f0fdf4" stroke="#94a3b8"/>
+<text x="55" y="4306" class="label">GCP KMS：三个独立身份 / 三把 KEK / 本节点 SPKI 绑定 AAD</text>
+<text x="55" y="4334" class="body">节点启动 → GCE metadata 短期身份 → KMS 解包原 DEK → 长度 / CRC32C 校验</text>
+<text x="55" y="4360" class="body">原 32 字节 DEK → 锁页内存 StorageKey → EncryptedStore；明文不落文件，释放前清零</text>
+<text x="55" y="4386" class="body">IAM / TLS / 完整性 / 锁页失败即停止；API 无解密权限；原 MPC 签名与账务状态不变</text>
+<text x="55" y="4412" class="body">恢复：原 wrappedKey + 原 KMS 版本解密能力 + 原加密记录；禁止随机更换 DEK</text></g>
 </svg>

@@ -42,7 +42,7 @@ set(ENABLE_VALIDATION ON CACHE BOOL "Keep cb-mpc input validation enabled" FORCE
 add_subdirectory("${CBMPC_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/cbmpc" EXCLUDE_FROM_ALL)
 find_package(Threads REQUIRED)
 
-add_library(wallet_mpc_engine src/engine.cpp src/store.cpp)
+add_library(wallet_mpc_engine src/engine.cpp src/store.cpp src/storage_key.cpp)
 target_include_directories(wallet_mpc_engine PUBLIC include)
 target_include_directories(wallet_mpc_engine SYSTEM PUBLIC "${CBMPC_SOURCE_DIR}/include")
 target_link_libraries(wallet_mpc_engine PUBLIC cbmpc Threads::Threads)
@@ -78,7 +78,7 @@ if(WALLET_MPC_BUILD_SERVER)
     "${CMAKE_BINARY_DIR}/headers/json.hpp"
     EXPECTED_HASH SHA256=aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63
     TLS_VERIFY ON TIMEOUT 90)
-  add_executable(wallet-mpc-signer src/server.cpp src/monero.cpp src/authorization.cpp)
+  add_executable(wallet-mpc-signer src/server.cpp src/monero.cpp src/authorization.cpp src/kms.cpp)
   target_include_directories(wallet-mpc-signer SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
   target_compile_definitions(wallet-mpc-signer PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT
     CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES)
@@ -95,14 +95,33 @@ if(WALLET_MPC_BUILD_SERVER)
   target_compile_options(wallet_mpc_monero_policy_test PRIVATE -Wall -Wextra -Werror)
   add_test(NAME mpc_monero_reviewed_policy COMMAND wallet_mpc_monero_policy_test)
   # Isolated crash injection binary is test-only and never installed in a Runtime package.
-  add_executable(wallet_mpc_admission_crash_test_node src/server.cpp src/monero.cpp src/authorization.cpp)
+  add_executable(wallet_mpc_admission_crash_test_node src/server.cpp src/monero.cpp src/authorization.cpp src/kms.cpp)
   target_include_directories(wallet_mpc_admission_crash_test_node SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
   target_compile_definitions(wallet_mpc_admission_crash_test_node PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT
-    CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES WALLET_MPC_TEST_FAILPOINTS)
+    CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES WALLET_MPC_TEST_FAILPOINTS WALLET_MPC_TEST_STORAGE_KEY)
   target_compile_options(wallet_mpc_admission_crash_test_node PRIVATE -Wall -Wextra -Werror)
   target_link_libraries(wallet_mpc_admission_crash_test_node PRIVATE wallet_mpc_engine
     "${CBMPC_OPENSSL_ROOT}/lib/libssl.a" "${CBMPC_OPENSSL_ROOT}/lib/libcrypto.a")
+  # No test key loader or cloud credential input is included in Runtime installs.
+  add_executable(wallet_mpc_fixture_node src/server.cpp src/monero.cpp src/authorization.cpp src/kms.cpp)
+  target_include_directories(wallet_mpc_fixture_node SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
+  target_compile_definitions(wallet_mpc_fixture_node PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT
+    CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES WALLET_MPC_TEST_STORAGE_KEY)
+  target_compile_options(wallet_mpc_fixture_node PRIVATE -Wall -Wextra -Werror)
+  target_link_libraries(wallet_mpc_fixture_node PRIVATE wallet_mpc_engine
+    "${CBMPC_OPENSSL_ROOT}/lib/libssl.a" "${CBMPC_OPENSSL_ROOT}/lib/libcrypto.a")
+  add_executable(wallet_mpc_kms_test tests/kms_test.cpp src/kms.cpp)
+  target_include_directories(wallet_mpc_kms_test SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/headers")
+  target_compile_definitions(wallet_mpc_kms_test PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT
+    CPPHTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES WALLET_MPC_TEST_HTTPS_PROXY)
+  target_compile_options(wallet_mpc_kms_test PRIVATE -Wall -Wextra -Werror)
+  target_link_libraries(wallet_mpc_kms_test PRIVATE wallet_mpc_engine
+    "${CBMPC_OPENSSL_ROOT}/lib/libssl.a" "${CBMPC_OPENSSL_ROOT}/lib/libcrypto.a")
+  add_test(NAME mpc_kms_storage_key COMMAND wallet_mpc_kms_test)
   find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME mpc_kms_production_startup
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/kms_startup_test.py" $<TARGET_FILE:wallet-mpc-signer>)
+  set_tests_properties(mpc_kms_production_startup PROPERTIES TIMEOUT 45)
   add_test(NAME mpc_authorization_admission_crash
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/authorization_admission_crash_test.py"
       $<TARGET_FILE:wallet-mpc-signer> $<TARGET_FILE:wallet_mpc_admission_crash_test_node>)

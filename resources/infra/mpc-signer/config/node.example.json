@@ -4,7 +4,6 @@
   "certificateFile": "/etc/surprising-wallet-mpc/node.pem",
   "privateKeyFile": "/etc/surprising-wallet-mpc/node.key",
   "caFile": "/etc/surprising-wallet-mpc/ca.pem",
-  "encryptionKeyFile": "/etc/surprising-wallet-mpc/storage.key",
   "storeDirectory": "/var/lib/surprising-wallet-mpc/store",
   "sessionTimeoutSeconds": 30,
   "authorizationPublicKeys": [
@@ -46,5 +45,10 @@
         "READ_RESULT"
       ]
     }
+  },
+  "storageKey": {
+    "kmsKeyName": "projects/REPLACE_WITH_PROJECT/locations/us-central1/keyRings/surprising-wallet-mpc/cryptoKeys/holder-1-storage",
+    "wrappedKey": "REPLACE_WITH_BASE64_KMS_CIPHERTEXT_BOUND_TO_THIS_NODE_SPKI",
+    "caBundleFile": "/etc/ssl/certs/ca-certificates.crt"
   }
 }

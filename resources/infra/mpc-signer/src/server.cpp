@@ -1,5 +1,6 @@
 #include <wallet_mpc/engine.h>
 #include <wallet_mpc/store.h>
+#include <wallet_mpc/kms.h>
 #include <wallet_mpc/monero.h>
 #include <wallet_mpc/authorization.h>
 
@@ -110,26 +111,24 @@ Json read_json_file(const std::string& path) {
   return Json::parse(file);
 }
 
-buf_t read_encryption_key(const std::string& path) {
-  const int fd = open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-  require(fd >= 0, "cannot open node encryption key");
-  struct Close {
-    int fd;
-    ~Close() { close(fd); }
-  } guard{fd};
-  struct stat status{};
-  require(fstat(fd, &status) == 0 && S_ISREG(status.st_mode) && status.st_uid == geteuid() &&
-              (status.st_mode & 0777) == 0600 && status.st_size == 32,
-          "encryption key must be a local owner-only 32-byte file");
-  buf_t result(32);
-  int offset = 0;
-  while (offset < result.size()) {
-    const auto count = read(fd, result.data() + offset, result.size() - offset);
-    if (count < 0 && errno == EINTR) continue;
-    require(count > 0, "cannot load encryption key");
-    offset += static_cast<int>(count);
+StorageKey node_storage_key(const Json& config) {
+#ifdef WALLET_MPC_TEST_STORAGE_KEY
+  // Synthetic fixture input exists only in the non-installed test executable.
+  if (config.contains("testStorageKeyHex")) {
+    require(!config.contains("storageKey") && !config.contains("encryptionKeyFile"), "ambiguous test key configuration");
+    auto bytes = unhex(config.at("testStorageKeyHex").get<std::string>(), 32);
+    try {
+      StorageKey key(bytes);
+      bytes.secure_bzero();
+      return key;
+    } catch (...) { bytes.secure_bzero(); throw; }
   }
-  return result;
+#endif
+  std::unique_ptr<BIO, decltype(&BIO_free)> file(
+      BIO_new_file(config.at("certificateFile").get<std::string>().c_str(), "r"), BIO_free);
+  std::unique_ptr<X509, decltype(&X509_free)> certificate(
+      file ? PEM_read_bio_X509(file.get(), nullptr, nullptr, nullptr) : nullptr, X509_free);
+  return load_storage_key(config, fingerprint(certificate.get()));
 }
 
 struct Peer {
@@ -171,7 +170,7 @@ class Node {
  public:
   explicit Node(Json config)
       : config_(std::move(config)),
-        store_(config_.at("storeDirectory"), read_encryption_key(config_.at("encryptionKeyFile"))),
+        store_(config_.at("storeDirectory"), node_storage_key(config_)),
         server_(config_.at("certificateFile").get<std::string>().c_str(),
                 config_.at("privateKeyFile").get<std::string>().c_str(),
                 config_.at("caFile").get<std::string>().c_str()) {

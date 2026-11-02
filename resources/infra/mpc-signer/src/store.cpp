@@ -98,8 +98,8 @@ buf_t unseal(mem_t key, const std::string& aad, mem_t sealed) {
 }
 }  // namespace
 
-EncryptedStore::EncryptedStore(const std::string& directory, mem_t encryption_key) : directory_fd_(-1) {
-  if (encryption_key.size != 32 || !encryption_key.data) throw std::invalid_argument("store requires a 32-byte key");
+EncryptedStore::EncryptedStore(const std::string& directory, StorageKey encryption_key)
+    : directory_fd_(-1), encryption_key_(std::move(encryption_key)) {
   if (mkdir(directory.c_str(), 0700) != 0 && errno != EEXIST) throw std::runtime_error("cannot create store directory");
   const int fd = open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   require(fd >= 0, "cannot open store directory");
@@ -108,14 +108,12 @@ EncryptedStore::EncryptedStore(const std::string& directory, mem_t encryption_ke
   require(fstat(fd, &status) == 0 && S_ISDIR(status.st_mode) && status.st_uid == geteuid() &&
               (status.st_mode & 0777) == 0700, "store directory must belong to this user and have mode 0700");
   require(flock(fd, LOCK_EX | LOCK_NB) == 0, "encrypted store is already in use by another node");
-  encryption_key_ = encryption_key;
   directory_fd_ = fcntl(fd, F_DUPFD_CLOEXEC, 0);
   require(directory_fd_ >= 0, "cannot retain store directory");
 }
 
 EncryptedStore::~EncryptedStore() {
   if (directory_fd_ >= 0) close(directory_fd_);
-  encryption_key_.secure_bzero();
 }
 
 std::optional<coinbase::buf_t> EncryptedStore::get(const std::string& id, const std::string& metadata) const {
