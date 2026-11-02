@@ -18,9 +18,9 @@ Wallet、独立审批和三个 MPC 持有者分别使用独立操作系统身份
 
 ## 数据库与角色
 
-唯一结构基线仍是 `resources/docs/db/surprising-wallet-init-pgsql.sql`，只用于全新目标数据库。`database-roles.sql` 只调整当前数据库的 owner/权限，不创建数据库、表、数据库服务或容器；它不是第二份结构基线。开发和测试始终使用 `127.0.0.1:5432` 已有 PostgreSQL 18，在隔离命名临时库中演练。
+唯一结构基线仍是 `resources/docs/db/surprising-wallet-init-pgsql.sql`，只用于全新目标数据库。`database-roles.sql` 只调整当前数据库的 owner、权限和 Wallet 表的 RLS 策略，不创建数据库、业务表、数据库服务或容器；它不是第二份结构基线。开发和测试始终使用 `127.0.0.1:5432` 已有 PostgreSQL 18，在隔离命名临时库中演练。
 
-维护人员在指定目标库初始化后审阅并执行 `database-roles.sql`。可通过 psql 变量选择四个不同的角色名，默认是 `sw_wallet_owner`、`sw_approval_owner`、`sw_wallet_runtime`、`sw_approval_runtime`。脚本撤销 PUBLIC 对应用表/函数以及 PGMQ 的访问，再分别授予 Wallet public/PGMQ 访问和独立审批 approval 访问；该操作需要专用钱包数据库，不能不经审阅套用到其他应用共用的数据库。LOGIN 密码通过主机上的 psql `\password` 交互设置，不写入 SQL、命令参数或仓库。
+维护人员在指定目标库初始化后审阅并执行 `database-roles.sql`。可通过 psql 变量选择四个不同的角色名，默认是 `sw_wallet_owner`、`sw_approval_owner`、`sw_wallet_runtime`、`sw_approval_runtime`。脚本保留 Supabase 对 `public` schema 和 `rls_auto_enable()` 的所有权，只转移钱包/审批业务对象；撤销 Supabase API 角色对钱包表的权限，并为受限 Wallet 角色建立逐表 RLS 策略。Wallet 只访问 public/PGMQ，独立审批只访问 approval；该操作需要专用钱包数据库，不能不经审阅套用到其他应用共用的数据库。LOGIN 密码通过主机上的 psql `\password` 交互设置，不写入 SQL、命令参数或仓库。
 
 `DatabaseRoleIsolation` 在两个可执行应用启动时检查真实有效权限。独立审批必须无法读取/写入 approval 之外的应用关系，不能执行外部可调用的 SECURITY DEFINER 函数或创建应用对象；Wallet 必须完全无法访问 approval schema/关系。两者都检查 PostgreSQL 17 及以上、非管理/非数据库 owner 角色和无角色成员资格；Wallet 还检查 PGMQ 的队列与租约接口。未满足即启动失败，没有生产绕过开关。应用只读系统目录，不在启动时更改授权。权限判断使用 [PostgreSQL 权限查询函数](https://www.postgresql.org/docs/17/functions-info.html)；拒绝角色成员资格也覆盖 [SET ROLE 所提供的切换能力](https://www.postgresql.org/docs/17/role-membership.html)。
 

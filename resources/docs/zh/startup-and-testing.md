@@ -28,18 +28,16 @@ npm --version
 
 ## 2. 数据库初始化
 
-创建数据库和用户：
+在本机既有 PostgreSQL 18 实例中创建隔离测试库：
 
 ```bash
-psql -U postgres -c "create user wallet with password 'wallet123';"
-psql -U postgres -c "create database wallet owner wallet;"
-psql -U postgres -d wallet -c "grant all on schema public to wallet;"
+createdb -h 127.0.0.1 -p 5432 surprising_wallet_test_local
 ```
 
 用唯一初始化文件初始化全新本地测试库：
 
 ```bash
-psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
+psql -h 127.0.0.1 -p 5432 -d surprising_wallet_test_local -v ON_ERROR_STOP=1 -f resources/docs/db/surprising-wallet-init-pgsql.sql
 ```
 
 注意：
@@ -47,6 +45,7 @@ psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
 - `resources/docs/db/surprising-wallet-init-pgsql.sql` 是唯一 DB 初始化文件，从当前本地 DB schema 导出，并包含静态链/token 配置种子数据。
 - 它只用于全新本地库，包含重置表的行为。
 - 不要在生产或共享环境执行 destructive SQL。
+- 部署前须审阅并执行 `resources/infra/approval/database-roles.sql`，分别设置 Wallet 与审批的受限 LOGIN 密码；不能用管理员数据库账号运行服务。
 
 ## 3. PGMQ
 
@@ -58,7 +57,7 @@ make -C /tmp/wallet-pgmq/pgmq-extension
 make -C /tmp/wallet-pgmq/pgmq-extension install
 ```
 
-三个应用通过 `SW_DB_URL` 连接同一个数据库。签名服务使用独立数据库账号，只授予对应 PGMQ 队列权限。
+Wallet API 和独立审批服务分别通过自己的受限账号连接同一个数据库；三个原生签名节点不连接钱包数据库。托管数据库的 CA 证书放在部署主机的配置目录，用 `SW_DB_URL` 中的 `sslmode=verify-full` 与 `sslrootcert` 文件系统绝对路径引用，不把证书或数据库密码打进 JAR。
 
 ## 4. 构建
 

@@ -17,6 +17,7 @@ public final class DatabaseRoleIsolation {
                         where n.nspname not in ('approval','pg_catalog','information_schema')
                           and n.nspname not like 'pg_toast%' and n.nspname not like 'pg_temp_%'
                           and c.relkind in ('r','p','v','m','f','S')
+                          and has_schema_privilege(current_user,n.oid,'USAGE')
                           and case when c.relkind='S' then has_sequence_privilege(current_user,c.oid,'USAGE,SELECT,UPDATE')
                               else has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') end)
                     """),"approval database runtime can access relations outside its own schema");
@@ -27,7 +28,8 @@ public final class DatabaseRoleIsolation {
                     """),"approval runtime must not have application-schema CREATE privileges");
             require(check(connection,"""
                     select not exists(select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
-                        where p.prosecdef and n.nspname not in ('approval','pg_catalog','information_schema')
+                        where p.prosecdef and p.prorettype <> 'pg_catalog.event_trigger'::regtype
+                          and n.nspname not in ('approval','pg_catalog','information_schema')
                           and has_schema_privilege(current_user,n.oid,'USAGE') and has_function_privilege(current_user,p.oid,'EXECUTE'))
                     """),"approval runtime can execute an external security-definer function");
         }

@@ -208,7 +208,7 @@ Wallet 在同一子账号状态/角色、会话撤销和审计事务中，向 `c
 
 独立管理员邀请/重置时必须显式确认当前 Wallet 撤销代次。页面列出 walletRevocationSequence；邀请前查询同租户 fence，存在撤销时先要求独立管理员核实本人及当前 Wallet 状态并勾选恢复确认。恢复仍通过独立一次性能力和本人设置密码完成，没有 Wallet/mTLS enable/reset/enroll 路由。传播为跨进程持久重试，不能称为即时跨域原子撤销，也不能声称撤回已签发证明或先前有效审核；停用的是后续身份使用。API/业务用户仍只看到 FROZEN 等正常处理状态。
 
-`common.security.DatabaseRoleIsolation` 只读取 PostgreSQL 17 及以上版本的系统目录，在 Wallet 与独立审批的 ApplicationRunner 中检查真实有效权限；Wallet 另校验 PGMQ 队列和租约接口：runtime 非管理/非 DB owner/无其他角色成员资格与 CREATE；Wallet 不得访问 approval，审批不得访问其他应用关系、创建应用对象或调用外部 SECURITY DEFINER 函数。检查没有生产旁路开关，失败即启动失败，不在启动时创建/改动角色。独立 schema 由单独 NOLOGIN owner 所有，runtime 仅获业务 DML。
+`common.security.DatabaseRoleIsolation` 只读取 PostgreSQL 17 及以上版本的系统目录，在 Wallet 与独立审批的 ApplicationRunner 中检查真实有效权限；关系访问同时要求所属 schema 的 USAGE，避免把无法实际查询的托管库统计视图误判为跨界访问。Wallet 另校验 PGMQ 队列和租约接口：runtime 非管理/非 DB owner/无其他角色成员资格与 CREATE；Wallet 不得访问 approval，审批不得访问其他应用关系、创建应用对象或外部可调用的 SECURITY DEFINER 函数。检查没有生产旁路开关，失败即启动失败，不在启动时创建/改动角色。Wallet 业务表和独立 approval schema 分别由不同 NOLOGIN owner 所有，runtime 仅获业务 DML；托管库的 public schema 保留平台所有权，Wallet 表的 RLS 策略只允许 Wallet runtime，Supabase API 角色不获业务表权限。
 
 新增 `resources/infra/approval/` 仅提供可审阅部署材料：角色/授权脚本（不建库、不建表或服务）、独立 OS 用户 systemd、无已登记服务证书的公共代理、私网直连 mTLS、只读 native 身份与 issuer 分离、故障/回滚/备份说明。唯一表基线已同步上述用户字段、索引和新单表/触发器，架构边界映射同步新增仓储；没有更改生产角色或部署服务。HTTPS 验收在自己的临时库中配置互异 owner/runtime 与密码；前端、原生授权和受限角色 HTTPS 有各自验证入口，实际覆盖范围见 [审批验收记录](approval-validation.md)。无授权终止见下文；已授权短有效期/部分失败交易继续保持原绑定。
 
