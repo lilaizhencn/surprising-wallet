@@ -1,7 +1,7 @@
 [Unit]
 Description=Pull, build and deploy updated wallet source
 Wants=network-online.target
-After=network-online.target postgresql.service
+After=network-online.target
 
 [Service]
 Type=oneshot
