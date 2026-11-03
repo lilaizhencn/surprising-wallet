@@ -110,6 +110,16 @@ public class ApprovalWorkflowService {
     @Transactional(readOnly=true)
     public RequestPage list(UUID tenant,UUID member,String state,int limit,int offset) {
         requireMember(tenant,member,false);
+        return page(tenant,state,limit,offset);
+    }
+
+    @Transactional(readOnly=true)
+    public RequestPage listForService(UUID tenant,String state,int limit,int offset) {
+        if(!tenants.active(tenant))throw new SecurityException("independent approval tenant is disabled");
+        return page(tenant,state,limit,offset);
+    }
+
+    private RequestPage page(UUID tenant,String state,int limit,int offset) {
         require(List.of("","PENDING","APPROVED","REJECTED","EXPIRED").contains(state),"invalid approval state filter");
         int size=Math.min(Math.max(limit,1),100),start=Math.max(offset,0);
         return new RequestPage(requests.list(tenant,state,size,start),requests.count(tenant,state),size,start);

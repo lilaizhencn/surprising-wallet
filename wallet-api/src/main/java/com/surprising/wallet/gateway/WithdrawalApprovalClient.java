@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import javax.net.ssl.SSLParameters;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,12 @@ public class WithdrawalApprovalClient implements AutoCloseable {
     public ApprovalRequest status(UUID tenant,UUID requestId) {
         var receipt=call("/approval/service/v1/intents/"+requestId+"?tenantId="+tenant,null,ApprovalRequest.class);
         require(receipt.intent().tenantId().equals(tenant) && receipt.intent().id().equals(requestId),"authority returned a different request owner");return receipt;
+    }
+    public AuthorityPage list(UUID tenant,String status,int limit,int offset) {
+        var page=call("/approval/service/v1/intents?tenantId="+tenant+"&status="+status+"&limit="+limit+"&offset="+offset,null,AuthorityPage.class);
+        require(page.items()!=null && page.items().stream().allMatch(item->item.intent().tenantId().equals(tenant)) && page.total()>=0,
+                "authority returned a different request owner");
+        return page;
     }
     public GrantResponse authorize(SigningCandidate candidate) { return call("/approval/service/v1/signing-grants",candidate,GrantResponse.class); }
     public AutomaticOperation plan(AutomaticParentPlan plan){return call("/approval/service/v1/automatic-plans",plan,AutomaticOperation.class);}
@@ -70,4 +77,5 @@ public class WithdrawalApprovalClient implements AutoCloseable {
     public record GrantResponse(String status,SigningGrant grant,AutomaticOperation automaticOperation) {
         public GrantResponse(String status,SigningGrant grant){this(status,grant,null);}
     }
+    public record AuthorityPage(List<ApprovalRequest> items,long total,int limit,int offset) { }
 }

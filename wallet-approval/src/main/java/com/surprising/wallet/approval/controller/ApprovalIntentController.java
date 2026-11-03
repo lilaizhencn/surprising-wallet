@@ -20,6 +20,11 @@ public class ApprovalIntentController {
     @GetMapping("/{id}") public ApprovalRequest status(@PathVariable UUID id,@RequestParam UUID tenantId,HttpServletRequest request) {
         client(request).requireTenant(tenantId);return workflow.status(tenantId,id);
     }
+    @GetMapping public ApprovalWorkflowService.RequestPage list(@RequestParam UUID tenantId,
+            @RequestParam(defaultValue="") String status,@RequestParam(defaultValue="20") int limit,
+            @RequestParam(defaultValue="0") int offset,HttpServletRequest request) {
+        client(request).requireTenant(tenantId);return workflow.listForService(tenantId,status,limit,offset);
+    }
     private static ApprovalAuthenticationFilter.ServiceClient client(HttpServletRequest request) {
         if(!(request.getAttribute(ApprovalAuthenticationFilter.CLIENT) instanceof ApprovalAuthenticationFilter.ServiceClient client))
             throw new SecurityException("approval service mTLS required");

@@ -273,6 +273,15 @@ class ApprovalWorkflowIntegrationTest {
         var self=service.submit(intent("10","0x1111111111111111111111111111111111111111","CONSOLE",admin),"wallet-client");
         assertThrows(IllegalArgumentException.class,()->service.decide(tenant,self.intent().id(),admin,"APPROVE","Cannot approve own request",self.intentHash()));
     }
+    @Test void walletServiceCanReadAllAuthorityRequestsWithoutApprovalMemberCredentials() {
+        policy(BigDecimal.ONE,null,false,false,1);
+        var request=service.submit(intent("10"),"wallet-client");
+        var page=service.listForService(tenant,"",20,0);
+        assertEquals(1,page.total());
+        assertEquals(request.intentHash(),page.items().getFirst().intentHash());
+        assertEquals(0,service.listForService(other,"",20,0).total());
+        assertThrows(IllegalArgumentException.class,()->service.listForService(tenant,"AUTHORIZED",20,0));
+    }
 
     private void policy(BigDecimal single,BigDecimal rolling,boolean newAddress,boolean console,int reviews) {
         long version=context.getBean(ApprovalPolicyRepository.class).find(tenant,"ETH","eip155:11155111","USDC").map(p->p.version()).orElse(0L);
