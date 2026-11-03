@@ -67,6 +67,17 @@ class ApprovalAuthenticationFilterTest {
         var management=request("POST","/approval/v1/members");management.addHeader("Origin","https://approval.example");
         assertFalse(allowed(filter,management));
     }
+    @Test void decisionStepUpRequiresExactOriginButNotAnApprovalSession() throws Exception {
+        var filter=filter(Map.of());
+        var path="/approval/v1/requests/11111111-1111-4111-8111-111111111111/decisions/step-up";
+        var stepUp=request("POST",path);
+        assertFalse(allowed(filter,stepUp));
+        stepUp.addHeader("Origin","https://wallet.example");assertFalse(allowed(filter,stepUp));
+        stepUp.removeHeader("Origin");stepUp.addHeader("Origin","https://approval.example");assertTrue(allowed(filter,stepUp));
+        var normal=request("POST",path.replace("/step-up",""));normal.addHeader("Origin","https://approval.example");
+        when(auth.require(null)).thenThrow(new SecurityException("approval login required"));
+        assertFalse(allowed(filter,normal));
+    }
     @Test void serviceRequestsRequireActualEnrolledCertificateAndCannotSpoofTenant() throws Exception {
         var pub=KeyPairGenerator.getInstance("EC").generateKeyPair().getPublic();
         var cert=mock(X509Certificate.class);when(cert.getPublicKey()).thenReturn(pub);

@@ -185,6 +185,17 @@ class ApprovalWorkflowIntegrationTest {
         String auditView=context.getBean(ObjectMapper.class).writeValueAsString(management().audits(tenant,admin,"",100,0));
         assertFalse(publicView.contains(activation.token()) || auditView.contains(activation.token()) || auditView.contains("independent-password-123"));
     }
+    @Test void reviewerSetsShortPasswordAndEveryDecisionCheckCreatesNoSession() {
+        var activation=invite();var auth=context.getBean(com.surprising.wallet.approval.service.ApprovalAuthenticationService.class);
+        assertThrows(IllegalArgumentException.class,()->management().activate(activation.token(),"short7"));
+        management().activate(activation.token(),"review88");
+        assertNull(auth.verifyForDecision(tenant,activation.memberId(),"incorrect"));
+        assertNull(auth.verifyForDecision(other,activation.memberId(),"review88"));
+        assertEquals(activation.memberId(),auth.verifyForDecision(tenant,activation.memberId(),"review88").memberId());
+        assertEquals(0,jdbc.queryForObject("select count(*) from approval.session where member_id=?",Integer.class,activation.memberId()));
+        for(int i=0;i<5;i++)assertNull(auth.verifyForDecision(tenant,activation.memberId(),"incorrect"));
+        assertNull(auth.verifyForDecision(tenant,activation.memberId(),"review88"));
+    }
     @Test void resetRevokesSessionsAndBothOldPasswordAndPreviousActivationThenAllowsOnlyNewCredential() {
         var first=invite();var auth=context.getBean(com.surprising.wallet.approval.service.ApprovalAuthenticationService.class);
         management().activate(first.token(),"independent-password-123");var login=auth.login("new-reviewer@example.test","independent-password-123");
@@ -846,6 +857,21 @@ class ApprovalWorkflowIntegrationTest {
         assertThrows(IllegalArgumentException.class,()->enroll.enroll(new com.surprising.wallet.approval.service.ApprovalEnrollmentService.Enrollment(
                 newTenant,"different-slug",UUID.randomUUID(),"another@example.test","Another","APPROVER","independent-password-12345")));
         assertEquals(1,jdbc.queryForObject("select count(*) from approval.member where tenant_id=?",Integer.class,newTenant));
+    }
+    @Test void trustedHostInvitesWalletAdministratorToSetOwnShortPassword() {
+        var enroll=context.getBean(com.surprising.wallet.approval.service.ApprovalEnrollmentService.class);
+        var member=UUID.randomUUID();
+        var command=new com.surprising.wallet.approval.service.ApprovalEnrollmentService.AdminInvitation(
+                tenant,"review-test",member,"admin-2@example.test","Tenant administrator");
+        var activation=enroll.inviteAdministrator(command);
+        assertEquals("INVITED",jdbc.queryForObject("select status from approval.member where id=?",String.class,member));
+        assertNotEquals(activation.token(),jdbc.queryForObject("select activation_token_hash from approval.member where id=?",String.class,member));
+        assertThrows(RuntimeException.class,()->enroll.inviteAdministrator(command));
+        management().activate(activation.token(),"admin888");
+        var actor=context.getBean(com.surprising.wallet.approval.service.ApprovalAuthenticationService.class)
+                .verifyForDecision(tenant,member,"admin888");
+        assertEquals("TENANT_ADMIN",actor.role());
+        assertNull(jdbc.queryForObject("select activation_token_hash from approval.member where id=?",String.class,member));
     }
     @Test void walletRuntimeRoleCannotReadOrWriteIndependentApprovalState() throws Exception {
         String role="sw_test_approval_"+UUID.randomUUID().toString().replace("-","");

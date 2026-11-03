@@ -73,7 +73,7 @@ public class ApprovalMemberService {
         require(token!=null && token.matches("[0-9a-f]{64}"),"activation link is invalid or expired");
         String tokenHash=hash(token);
         var identity=members.activationIdentity(tokenHash).orElseThrow(()->new IllegalArgumentException("activation link is invalid or expired"));
-        String passwordHash=passwords.hash(password);
+        String passwordHash=passwords.hash(password,8,32);
         require(tenants.lockActive(identity.tenantId()),"activation link is invalid or expired");
         members.lock(identity.tenantId(),identity.id()).orElseThrow(()->new IllegalArgumentException("activation link is invalid or expired"));
         require(members.activate(identity.tenantId(),identity.id(),tokenHash,passwordHash,clock.instant())==1,"activation link is invalid or expired");

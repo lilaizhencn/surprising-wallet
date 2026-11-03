@@ -17,17 +17,29 @@ import tools.jackson.databind.ObjectMapper;
 public final class ApprovalEnrollment {
     private ApprovalEnrollment() { }
     public static void enroll(Path file) throws Exception {
-        if(Files.isSymbolicLink(file) || !Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || Files.size(file)>16384
-                || !Files.getOwner(file,LinkOption.NOFOLLOW_LINKS).getName().equals(System.getProperty("user.name"))
-                || !Files.getPosixFilePermissions(file,LinkOption.NOFOLLOW_LINKS).equals(Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE)))
-            throw new IllegalArgumentException("enrollment requires a local owner-only 0600 regular file");
         var json=new ObjectMapper();
-        var command=json.readValue(Files.readAllBytes(file),ApprovalEnrollmentService.Enrollment.class);
+        var command=json.readValue(read(file),ApprovalEnrollmentService.Enrollment.class);
         var data=new DriverManagerDataSource(required("APPROVAL_DB_URL"),required("APPROVAL_DB_USERNAME"),required("APPROVAL_DB_PASSWORD"));
         var jdbc=new JdbcTemplate(data);
         var service=new ApprovalEnrollmentService(new ApprovalTenantRepository(jdbc),new ApprovalMemberRepository(jdbc),new ApprovalAuditRepository(jdbc,json));
         new TransactionTemplate(new DataSourceTransactionManager(data)).executeWithoutResult(status->service.enroll(command));
         System.out.println("Independent approval member enrolled: "+command.memberId());
+    }
+    public static void inviteAdministrator(Path file) throws Exception {
+        var json=new ObjectMapper();
+        var command=json.readValue(read(file),ApprovalEnrollmentService.AdminInvitation.class);
+        var data=new DriverManagerDataSource(required("APPROVAL_DB_URL"),required("APPROVAL_DB_USERNAME"),required("APPROVAL_DB_PASSWORD"));
+        var jdbc=new JdbcTemplate(data);
+        var service=new ApprovalEnrollmentService(new ApprovalTenantRepository(jdbc),new ApprovalMemberRepository(jdbc),new ApprovalAuditRepository(jdbc,json));
+        var activation=new TransactionTemplate(new DataSourceTransactionManager(data)).execute(status->service.inviteAdministrator(command));
+        System.out.println(activation.token());
+    }
+    private static byte[] read(Path file) throws Exception {
+        if(Files.isSymbolicLink(file) || !Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || Files.size(file)>16384
+                || !Files.getOwner(file,LinkOption.NOFOLLOW_LINKS).getName().equals(System.getProperty("user.name"))
+                || !Files.getPosixFilePermissions(file,LinkOption.NOFOLLOW_LINKS).equals(Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE)))
+            throw new IllegalArgumentException("enrollment requires a local owner-only 0600 regular file");
+        return Files.readAllBytes(file);
     }
     private static String required(String name) {
         String value=System.getenv(name);if(value==null) throw new IllegalStateException(name+" is required");return value;

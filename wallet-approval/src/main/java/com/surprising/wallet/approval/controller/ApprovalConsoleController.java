@@ -41,7 +41,16 @@ public class ApprovalConsoleController {
         var actor=principal(request);return workflow.history(actor.tenantId(),actor.memberId(),id);
     }
     @PostMapping("/requests/{id}/decisions") public ApprovalRequest decide(@PathVariable UUID id,@RequestBody Decision command,HttpServletRequest request) {
-        var actor=principal(request);return workflow.decide(actor.tenantId(),id,actor.memberId(),command.decision(),command.reason(),command.intentHash());
+        var actor=principal(request);
+        var verified=auth.verifyForDecision(actor.tenantId(),actor.memberId(),command.password());
+        if(verified==null || !verified.tenantId().equals(actor.tenantId()) || !verified.memberId().equals(actor.memberId()))
+            throw new SecurityException("invalid independent approval credentials");
+        return workflow.decide(actor.tenantId(),id,actor.memberId(),command.decision(),command.reason(),command.intentHash());
+    }
+    @PostMapping("/requests/{id}/decisions/step-up") public ApprovalRequest decideWithPassword(@PathVariable UUID id,@RequestBody VerifiedDecision command) {
+        var actor=auth.verifyForDecision(command.tenantId(),command.memberId(),command.password());
+        if(actor==null)throw new SecurityException("invalid independent approval credentials");
+        return workflow.decide(actor.tenantId(),id,actor.memberId(),command.decision(),command.reason(),command.intentHash());
     }
     @GetMapping("/policies") public List<ApprovalPolicy> policies(HttpServletRequest request) {
         var actor=principal(request);return workflow.policies(actor.tenantId(),actor.memberId());
@@ -55,5 +64,6 @@ public class ApprovalConsoleController {
         return principal;
     }
     public record Credentials(String email,String password) { }
-    public record Decision(String decision,String reason,String intentHash) { }
+    public record Decision(String decision,String reason,String intentHash,String password) { }
+    public record VerifiedDecision(UUID tenantId,UUID memberId,String password,String decision,String reason,String intentHash) { }
 }

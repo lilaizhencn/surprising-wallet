@@ -1,7 +1,12 @@
 package com.surprising.wallet.approval.service;
 
 import com.surprising.wallet.approval.repository.*;
+import com.surprising.wallet.common.approval.SigningAuthorization;
 import com.surprising.wallet.common.security.PasswordHashes;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -30,5 +35,28 @@ public class ApprovalEnrollmentService {
         members.insert(command.tenantId(),command.memberId(),email,command.displayName().trim(),hash,command.role());
         audit.insert(command.tenantId(),"SYSTEM","offline-enrollment","MEMBER.ENROLL",command.memberId(),Map.of("email",email,"role",command.role()));
     }
+    /** Trusted-host invitation lets a Wallet tenant administrator choose their own password. */
+    @Transactional(rollbackFor=Throwable.class)
+    public AdminActivation inviteAdministrator(AdminInvitation command) {
+        if(command.tenantId()==null || command.memberId()==null || command.tenantSlug()==null
+                || !command.tenantSlug().matches("[a-z0-9][a-z0-9_-]{0,95}"))
+            throw new IllegalArgumentException("independent tenant and member identities required");
+        String email=command.email()==null?"":command.email().trim().toLowerCase(Locale.ROOT);
+        if(email.length()>254 || !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") || command.displayName()==null
+                || command.displayName().isBlank() || command.displayName().length()>120
+                || command.displayName().chars().anyMatch(Character::isISOControl))
+            throw new IllegalArgumentException("invalid independent administrator invitation");
+        byte[] random=new byte[32];new SecureRandom().nextBytes(random);
+        String token=HexFormat.of().formatHex(random);
+        Instant expires=Instant.now().plusSeconds(86400);
+        tenants.enroll(command.tenantId(),command.tenantSlug());
+        members.inviteAdministrator(command.tenantId(),command.memberId(),email,command.displayName().trim(),
+                new PasswordHashes().hash(token),SigningAuthorization.hash(token.getBytes(StandardCharsets.US_ASCII)),expires);
+        audit.insert(command.tenantId(),"SYSTEM","offline-enrollment","MEMBER.ADMIN_INVITE",command.memberId(),
+                Map.of("email",email,"role","TENANT_ADMIN","expiresAt",expires));
+        return new AdminActivation(token,expires);
+    }
     public record Enrollment(UUID tenantId,String tenantSlug,UUID memberId,String email,String displayName,String role,String password) { }
+    public record AdminInvitation(UUID tenantId,String tenantSlug,UUID memberId,String email,String displayName) { }
+    public record AdminActivation(String token,Instant expiresAt) { }
 }

@@ -46,8 +46,10 @@ public class ApprovalAuthenticationFilter extends OncePerRequestFilter {
                 boolean mutation=!Set.of("GET","HEAD").contains(request.getMethod());
                 if(mutation && !properties.publicOrigin().equals(request.getHeader("Origin")))
                     throw new SecurityException("approval request origin differs");
-                boolean login=Set.of("/approval/v1/auth/login","/approval/v1/auth/activate").contains(path) && request.getMethod().equals("POST");
-                if(!login) {
+                boolean publicPasswordAction=request.getMethod().equals("POST") &&
+                        (Set.of("/approval/v1/auth/login","/approval/v1/auth/activate").contains(path)
+                                || path.matches("/approval/v1/requests/[0-9a-fA-F-]{36}/decisions/step-up"));
+                if(!publicPasswordAction) {
                     var principal=auth.require(token(request));
                     if(mutation) {
                         var provided=request.getHeader("X-Approval-CSRF");

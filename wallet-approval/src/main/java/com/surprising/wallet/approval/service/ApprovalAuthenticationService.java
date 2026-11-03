@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,8 +33,27 @@ public class ApprovalAuthenticationService {
     /** Failed authentication is a committed result so persistent throttling cannot roll back. */
     @Transactional(rollbackFor=Throwable.class)
     public Login login(String email,String password) {
+        var member=authenticate(email,password);
+        if(member==null)return null;
+        Instant now=clock.instant();
+        String token="as_"+secret(),csrf=secret();Instant expires=now.plusSeconds(8*3600);
+        sessions.insert(member.tenantId(),member.id(),hash(token),csrf,expires);
+        audit.insert(member.tenantId(),"MEMBER",member.id().toString(),"AUTH.LOGIN",member.id(),Map.of());
+        return new Login(token,expires,new ApprovalPrincipal(member.tenantId(),member.id(),member.role(),member.email(),member.displayName(),csrf));
+    }
+    /** A decision checks the independent password every time and never creates an approval session. */
+    @Transactional(rollbackFor=Throwable.class)
+    public ApprovalPrincipal verifyForDecision(UUID tenant,UUID memberId,String password) {
+        var member=authenticate(members.credentialByIdentity(tenant,memberId),password);
+        if(member==null)return null;
+        audit.insert(member.tenantId(),"MEMBER",member.id().toString(),"AUTH.DECISION_VERIFY",member.id(),Map.of());
+        return new ApprovalPrincipal(member.tenantId(),member.id(),member.role(),member.email(),member.displayName(),null);
+    }
+    private ApprovalMemberRepository.Credential authenticate(String email,String password) {
         if(email==null || email.length()>254) { passwords.verify(password,dummy);return null; }
-        var found=members.credentialByEmail(email.trim().toLowerCase(Locale.ROOT));
+        return authenticate(members.credentialByEmail(email.trim().toLowerCase(Locale.ROOT)),password);
+    }
+    private ApprovalMemberRepository.Credential authenticate(Optional<ApprovalMemberRepository.Credential> found,String password) {
         if(found.isEmpty()) { passwords.verify(password,dummy);return null; }
         var member=found.get();Instant now=clock.instant();
         if(member.lockedUntil()!=null && now.isBefore(member.lockedUntil())) return null;
@@ -44,10 +65,7 @@ public class ApprovalAuthenticationService {
         }
         if(!member.status().equals("ACTIVE") || !tenants.active(member.tenantId())) return null;
         members.failed(member.tenantId(),member.id(),0,null);
-        String token="as_"+secret(),csrf=secret();Instant expires=now.plusSeconds(8*3600);
-        sessions.insert(member.tenantId(),member.id(),hash(token),csrf,expires);
-        audit.insert(member.tenantId(),"MEMBER",member.id().toString(),"AUTH.LOGIN",member.id(),Map.of());
-        return new Login(token,expires,new ApprovalPrincipal(member.tenantId(),member.id(),member.role(),member.email(),member.displayName(),csrf));
+        return member;
     }
     @Transactional(readOnly=true)
     public ApprovalPrincipal require(String token) {

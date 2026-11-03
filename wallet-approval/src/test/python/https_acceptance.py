@@ -247,8 +247,16 @@ with tempfile.TemporaryDirectory(prefix="sw-approval-https-") as directory, cont
             reviewer, cookie = login(members[i][1])
             queue, _ = request("/approval/v1/requests?status=PENDING", cookie=cookie)
             assert queue["total"] == 1 and queue["items"][0]["intentHash"] == admitted["intentHash"]
-            decision = {"decision": "APPROVE", "reason": "Independent recipient and amount verification", "intentHash": admitted["intentHash"]}
-            decided, _ = request(f'/approval/v1/requests/{intent["id"]}/decisions', "POST", decision, cookie=cookie, csrf=reviewer["csrfToken"], origin_header=origin)
+            decision = {"decision": "APPROVE", "reason": "Independent recipient and amount verification", "intentHash": admitted["intentHash"], "password": password}
+            if i == 1:
+                step_up = dict(decision, tenantId=tenant, memberId=reviewer["memberId"])
+                request(f'/approval/v1/requests/{intent["id"]}/decisions/step-up', "POST",
+                        dict(step_up, password="wrong-password"), origin_header=origin, expected=401)
+                decided, _ = request(f'/approval/v1/requests/{intent["id"]}/decisions/step-up', "POST",
+                                     step_up, origin_header=origin)
+            else:
+                decided, _ = request(f'/approval/v1/requests/{intent["id"]}/decisions', "POST", decision,
+                                     cookie=cookie, csrf=reviewer["csrfToken"], origin_header=origin)
             assert decided["status"] == ("PENDING" if i == 1 else "APPROVED")
             request("/approval/v1/policies", "PUT", dict(policy, expectedVersion=1), cookie=cookie, csrf=reviewer["csrfToken"], origin_header=origin, expected=401)
         final, _ = request(f'/approval/service/v1/intents/{intent["id"]}?tenantId={tenant}', context=client)
@@ -299,7 +307,7 @@ with tempfile.TemporaryDirectory(prefix="sw-approval-https-") as directory, cont
         for index in (1, 2):
             reviewer, cookie = login(members[index][1])
             aptos_review, _ = request(f'/approval/v1/requests/{aptos_intent["id"]}/decisions', "POST",
-                {"decision": "APPROVE", "reason": "Verified canonical Aptos recipient, native amount and fee", "intentHash": aptos_review["intentHash"]},
+                {"decision": "APPROVE", "reason": "Verified canonical Aptos recipient, native amount and fee", "intentHash": aptos_review["intentHash"], "password": password},
                 cookie=cookie, csrf=reviewer["csrfToken"], origin_header=origin)
         assert aptos_review["status"] == "APPROVED"
         aptos_input = fixture / "aptos-candidate-input.json"
@@ -376,7 +384,7 @@ with tempfile.TemporaryDirectory(prefix="sw-approval-https-") as directory, cont
                 for reviewer_index in (1, 2):
                     reviewer, cookie = login(members[reviewer_index][1])
                     review, _ = request(f'/approval/v1/requests/{item["id"]}/decisions', "POST",
-                        {"decision": "APPROVE", "reason": "Verified exact native batch recipient, principal and expense", "intentHash": review["intentHash"]},
+                        {"decision": "APPROVE", "reason": "Verified exact native batch recipient, principal and expense", "intentHash": review["intentHash"], "password": password},
                         cookie=cookie, csrf=reviewer["csrfToken"], origin_header=origin)
                 assert review["status"] == "APPROVED"; receipts.append(review)
             native_cluster.stop(1)

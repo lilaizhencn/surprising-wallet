@@ -20,7 +20,10 @@ public final class PasswordHashes {
     private static final int KEY_BITS = 256;
     private static final SecureRandom RANDOM = new SecureRandom();
     public String hash(String password) {
-        validatePassword(password);
+        return hash(password, 12, 256);
+    }
+    public String hash(String password, int minLength, int maxLength) {
+        validatePassword(password, minLength, maxLength);
         byte[] salt = new byte[16];
         RANDOM.nextBytes(salt);
         byte[] hash = derive(password.toCharArray(), salt, ITERATIONS, KEY_BITS);
@@ -50,9 +53,9 @@ public final class PasswordHashes {
             return false;
         }
     }
-    private void validatePassword(String password) {
-        if (password == null || password.length() < 12 || password.length() > 256) {
-            throw new IllegalArgumentException("password must contain between 12 and 256 characters");
+    private void validatePassword(String password, int minLength, int maxLength) {
+        if (password == null || password.length() < minLength || password.length() > maxLength) {
+            throw new IllegalArgumentException("password must contain between " + minLength + " and " + maxLength + " characters");
         }
     }
     private byte[] derive(char[] password, byte[] salt, int iterations, int keyBits) {

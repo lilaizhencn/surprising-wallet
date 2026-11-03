@@ -17,6 +17,10 @@ public class ApprovalMemberRepository {
         jdbc.update("insert into approval.member(id,tenant_id,email,display_name,password_hash,role) values (?,?,?,?,?,?)",
                 id,tenant,email,name,hash,role);
     }
+    public void inviteAdministrator(UUID tenant,UUID id,String email,String name,String unusableHash,String tokenHash,Instant expires) {
+        jdbc.update("insert into approval.member(id,tenant_id,email,display_name,password_hash,role,status,activation_token_hash,activation_expires_at) values (?,?,?,?,?,'TENANT_ADMIN','INVITED',?,?)",
+                id,tenant,email,name,unusableHash,tokenHash,Timestamp.from(expires));
+    }
     public Optional<Member> active(UUID tenant, UUID member) {
         return jdbc.query("select id,tenant_id,role from approval.member where tenant_id=? and id=? and status='ACTIVE'",
                 (r,n) -> new Member(r.getObject("id",UUID.class),r.getObject("tenant_id",UUID.class),r.getString("role")), tenant,member).stream().findFirst();
@@ -59,9 +63,17 @@ public class ApprovalMemberRepository {
     }
     public Optional<Credential> credentialByEmail(String email) {
         return jdbc.query("select id,tenant_id,role,email,display_name,password_hash,status,failed_attempts,locked_until from approval.member where lower(email)=? for update",
-                (r,n)->new Credential(r.getObject("id",UUID.class),r.getObject("tenant_id",UUID.class),r.getString("role"),r.getString("email"),
-                    r.getString("display_name"),r.getString("password_hash"),r.getString("status"),r.getInt("failed_attempts"),
-                    r.getTimestamp("locked_until")==null?null:r.getTimestamp("locked_until").toInstant()),email).stream().findFirst();
+                (r,n)->credential(r),email).stream().findFirst();
+    }
+    public Optional<Credential> credentialByIdentity(UUID tenant,UUID member) {
+        if(tenant==null || member==null)return Optional.empty();
+        return jdbc.query("select id,tenant_id,role,email,display_name,password_hash,status,failed_attempts,locked_until from approval.member where tenant_id=? and id=? for update",
+                (r,n)->credential(r),tenant,member).stream().findFirst();
+    }
+    private static Credential credential(java.sql.ResultSet r) throws java.sql.SQLException {
+        return new Credential(r.getObject("id",UUID.class),r.getObject("tenant_id",UUID.class),r.getString("role"),r.getString("email"),
+                r.getString("display_name"),r.getString("password_hash"),r.getString("status"),r.getInt("failed_attempts"),
+                r.getTimestamp("locked_until")==null?null:r.getTimestamp("locked_until").toInstant());
     }
     public Optional<Profile> profile(UUID tenant,UUID member) {
         return jdbc.query("select id,role,email,display_name from approval.member where tenant_id=? and id=? and status='ACTIVE'",
