@@ -266,7 +266,7 @@ EVM ERC-20 充值地址后续可通过 [EIP-7702 免 Gas 批量归集目标方�
 
 管理员登录后点击右上角昵称进入「账号安全」，可扫码绑定谷歌验证器；密码确认和一次有效验证码全部通过后才算绑定完成。已绑定的验证器即使尚未强制，也会参与后续登录校验。子账号的邮箱 / 谷歌强制要求和绑定状态在「团队成员 → 登录安全」查看与设置，保存后原有会话立即撤销。非管理员不能自行关闭政策。失去设备时，管理员在成员行选择「重置谷歌验证器」并填写原因；租户管理员自身失去设备，由平台管理员在租户详情重置。强制绑定要求保留，下次密码校验后必须重新扫码确认。
 
-邮件配置位于 `wallet-api/src/main/resources/application.yaml`：填写 `spring.mail.host / port / username / password` 以及 `sw.wallet.custody.email-verification.from`，确认 SMTP 支持 STARTTLS 后启用 `sw.wallet.custody.email-verification.enabled`。默认开关关闭、地址和凭据为空，不发送真实邮件，也不允许开启强制邮箱校验。连接 / 读写超时为 5 秒；启用时保留 TLS 验证，不把账号验证码或 SMTP 密码写入日志。配置修改后重启应用并验证发送，再向人员开启强制邮箱要求。
+邮件配置位于 `wallet-api/src/main/resources/application.yaml`：仅在实际接通 SMTP 时设置 `spring.mail.host / port / username / password`、STARTTLS、连接 / 读写超时（建议 5 秒）以及 `sw.wallet.custody.email-verification.from`，验证邮件发送成功后再启用 `sw.wallet.custody.email-verification.enabled`。默认不配置 `spring.mail`，以免空 SMTP 参数启用邮件健康检查并使服务健康状态错误；此时不发送真实邮件，也不允许开启强制邮箱校验。启用时保留 TLS 验证，不把账号验证码或 SMTP 密码写入日志。配置修改后重启应用并验证发送，再向人员开启强制邮箱要求。
 
 浏览器 Console 写请求检查精确 Origin 白名单，配置 `SW_CUSTODY_CORS_ORIGINS` 时必须包含实际 Console HTTPS Origin；不要填星号、路径或任意后缀。生产 Cookie 开启 Secure。认证、绑定和审批列表响应均不缓存。前端只保存已经完成验证的会话显示信息，密码、验证码、绑定种子不进入 localStorage / sessionStorage。
 

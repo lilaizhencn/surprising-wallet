@@ -15,19 +15,6 @@ logging:
     default: INFO
 
 spring:
-  # 邮件发送预留配置。填写 SMTP 后，再将 custody.email-verification.enabled 改为 true。
-  mail:
-    host: ""
-    port: 587
-    username: ""
-    password: ""
-    properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
-      mail.smtp.starttls.required: true
-      mail.smtp.connectiontimeout: 5000
-      mail.smtp.timeout: 5000
-      mail.smtp.writetimeout: 5000
   application:
     # Spring 应用名，用于日志、指标和未来配置中心标识。
     name: wallet-api
