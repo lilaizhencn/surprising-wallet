@@ -36,7 +36,11 @@ public final class RegisteredMpcAddresses {
         };
     }
     public static boolean matches(RegisteredMpcKey key,ApprovalAssetSnapshot asset,String value) {
-        if(key==null || !key.state().equals("ACTIVE") || !key.keyGroup().equals(ChainType.valueOf(asset.chain()).isEvm()?"EVM":asset.chain()))return false;
+        return key!=null && key.state().equals("ACTIVE") && matchesIdentity(key,asset,value);
+    }
+    /** Public address identity only; it does not grant an inactive key any signing rights. */
+    public static boolean matchesIdentity(RegisteredMpcKey key,ApprovalAssetSnapshot asset,String value) {
+        if(key==null || !key.keyGroup().equals(ChainType.valueOf(asset.chain()).isEvm()?"EVM":asset.chain()))return false;
         var chain=ChainType.valueOf(asset.chain());
         if(chain==ChainType.DOT)return Arrays.equals(MpcPolkadotTransactionCodec.account(value),HexFormat.of().parseHex(key.publicKeyHex()));
         String actual=address(key,asset);

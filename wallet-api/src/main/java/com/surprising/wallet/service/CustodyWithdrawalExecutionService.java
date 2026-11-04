@@ -35,6 +35,7 @@ public class CustodyWithdrawalExecutionService {
     /** ledger_balance 单表仓储。 */
     private final LedgerBalanceRepository ledgerBalanceRepository;
     private final CustodyPoolFundingService pool;
+    private final HotWalletWithdrawalRoutingService hotWalletRouting;
 
     public CustodyWithdrawalExecutionService(
             WithdrawalOrderRepository withdrawalOrderRepository,
@@ -44,7 +45,8 @@ public class CustodyWithdrawalExecutionService {
             ChainAssetRepository chainAssetRepository,
             ChainProfileRepository chainProfileRepository,
             TokenConfigRepository tokenConfigRepository,
-            LedgerBalanceRepository ledgerBalanceRepository,CustodyPoolFundingService pool) {
+            LedgerBalanceRepository ledgerBalanceRepository,CustodyPoolFundingService pool,
+            HotWalletWithdrawalRoutingService hotWalletRouting) {
         this.withdrawalOrderRepository = withdrawalOrderRepository;
         this.collectionPlanningService = collectionPlanningService;
         this.runtimeConfig = runtimeConfig;
@@ -54,6 +56,7 @@ public class CustodyWithdrawalExecutionService {
         this.tokenConfigRepository = tokenConfigRepository;
         this.ledgerBalanceRepository = ledgerBalanceRepository;
         this.pool = pool;
+        this.hotWalletRouting = hotWalletRouting;
     }
 
     public ExecutionResult execute(CustodyAddressRecord custodyAddress, ChainAddressRecord account,
@@ -70,7 +73,7 @@ public class CustodyWithdrawalExecutionService {
         SpendAccount spend=fundingSource==CustodyWithdrawalService.FundingSource.TENANT_POOL
                 ? new SpendAccount(pool.fund(tenantId,custodyAddress,symbol,frozenAmount,orderNo),account.getAddress())
                 : requireTenantSpendAccount(custodyAddress,account,symbol,frozenAmount);
-        String sourceAddress=withdrawalSourceAddress(tenantId,chain,spend);
+        String sourceAddress=withdrawalSourceAddress(tenantId,chain,symbol,orderNo,amount,spend,fundingSource);
 
         long orderId = withdrawalOrderRepository.createForTenant(
                 tenantId,
@@ -145,9 +148,18 @@ public class CustodyWithdrawalExecutionService {
                 .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
         return new SpendAccount(availableAccount, address.getAddress());
     }
-    private String withdrawalSourceAddress(UUID tenantId, String chain, SpendAccount spend) {
+    private String withdrawalSourceAddress(UUID tenantId, String chain, String asset, String orderNo,
+                                           BigDecimal amount, SpendAccount spend,
+                                           CustodyWithdrawalService.FundingSource fundingSource) {
         if (ChainType.valueOf(chain).isUtxo()) {
             return spend.address();
+        }
+        var hotSource = hotWalletRouting.reserveNewOrder(tenantId, chain, asset, orderNo, amount);
+        if (hotSource.isPresent()) return hotSource.get();
+        if (fundingSource == CustodyWithdrawalService.FundingSource.TENANT_POOL) {
+            return collectionPlanningService.destination(tenantId, chain)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "tenant withdrawal pool source is unavailable"));
         }
         return collectionPlanningService.destination(tenantId, chain)
                 .orElse(spend.address());

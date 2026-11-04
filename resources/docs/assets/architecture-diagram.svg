@@ -12,21 +12,21 @@
 <path d="M600,213 V238" class="arrow"/>
 <g id="application"><rect x="35" y="245" width="1130" height="134" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
 <text x="55" y="274" class="label">应用与领域编排</text>
-<text x="55" y="302" class="body">Service：租户、余额、订单、nonce/UTXO、Gas、事件和事务边界</text>
+<text x="55" y="302" class="body">Service：租户、余额、订单、nonce/UTXO、Gas、备用热提地址和事务边界</text>
 <text x="55" y="328" class="body">Chain / Coordinator / Gateway：原网络 RPC、固定载荷、公开编码与完整链回执核验</text>
 <text x="55" y="354" class="body">custody / evm7702 / account / deposit / withdraw 独立线程池；Webhook 独立执行器</text>
 </g>
 <path d="M600,379 V408" class="arrow"/>
 <g id="persistence"><rect x="35" y="415" width="1130" height="134" rx="12" fill="#f0fdf4" stroke="#94a3b8"/>
 <text x="55" y="444" class="label">PostgreSQL 18 + PGMQ 1.11.1</text>
-<text x="55" y="472" class="body">一个 Repository 对应一张业务表；Service 组合单表仓储，不跨表 SQL</text>
+<text x="55" y="472" class="body">一个 Repository 对应一张表；热提地址/逐资产额度独立存储；Service 组合单表仓储</text>
 <text x="55" y="498" class="body">UTXO 队列：wallet_mpc_sign → wallet_sign_done；提现 / 事件 / RBF 队列保留</text>
 <text x="55" y="524" class="body">原入队凭据、订单、输入锁同事务；消费使用 read_ct，下一阶段入队与归档同事务</text>
 </g>
 <path d="M600,549 V578" class="arrow"/>
 <g id="mpc-coordinator"><rect x="35" y="585" width="1130" height="134" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
 <text x="55" y="614" class="label">MpcSigningService：公开意图与独立验签</text>
-<text x="55" y="642" class="body">key / key_epoch / sign_request / sign_attempt：租户、公钥、版本、原载荷与加密绑定结果</text>
+<text x="55" y="642" class="body">key / key_epoch / sign_request / sign_attempt：HOT_WITHDRAW 独立库存；三持有者及审批禁用 key</text>
 <text x="55" y="668" class="body">先提交资金 / nonce / UTXO / 原请求 → 事务外 mTLS MPC → 选定 raw/hash 提交 → 链 RPC</text>
 <text x="55" y="694" class="body">CustodyAddressService 统一发布客户 / Gas / 中继地址；Java 不保存钱包私钥或份额</text>
 </g>

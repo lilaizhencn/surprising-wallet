@@ -17,6 +17,7 @@ import java.util.UUID;
 public class WithdrawalSettlementService {
     private final WithdrawalOrderRepository orders;
     private final LedgerBalanceRepository balances;
+    private final HotWalletReservationLifecycleService hotReservations;
 
     @Transactional(rollbackFor = Throwable.class)
     public boolean confirm(UUID tenantId, String chain, String orderNo, String txHash) {
@@ -47,6 +48,7 @@ public class WithdrawalSettlementService {
         if (orders.markConfirmed(tenantId, chain, orderNo, txHash) != 1) {
             throw new IllegalStateException("unable to mark withdrawal " + orderNo + " confirmed");
         }
+        hotReservations.close(tenantId, chain, orderNo, "CONFIRMED");
         return true;
     }
     /** Only a confirmed failure receipt permits releasing the frozen principal. */
@@ -63,6 +65,7 @@ public class WithdrawalSettlementService {
             throw new IllegalStateException("failed withdrawal locked principal is inconsistent");
         }
         if (orders.failSettled(tenantId,chain,orderNo,txHash,reason) != 1) throw new IllegalStateException("failed withdrawal transition lost");
+        hotReservations.close(tenantId, chain, orderNo, "FAILED");
         return true;
     }
 

@@ -138,17 +138,20 @@ public class WithdrawalOrderRepository {
 
     /** 更新提现为签名中。 */
     public int claimSigning(UUID tenantId, String chain, String orderNo, String fromAddress) {
+        requireSender(fromAddress);
         return jdbc.update("""
-                update withdrawal_order set status = 'SIGNING', from_address = coalesce(?, from_address),
+                update withdrawal_order set status = 'SIGNING', from_address = coalesce(from_address, ?),
                     error_message = null, last_attempt_at = now(),
                     attempt_count = attempt_count + 1, lease_until = now() + interval '5 minutes', updated_at = ?
                  where tenant_id = ? and chain = ? and order_no = ? and status in ('FROZEN', 'RETRYING')
-                """, fromAddress, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
+                   and (from_address is null or from_address = ?)
+                """, fromAddress, Timestamp.from(Instant.now()), tenantId, chain, orderNo, fromAddress);
     }
 
     public int claimSigningDurable(UUID tenantId, String chain, String orderNo, String fromAddress) {
-        return jdbc.update("update withdrawal_order set status='SIGNING',durable_submission=true,from_address=coalesce(?,from_address),updated_at=now() where tenant_id=? and chain=? and order_no=? and status in ('FROZEN','RETRYING')",
-                fromAddress,tenantId,chain,orderNo);
+        requireSender(fromAddress);
+        return jdbc.update("update withdrawal_order set status='SIGNING',durable_submission=true,from_address=coalesce(from_address,?),updated_at=now() where tenant_id=? and chain=? and order_no=? and status in ('FROZEN','RETRYING') and (from_address is null or from_address=?)",
+                fromAddress,tenantId,chain,orderNo,fromAddress);
     }
 
     public int recoverUnsignedDurable(UUID tenant, String chain, String orderNo) {
@@ -182,12 +185,14 @@ public class WithdrawalOrderRepository {
 
     /** 标记提现已发送。 */
     public int markSent(UUID tenantId, String chain, String orderNo, String fromAddress, String txHash) {
+        requireSender(fromAddress);
         requireTransactionHash(txHash);
         return jdbc.update("""
-                update withdrawal_order set status = 'SENT', from_address = coalesce(?, from_address),
+                update withdrawal_order set status = 'SENT',
                     tx_hash = ?, error_message = null, lease_owner = null, lease_until = null, updated_at = ?
                  where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING' and (tx_hash is null or tx_hash = ?)
-                """, fromAddress, txHash, Timestamp.from(Instant.now()), tenantId, chain, orderNo, txHash);
+                   and from_address = ?
+                """, txHash, Timestamp.from(Instant.now()), tenantId, chain, orderNo, txHash, fromAddress);
     }
 
     /** 标记非租户提现已发送。 */
@@ -203,11 +208,13 @@ public class WithdrawalOrderRepository {
     /** 标记提现广播未知。 */
     public int markBroadcastUnknown(UUID tenantId, String chain, String orderNo,
                                     String fromAddress, String errorMessage) {
+        requireSender(fromAddress);
         return jdbc.update("""
-                update withdrawal_order set status = 'BROADCAST_UNKNOWN', from_address = coalesce(?, from_address),
+                update withdrawal_order set status = 'BROADCAST_UNKNOWN',
                     error_message = ?, lease_owner = null, lease_until = null, updated_at = ?
                  where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING'
-                """, fromAddress, errorMessage, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
+                   and from_address = ?
+                """, errorMessage, Timestamp.from(Instant.now()), tenantId, chain, orderNo, fromAddress);
     }
 
     /** 标记非租户提现广播未知。 */
@@ -243,11 +250,13 @@ public class WithdrawalOrderRepository {
     public int updateStatus(UUID tenantId, String chain, String orderNo, String status,
                             String fromAddress, String txHash, String errorMessage) {
         return jdbc.update("""
-                update withdrawal_order set status = ?, from_address = coalesce(?, from_address),
+                update withdrawal_order set status = ?, from_address = coalesce(from_address, ?),
                     tx_hash = coalesce(?, tx_hash), error_message = ?, lease_owner = null,
                     lease_until = null, updated_at = now()
                  where tenant_id = ? and chain = ? and order_no = ? and status not in ('CONFIRMED','FAILED','REJECTED','CANCELLED')
-                """, status, fromAddress, txHash, errorMessage, tenantId, chain, orderNo);
+                   and (? or from_address is null or from_address = ?)
+                """, status, fromAddress, txHash, errorMessage, tenantId, chain, orderNo,
+                fromAddress == null, fromAddress);
     }
 
     /** 更新非租户提现状态。 */
@@ -315,6 +324,11 @@ public class WithdrawalOrderRepository {
 
     private static void requireTransactionHash(String hash) {
         if (hash == null || hash.isBlank()) throw new IllegalArgumentException("withdrawal tx hash must not be blank");
+    }
+    private static void requireSender(String address) {
+        if (address == null || address.isBlank()) {
+            throw new IllegalArgumentException("withdrawal chain sender must be fixed before signing");
+        }
     }
 
     /** 查询非租户条件的提现订单。 */

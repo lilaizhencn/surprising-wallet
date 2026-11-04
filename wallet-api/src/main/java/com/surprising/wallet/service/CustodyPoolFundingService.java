@@ -52,6 +52,8 @@ public class CustodyPoolFundingService {
             var owner=chainAddresses.findOwned(tenantId,address.chainAddressId()).orElseThrow();
             excluded.add(owner.getAccountId());
         }
+        // Hot withdrawal inventory is an operating reserve, never a source of customer principal.
+        excluded.addAll(chainAddresses.listHotWithdrawalAccountIds(tenantId, chain));
         var contributions=balances.contributeToPool(tenantId,chain,asset,needed,excluded);
         BigDecimal total=contributions.stream().map(LedgerBalanceRepository.PoolContribution::amount)
                 .reduce(BigDecimal.ZERO,BigDecimal::add);

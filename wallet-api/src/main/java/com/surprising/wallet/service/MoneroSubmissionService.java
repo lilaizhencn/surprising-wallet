@@ -44,6 +44,7 @@ public class MoneroSubmissionService {
     private final CustodyGasAccountingService accounting;
     private final ObjectMapper json;
     private final PlatformTransactionManager manager;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public enum Kind {WITHDRAWAL,COLLECTION,FUNDING}
     public record Operation(UUID tenantId,String reference,Kind kind) {
@@ -121,7 +122,7 @@ public class MoneroSubmissionService {
             require(owner==null || result.transactionHash().equals(owner.hash()),"Monero relay has no durable owned business hash");return result;
         });
         if(!terminal(op)) {
-            signing.relayMonero(op.tenantId(),intent(op).orElseThrow().id(),selected.transactionHash(),nodes);
+            signing.relayMonero(op.tenantId(),intent(op).orElseThrow().id(),selected.transactionHash(),nodes,broadcastFence);
             restoreSent(op,selected.transactionHash());
         }
         return selected.transactionHash();

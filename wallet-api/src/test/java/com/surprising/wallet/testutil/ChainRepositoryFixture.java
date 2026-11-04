@@ -132,7 +132,8 @@ public class ChainRepositoryFixture {
                 chainAddressRepository,
                 custodyGasAccountRepository);
         utxoSelectionService = new UtxoSelectionService(utxoRepository, chainAddressRepository, chainProfileRepository);
-        withdrawalClaimService = new WithdrawalClaimService(withdrawalOrderRepository, custodyReorgDeficitRepository);
+        withdrawalClaimService = new WithdrawalClaimService(withdrawalOrderRepository, custodyReorgDeficitRepository,
+                new CustodyTenantChainTableRepository(jdbc));
         evmBatchOwnershipService = new EvmBatchOwnershipService(
                 evmWithdrawalBatchItemRepository,
                 evmWithdrawalBatchRepository,

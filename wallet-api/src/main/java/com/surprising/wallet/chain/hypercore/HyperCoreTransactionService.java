@@ -4,11 +4,13 @@ import com.surprising.wallet.sdk.signing.hypercore.MpcHyperCoreActionCodec;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.HyperCoreActionRepository;
 import com.surprising.wallet.service.HyperCoreSubmissionService;
 import com.surprising.wallet.service.HyperCoreSubmissionService.Operation;
 import com.surprising.wallet.service.HyperCoreSubmissionService.Kind;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
+import com.surprising.wallet.service.HotWalletBroadcastFence;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,8 @@ public class HyperCoreTransactionService {
     private final CollectionRecordRepository collections;
     private final WalletRuntimeConfigService runtime;
     private final ObjectMapper json;
+    private final ChainProfileRepository profiles;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String send(Operation operation,ChainAddressRecord source) {
         runtime.requireTaskEnabled("HYPERCORE",WalletRuntimeConfigService.TASK_WITHDRAW,"hypercore withdrawal");
@@ -61,7 +65,14 @@ public class HyperCoreTransactionService {
         if(!actions.accepted(prepared.actionId())) {
             if(reconcile(operation,prepared.actionId()))return prepared.actionId();
             try {
-                var response=api.postExchange(json.readValue(prepared.body(),ObjectNode.class));
+                var sourceKeyId=submissions.intent(operation).orElseThrow().command().keyId();
+                var response=operation.kind()==Kind.COLLECTION
+                        ?broadcastFence.withAccountCollectionBroadcastPermit(operation.tenantId(),"HYPERCORE",
+                                profiles.findAccountByChain("HYPERCORE").orElseThrow().getNetwork(),
+                                operation.reference(),prepared.actionId(),sourceKeyId,
+                                ()->api.postExchange(json.readValue(prepared.body(),ObjectNode.class)))
+                        :broadcastFence.withPayoutBroadcastPermit(operation.tenantId(),"HYPERCORE",sourceKeyId,
+                                ()->api.postExchange(json.readValue(prepared.body(),ObjectNode.class)));
                 submissions.accepted(operation,prepared.actionId(),response);
             } catch(RuntimeException unknown) {
                 try {if(reconcile(operation,prepared.actionId()))return prepared.actionId();}

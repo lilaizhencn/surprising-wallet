@@ -19,7 +19,7 @@
 <g id="intent"><rect x="35" y="385" width="1130" height="108" rx="12" fill="#eff6ff" stroke="#94a3b8"/>
 <text x="55" y="414" class="label">出款 / 归集：原业务锁 → 原金额、原来源、nonce/UTXO、费用 → 原 MPC 意图同事务</text>
 <text x="55" y="442" class="body">WithdrawalClaimService 检查赤字；UtxoSelectionService 校验归属并锁输入</text>
-<text x="55" y="468" class="body">CollectionPlanningService 计算可归集金额和租户目标；刷新中的 key 不受理新 SIGN</text>
+<text x="55" y="468" class="body">租户链暂停阻断新提现；热提入款不记客户余额；三持有者及审批禁用旧 key</text>
 </g>
 <path d="M600,493 V518" class="arrow"/>
 <g id="sign-and-select"><rect x="35" y="525" width="1130" height="108" rx="12" fill="#fff7ed" stroke="#94a3b8"/>

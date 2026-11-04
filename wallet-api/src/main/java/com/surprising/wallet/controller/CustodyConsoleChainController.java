@@ -52,6 +52,17 @@ public class CustodyConsoleChainController {
                 body.enabled(), CustodyRequestSupport.clientIp(request));
     }
 
+    @PutMapping("/{chain}/withdrawals/pause")
+    public CustodyTenantChainService.ChainView setWithdrawalPaused(
+            @PathVariable String chain,
+            @RequestBody UpdateWithdrawalPauseRequest body,
+            HttpServletRequest request) {
+        return chains.setWithdrawalPaused(CustodyRequestSupport.requirePrincipal(request), chain,
+                body.paused(), body.reason(), CustodyRequestSupport.clientIp(request));
+    }
+
+    public record UpdateWithdrawalPauseRequest(boolean paused, String reason) { }
+
     /**
      * 链启用开关请求体。
      */

@@ -11,6 +11,7 @@ import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyAuditRepository;
 import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyHotWalletRepository;
 import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import com.surprising.wallet.repository.Evm7702ConfigRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
@@ -42,6 +43,7 @@ public class CustodyTenantChainService {
     private final CustodyAddressRepository addresses;
     private final CustodyAuditRepository audits;
     private final BlockchainRuntimeService runtime;
+    private final CustodyHotWalletRepository hotWallets;
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public List<ChainView> list(CustodyPrincipal principal) {
@@ -70,6 +72,54 @@ public class CustodyTenantChainService {
                 .orElseThrow(() -> new IllegalStateException("tenant chain status was not persisted"));
     }
 
+    @Transactional(rollbackFor = Throwable.class)
+    public ChainView setWithdrawalPaused(CustodyPrincipal principal, String chainValue,
+                                         boolean paused, String reason, String sourceIp) {
+        requireTenantAdmin(principal);
+        String chain = normalizeChain(chainValue);
+        String explanation = reason == null ? "" : reason.trim();
+        if (explanation.length() < 8 || explanation.length() > 500) {
+            throw new IllegalArgumentException("withdrawal pause reason must be 8 to 500 characters");
+        }
+        if (profiles.listByChain(chain).isEmpty()) {
+            throw new IllegalArgumentException("chain is not configured by the platform");
+        }
+        if(!paused && profiles.findAccountByChain(chain).isEmpty()) {
+            throw new IllegalStateException("platform-disabled chain cannot resume withdrawals");
+        }
+        if(!paused) {
+            chains.lockEmergencyPauseCoordination(principal.tenantId(),chain);
+            var registered=hotWallets.list(principal.tenantId(),chain);
+            if(registered.stream().anyMatch(wallet->"QUARANTINED".equals(wallet.status())
+                    && wallet.quarantineFenceConfirmedAt()==null))
+                throw new IllegalStateException("confirm the old hot wallet quarantine fence before resuming withdrawals");
+            if(registered.stream().anyMatch(wallet->"QUARANTINED".equals(wallet.status())
+                    || "RETIRED".equals(wallet.status()))
+                    && registered.stream().noneMatch(wallet->"ACTIVE".equals(wallet.status())))
+                throw new IllegalStateException("activate a safe replacement hot wallet before resuming withdrawals");
+        }
+        int changed=paused
+                ?chains.ensureEmergencyPaused(principal.tenantId(),chain,principal.actorId())
+                :chains.setWithdrawalPaused(principal.tenantId(),chain,false,principal.actorId());
+        if (changed != 1) {
+            throw new IllegalArgumentException("tenant chain is not configured");
+        }
+        String details = "{\"chain\":\"" + chain + "\",\"paused\":" + paused
+                + ",\"reason\":" + tools.jackson.databind.json.JsonMapper.builder().build()
+                .writeValueAsString(explanation) + "}";
+        audits.insert(UUID.randomUUID(), principal.tenantId(), principal.actorType().name(),
+                principal.actorId().toString(), paused ? "WITHDRAWAL.EMERGENCY_PAUSE" : "WITHDRAWAL.RESUME",
+                "TENANT_CHAIN", chain, sourceIp, details);
+        return listForTenant(principal.tenantId()).stream().filter(row -> row.chain().equals(chain))
+                .findFirst().orElseGet(()->{
+                    // A disabled platform profile still needs an emergency stop for an old signed wire.
+                    var profile=profiles.listByChain(chain).getFirst();
+                    var row=chains.list(principal.tenantId()).stream()
+                            .filter(candidate->candidate.chain().equalsIgnoreCase(chain)).findFirst().orElseThrow();
+                    return toView(profile,row,null,List.of(),false);
+                });
+    }
+
     public void requireActive(UUID tenantId, String chainValue) {
         String chain = normalizeChain(chainValue);
         if (profiles.findAccountByChain(chain).isEmpty() || !chains.active(tenantId, chain)) {
@@ -82,6 +132,7 @@ public class CustodyTenantChainService {
         String symbol = normalizeSymbol(symbolValue);
         AccountChainProfile profile = profiles.findAccountByChain(chain).orElse(null);
         if (profile != null && chains.active(tenantId, chain)
+                && !chains.withdrawalPaused(tenantId, chain)
                 && Boolean.TRUE.equals(profile.getWithdrawEnabled())
                 && Boolean.TRUE.equals(profile.getTransferEnabled())) {
             ChainAsset asset = assets.findActiveDefinition(chain, symbol).orElse(null);
@@ -120,7 +171,12 @@ public class CustodyTenantChainService {
         for (var config : evmConfigs.listAll()) {
             if ("ACTIVE".equals(config.status())) evm.add(new ChainNetwork(config.chain(), config.network()));
         }
-        return profiles.listProfiles(true).stream().map(profile -> {
+        var visibleProfiles=new java.util.LinkedHashMap<String,AccountChainProfile>();
+        for(var profile:profiles.listProfiles(true))
+            visibleProfiles.put(profile.getChain().toUpperCase(Locale.ROOT),profile);
+        for(var profile:profiles.listAll())
+            visibleProfiles.putIfAbsent(profile.getChain().toUpperCase(Locale.ROOT),profile);
+        return visibleProfiles.values().stream().map(profile -> {
             String chain = profile.getChain();
             ChainNetwork network = new ChainNetwork(chain, profile.getNetwork());
             return toView(profile, statuses.get(chain.toUpperCase(Locale.ROOT)), gas.get(chain),
@@ -152,7 +208,8 @@ public class CustodyTenantChainService {
                 tokens.stream().filter(TokenView::platformEnabled).map(TokenView::symbol)).distinct().toList();
         String status = row == null ? "CLOSED" : row.status();
         return new ChainView(profile.getChain(), profile.getNetwork(), profile.getFamily(), profile.getNativeSymbol(),
-                evm, enabledAssets, tokens, status, "ACTIVE".equals(status),
+                Boolean.TRUE.equals(profile.getEnabled()),
+                evm, enabledAssets, tokens, status, "ACTIVE".equals(status), row != null && row.withdrawalPaused(),
                 Boolean.TRUE.equals(profile.getScanEnabled()), Boolean.TRUE.equals(profile.getWithdrawEnabled()),
                 Boolean.TRUE.equals(profile.getTransferEnabled()),
                 address == null ? null : address.id(), address == null ? null : address.address(),
@@ -201,11 +258,13 @@ public class CustodyTenantChainService {
             String network,
             String family,
             String nativeSymbol,
+            boolean platformEnabled,
             boolean eip7702Enabled,
             List<String> assetSymbols,
             List<TokenView> tokens,
             String status,
             boolean enabled,
+            boolean withdrawalPaused,
             boolean scanEnabled,
             boolean withdrawalEnabled,
             boolean transferEnabled,

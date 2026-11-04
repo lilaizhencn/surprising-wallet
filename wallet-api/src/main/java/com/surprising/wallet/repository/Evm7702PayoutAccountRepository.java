@@ -23,13 +23,16 @@ public class Evm7702PayoutAccountRepository {
         return jdbc.update("""
                 insert into evm_7702_payout_account(id, tenant_id, chain, network, chain_address_id, authority_address)
                 values (?, ?, ?, ?, ?, ?)
-                on conflict (tenant_id, chain) do update set chain_address_id = excluded.chain_address_id,
-                    authority_address = excluded.authority_address, network = excluded.network, updated_at = now()
+                on conflict (tenant_id, chain, authority_address) do update
+                    set updated_at = now()
+                  where evm_7702_payout_account.chain_address_id = excluded.chain_address_id
+                    and evm_7702_payout_account.network = excluded.network
                 """, id, tenantId, chain, network, chainAddressId, authorityAddress);
     }
 
     /** 更新正常完成后的提现账户投影。 */
-    public int markCompleted(UUID tenantId, String chain, boolean authorizationIncluded,
+    public int markCompleted(UUID tenantId, String chain, String authorityAddress,
+                             boolean authorizationIncluded,
                              BigInteger authorizationNonce, BigInteger operationNonce,
                              String activationTxHash, String delegateAddress, int delegateVersion) {
         return jdbc.update("""
@@ -39,13 +42,15 @@ public class Evm7702PayoutAccountRepository {
                        observed_authority_nonce = case when ? then greatest(coalesce(observed_authority_nonce, 0), coalesce(?, 0))
                            else observed_authority_nonce end,
                        observed_operation_nonce = coalesce(?, observed_operation_nonce), updated_at = now()
-                 where tenant_id = ? and chain = ?
+                 where tenant_id = ? and chain = ? and lower(authority_address) = lower(?)
                 """, delegateAddress, delegateVersion, authorizationIncluded, activationTxHash,
-                authorizationIncluded, authorizationNonce, operationNonce, tenantId, chain);
+                authorizationIncluded, authorizationNonce, operationNonce, tenantId, chain,
+                authorityAddress);
     }
 
     /** 更新外层回滚后的提现账户投影。 */
-    public int markReverted(UUID tenantId, String chain, boolean authorizationIncluded,
+    public int markReverted(UUID tenantId, String chain, String authorityAddress,
+                            boolean authorizationIncluded,
                             BigInteger authorizationNonce, BigInteger operationNonce,
                             String activationTxHash, String delegateAddress, int delegateVersion) {
         return jdbc.update("""
@@ -57,9 +62,9 @@ public class Evm7702PayoutAccountRepository {
                        observed_authority_nonce = case when ? then greatest(coalesce(observed_authority_nonce, 0), coalesce(?, 0))
                            else observed_authority_nonce end,
                        observed_operation_nonce = coalesce(?, observed_operation_nonce), updated_at = now()
-                 where tenant_id = ? and chain = ?
+                 where tenant_id = ? and chain = ? and lower(authority_address) = lower(?)
                 """, authorizationIncluded, authorizationIncluded, delegateAddress, authorizationIncluded,
                 delegateVersion, authorizationIncluded, activationTxHash, authorizationIncluded, authorizationNonce,
-                operationNonce, tenantId, chain);
+                operationNonce, tenantId, chain, authorityAddress);
     }
 }

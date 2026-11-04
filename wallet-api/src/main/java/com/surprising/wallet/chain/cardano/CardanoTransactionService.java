@@ -41,6 +41,7 @@ public class CardanoTransactionService {
     @NonNull private final WalletRuntimeConfigService runtime;
     private final ObjectMapper json;
     private final MpcAuthorizationService authorizations;
+    private final HotWalletBroadcastFence broadcastFence;
     private static final HexFormat HEX = HexFormat.of();
 
     public String send(Operation op, ChainAddressRecord source) {
@@ -149,7 +150,7 @@ public class CardanoTransactionService {
         if (submissions.terminal(op)) return selected.txHash();
         requireIdentity(payload);
         if (rpc.tip().getSlot() < MpcCardanoTransactionCodec.expiry(payload.unsigned())) {
-            require(selected.txHash().equals(rpc.submit(HEX.parseHex(selected.transactionHex()))), "Cardano native submit returned a different body hash");
+            require(selected.txHash().equals(submitSelected(op,selected)), "Cardano native submit returned a different body hash");
             submissions.observed(op, selected.txHash());
         }
         // Closed TTL is not a submission error or a fee receipt. Confirmation must search the fixed interval and check inputs.
@@ -191,10 +192,20 @@ public class CardanoTransactionService {
         if (tip.getSlot() < MpcCardanoTransactionCodec.expiry(payload.unsigned())) {
             // Identical replay can be rejected for a pending or just-mined input. Neither rejection nor timeout settles funds.
             try {
-                if (selected.txHash().equals(rpc.submit(HEX.parseHex(selected.transactionHex())))) submissions.observed(op, selected.txHash());
+                if (selected.txHash().equals(submitSelected(op,selected))) submissions.observed(op, selected.txHash());
             } catch (RuntimeException pending) { return false; }
         }
         return false;
+    }
+
+    private String submitSelected(Operation op,MpcCardanoTransactionCodec.Signed selected) {
+        var sourceKeyId=submissions.intent(op).orElseThrow().command().keyId();
+        if(op.kind()==Kind.COLLECTION)
+            return broadcastFence.withAccountCollectionBroadcastPermit(op.tenantId(),"ADA",
+                    profiles.findAccountByChain("ADA").orElseThrow().getNetwork(),op.reference(),
+                    selected.txHash(),sourceKeyId,()->rpc.submit(HEX.parseHex(selected.transactionHex())));
+        return broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"ADA",sourceKeyId,
+                ()->rpc.submit(HEX.parseHex(selected.transactionHex())));
     }
 
     public BigDecimal collectableNativeAmount(String address, BigDecimal candidate, BigDecimal reserve) {

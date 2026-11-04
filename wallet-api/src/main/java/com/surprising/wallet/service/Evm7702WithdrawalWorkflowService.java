@@ -65,6 +65,7 @@ public class Evm7702WithdrawalWorkflowService {
     private final Evm7702SigningService mpc;
     private final CustodyCryptoService crypto;
     private final WalletRuntimeConfigService runtimeConfig;
+    private final HotWalletBroadcastFence broadcastFence;
     private final Evm7702PayoutSigner payoutSigner = new Evm7702PayoutSigner();
     private final Evm7702PayoutCodec payoutCodec = new Evm7702PayoutCodec();
     private final Evm7702PayoutReceiptParser receiptParser = new Evm7702PayoutReceiptParser();
@@ -81,7 +82,8 @@ public class Evm7702WithdrawalWorkflowService {
             Evm7702RpcClient rpc,
             Evm7702SigningService mpc,
             CustodyCryptoService crypto,
-            WalletRuntimeConfigService runtimeConfig) {
+            WalletRuntimeConfigService runtimeConfig,
+            HotWalletBroadcastFence broadcastFence) {
         this.batches = batches;
         this.items = items;
         this.attempts = attempts;
@@ -93,6 +95,7 @@ public class Evm7702WithdrawalWorkflowService {
         this.mpc = mpc;
         this.crypto = crypto;
         this.runtimeConfig = runtimeConfig;
+        this.broadcastFence = broadcastFence;
     }
 
     public void run() {
@@ -175,7 +178,9 @@ public class Evm7702WithdrawalWorkflowService {
                         continue;
                     }
                     this.attempts.recordRecovery(attempt.tenantId(), attempt.batchId(), attempt.txHash());
-                    EthSendTransaction sent = web3j.ethSendRawTransaction(rawTransaction).send();
+                    EthSendTransaction sent = broadcastFence.withPayoutBroadcastPermit(original.tenantId(),
+                            original.chain(),original.hotChainAddress().getMpcKeyId(),
+                            () -> web3j.ethSendRawTransaction(rawTransaction).send());
                     if (!sent.hasError()) {
                         if (!attempt.txHash().equalsIgnoreCase(sent.getTransactionHash())) {
                             throw new IllegalStateException("RPC transaction hash differs from persisted hash");
@@ -227,7 +232,9 @@ public class Evm7702WithdrawalWorkflowService {
                 if(mpc.outer(operation).isEmpty())prepareOuter(web3j,http,profile,batch,preparation);
                 mpc.signOuter(operation);
                 var signed=coordinator.persistSignedAttempt(batch);rawCommitted=true;
-                EthSendTransaction sent=web3j.ethSendRawTransaction(signed.rawTransaction()).send();
+                EthSendTransaction sent=broadcastFence.withPayoutBroadcastPermit(batch.tenantId(),
+                        batch.chain(),batch.hotChainAddress().getMpcKeyId(),
+                        () -> web3j.ethSendRawTransaction(signed.rawTransaction()).send());
                 if(sent.hasError())throw new IllegalStateException("eth_sendRawTransaction rejected original batch");
                 if(!signed.transactionHash().equalsIgnoreCase(sent.getTransactionHash()))throw new IllegalStateException("RPC batch hash differs from selected MPC hash");
                 coordinator.markSubmitted(batch.tenantId(),batch.id(),signed.transactionHash());

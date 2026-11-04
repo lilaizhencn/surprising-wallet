@@ -53,6 +53,9 @@ public class DepositService {
                 event.fromAddress(), event.toAddress(), event.tokenAddress(), event.amount(), event.blockHeight(),
                 event.blockHash(), event.confirmations(), status, accountId, event.rawPayload());
         if (recorded != 1) throw new IllegalStateException("deposit record belongs to another tenant");
+        // A treasury-to-hot refill (or any direct payment to a hot address) is platform inventory.
+        // Preserve the chain observation and reorg history, but never mint customer entitlement.
+        if (addresses.isHotWithdrawalDestination(tenantId, chain, event.toAddress())) return false;
         if (!unlocked || event.confirmations() < requiredConfirmations) return false;
         var credit = deposits.markCredited(tenantId, chain, event.txId(), logIndex);
         if (credit.isEmpty()) return false;

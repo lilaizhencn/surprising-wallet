@@ -17,6 +17,7 @@ import java.util.*;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.web3j.utils.Numeric;
+import org.web3j.crypto.Hash;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.cell.*;
 import sui.rpc.v2.*;
@@ -30,10 +31,170 @@ public class ApprovalOperatingBalanceReader {
     private final ApprovalChainRpcClient rpc;private final ApprovalNativeRegistryClient holders;private final ObjectMapper json;private final Clock clock;
     public ApprovalOperatingBalanceReader(ApprovalChainRpcClient rpc,ApprovalNativeRegistryClient holders,ObjectMapper json,Clock clock){this.rpc=rpc;this.holders=holders;this.json=json;this.clock=clock;}
     public Balance observe(ApprovalAssetSnapshot asset,RegisteredMpcKey key,String owner,MpcClient.Request originalMoneroObservation) {
+        return observeVerified(asset,key,owner,originalMoneroObservation,false);
+    }
+    /** Incident read only: disabled keys can be observed, never admitted for payment. */
+    public Balance observeQuarantined(ApprovalAssetSnapshot asset,RegisteredMpcKey key,String owner) {
+        require(key!=null && key.state().equals("DISABLED"),"quarantined balance requires a disabled key");
+        return observeVerified(asset,key,owner,null,true);
+    }
+    /** Recheck the live code of every EVM signing account, including manually approved payments and replay sessions. */
+    public void requireEvmSigningCode(ApprovalAssetSnapshot asset,RegisteredMpcKey key) {
+        require(!TransactionSynchronizationManager.isActualTransactionActive(),
+                "EVM signing account code observation requires no database transaction");
+        require(ChainType.valueOf(asset.chain()).isEvm() && key!=null && key.state().equals("ACTIVE"),
+                "active independently registered EVM signing key required");
+        String owner=RegisteredMpcAddresses.address(key,asset);
+        var reads=rpc.open(asset,"DEFAULT");
+        require(asset.networkIdentity().equals("eip155:"+quantity(reads.rpc("eth_chainId",List.of()))),
+                "signing EVM node chain ID differs");
+        var block=reads.rpc("eth_getBlockByNumber",List.of("latest",false));
+        String number=block.path("number").asText(),hash=block.path("hash").asText();
+        require(hash.matches("0x[0-9a-fA-F]{64}") && quantity(block.path("number")).bitLength()<=63,
+                "canonical EVM signing block required");
+        evmCode(reads,key,owner,number,false);
+        var confirmed=reads.rpc("eth_getBlockByNumber",List.of(number,false));
+        require(number.equals(confirmed.path("number").asText())
+                && hash.equalsIgnoreCase(confirmed.path("hash").asText()),
+                "EVM signing code observation crossed a chain reorganization");
+    }
+    /** A direct EVM payment needs a finalized exact receipt and an anchored current balance. */
+    public FinalizedSpend observeFinalizedDirectSpend(ApprovalAssetSnapshot asset,RegisteredMpcKey key,
+            String owner,String recipient,String txHash,BigInteger amountAtomic) {
+        require(ChainType.valueOf(asset.chain()).isEvm() && RegisteredMpcAddresses.matches(key,asset,owner),
+                "active independently owned EVM spend required");
+        return observeFinalizedDirectPayment(asset,owner,recipient,txHash,amountAtomic,key,owner);
+    }
+    /** A direct collection proves the source payment and samples the receiving hot wallet after finality. */
+    public FinalizedSpend observeFinalizedDirectCollection(ApprovalAssetSnapshot asset,
+            RegisteredMpcKey sourceKey,String source,RegisteredMpcKey destinationKey,
+            String destination,String txHash,BigInteger amountAtomic) {
+        require(ChainType.valueOf(asset.chain()).isEvm()
+                && RegisteredMpcAddresses.matchesIdentity(sourceKey,asset,source)
+                && RegisteredMpcAddresses.matches(destinationKey,asset,destination)
+                && !source.equalsIgnoreCase(destination),
+                "independently owned EVM collection source and active target required");
+        return observeFinalizedDirectPayment(asset,source,destination,txHash,amountAtomic,
+                destinationKey,destination);
+    }
+    private FinalizedSpend observeFinalizedDirectPayment(ApprovalAssetSnapshot asset,String owner,
+            String recipient,String txHash,BigInteger amountAtomic,RegisteredMpcKey balanceKey,
+            String balanceOwner) {
+        require(!TransactionSynchronizationManager.isActualTransactionActive(),
+                "finalized direct payment observation requires no database transaction");
+        require(ChainType.valueOf(asset.chain()).isEvm()
+                && owner!=null && owner.matches("0x[0-9a-fA-F]{40}")
+                && recipient!=null && recipient.matches("0x[0-9a-fA-F]{40}")
+                && !recipient.equalsIgnoreCase(owner) && txHash!=null
+                && txHash.matches("0x[0-9a-fA-F]{64}") && amountAtomic!=null
+                && amountAtomic.signum()>0 && amountAtomic.bitLength()<=256,
+                "complete independently owned direct EVM spend required");
+        var reads=rpc.open(asset,"DEFAULT");
+        require(asset.networkIdentity().equals("eip155:"+quantity(reads.rpc("eth_chainId",List.of()))),
+                "finalized EVM node chain ID differs");
+        var finalBlock=reads.rpc("eth_getBlockByNumber",List.of("finalized",false));
+        require(finalBlock.isObject() && finalBlock.path("hash").asText().matches("0x[0-9a-fA-F]{64}"),
+                "independent finalized EVM block is unavailable");
+        BigInteger finalHeight=quantity(finalBlock.path("number"));
+        require(finalHeight.bitLength()<=63,"finalized EVM height is out of range");
+        String finalNumber=finalBlock.path("number").asText();
+        String finalHash=finalBlock.path("hash").asText().toLowerCase(Locale.ROOT);
+        var receipt=reads.rpc("eth_getTransactionReceipt",List.of(txHash));
+        var transaction=reads.rpc("eth_getTransactionByHash",List.of(txHash));
+        require(receipt.isObject() && transaction.isObject()
+                && txHash.equalsIgnoreCase(receipt.path("transactionHash").asText())
+                && txHash.equalsIgnoreCase(transaction.path("hash").asText())
+                && "0x1".equalsIgnoreCase(receipt.path("status").asText())
+                && owner.equalsIgnoreCase(receipt.path("from").asText())
+                && owner.equalsIgnoreCase(transaction.path("from").asText())
+                && receipt.path("blockHash").asText().matches("0x[0-9a-fA-F]{64}")
+                && receipt.path("blockHash").asText().equalsIgnoreCase(transaction.path("blockHash").asText())
+                && receipt.path("blockNumber").asText().equals(transaction.path("blockNumber").asText()),
+                "finalized EVM payment receipt or sender identity differs");
+        BigInteger receiptHeight=quantity(receipt.path("blockNumber"));
+        require(receiptHeight.bitLength()<=63 && receiptHeight.compareTo(finalHeight)<=0,
+                "EVM payment receipt is beyond the finalized anchor");
+        var receiptBlock=reads.rpc("eth_getBlockByNumber",List.of(receipt.path("blockNumber").asText(),false));
+        require(receipt.path("blockHash").asText().equalsIgnoreCase(receiptBlock.path("hash").asText())
+                && receipt.path("blockNumber").asText().equals(receiptBlock.path("number").asText()),
+                "EVM payment receipt is not on the canonical finalized chain");
+        if(asset.tokenIdentifier()==null) {
+            require(recipient.equalsIgnoreCase(receipt.path("to").asText())
+                    && recipient.equalsIgnoreCase(transaction.path("to").asText())
+                    && amountAtomic.equals(quantity(transaction.path("value")))
+                    && "0x".equalsIgnoreCase(transaction.path("input").asText()),
+                    "finalized native payment differs from the original withdrawal");
+        } else {
+            String contract=asset.tokenIdentifier();
+            String expectedInput="0xa9059cbb"+"0".repeat(24)
+                    +recipient.substring(2)+String.format("%064x",amountAtomic);
+            require(contract.equalsIgnoreCase(receipt.path("to").asText())
+                    && contract.equalsIgnoreCase(transaction.path("to").asText())
+                    && quantity(transaction.path("value")).signum()==0
+                    && expectedInput.equalsIgnoreCase(transaction.path("input").asText())
+                    && directTransferLogMatches(receipt,contract,owner,recipient,amountAtomic),
+                    "finalized token payment differs from the original withdrawal");
+        }
+        var latestBlock=reads.rpc("eth_getBlockByNumber",List.of("latest",false));
+        require(latestBlock.isObject() && latestBlock.path("hash").asText().matches("0x[0-9a-fA-F]{64}"),
+                "independent latest EVM balance block is unavailable");
+        BigInteger latestHeight=quantity(latestBlock.path("number"));
+        require(latestHeight.bitLength()<=63 && latestHeight.compareTo(finalHeight)>=0,
+                "latest EVM balance is behind the finalized receipt");
+        String latestNumber=latestBlock.path("number").asText();
+        String latestHash=latestBlock.path("hash").asText().toLowerCase(Locale.ROOT);
+        evmCode(reads,balanceKey,balanceOwner,latestNumber,false);
+        BigInteger nativeAmount=quantity(reads.rpc("eth_getBalance",List.of(balanceOwner,latestNumber)));
+        BigInteger assetAmount=asset.tokenIdentifier()==null?nativeAmount
+                :quantity(reads.rpc("eth_call",List.of(Map.of("to",asset.tokenIdentifier(),
+                        "data","0x70a08231"+"0".repeat(24)+balanceOwner.substring(2)),latestNumber)));
+        var latestAgain=reads.rpc("eth_getBlockByNumber",List.of(latestNumber,false));
+        require(latestHash.equalsIgnoreCase(latestAgain.path("hash").asText())
+                && latestNumber.equals(latestAgain.path("number").asText()),
+                "latest EVM balance anchor changed during observation");
+        var finalAgain=reads.rpc("eth_getBlockByNumber",List.of(finalNumber,false));
+        require(finalHash.equalsIgnoreCase(finalAgain.path("hash").asText())
+                && finalNumber.equals(finalAgain.path("number").asText()),
+                "finalized EVM receipt anchor changed during balance observation");
+        return new FinalizedSpend(owner,recipient,txHash.toLowerCase(Locale.ROOT),amountAtomic,
+                assetAmount,nativeAmount,receiptHeight.longValueExact(),
+                receipt.path("blockHash").asText().toLowerCase(Locale.ROOT),
+                latestHeight.longValueExact(),latestHash,clock.instant());
+    }
+    private static boolean directTransferLogMatches(JsonNode receipt,String contract,String source,
+            String recipient,BigInteger amountAtomic) {
+        var logs=receipt.path("logs");
+        if(!logs.isArray() || logs.size()>1000)return false;
+        String event="0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+        String fromTopic="0x"+"0".repeat(24)+source.substring(2);
+        String toTopic="0x"+"0".repeat(24)+recipient.substring(2);
+        int matches=0;
+        for(var log:logs) {
+            var topics=log.path("topics");
+            if(!contract.equalsIgnoreCase(log.path("address").asText()) || !topics.isArray()
+                    || topics.size()!=3 || !event.equalsIgnoreCase(topics.path(0).asText())
+                    || !fromTopic.equalsIgnoreCase(topics.path(1).asText()))continue;
+            if(log.path("removed").asBoolean()
+                    || !receipt.path("transactionHash").asText().equalsIgnoreCase(log.path("transactionHash").asText())
+                    || !receipt.path("blockHash").asText().equalsIgnoreCase(log.path("blockHash").asText())
+                    || !receipt.path("blockNumber").asText().equals(log.path("blockNumber").asText())
+                    || !toTopic.equalsIgnoreCase(topics.path(2).asText())
+                    || !amountAtomic.equals(quantity(log.path("data"))))return false;
+            matches++;
+        }
+        return matches==1;
+    }
+    public record FinalizedSpend(String sourceAddress,String recipient,String txHash,BigInteger amountAtomic,
+            BigInteger availableAtomic,BigInteger nativeAtomic,long receiptBlockHeight,
+            String receiptBlockHash,long observedBlockHeight,String observedBlockHash,Instant observedAt) { }
+    private Balance observeVerified(ApprovalAssetSnapshot asset,RegisteredMpcKey key,String owner,
+                                    MpcClient.Request originalMoneroObservation,boolean quarantinedRead) {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"independent balance queries require no database transaction");
-        require(RegisteredMpcAddresses.matches(key,asset,owner),"operating balance owner differs from the independently enrolled key");
+        require(quarantinedRead?RegisteredMpcAddresses.matchesIdentity(key,asset,owner)
+                        :RegisteredMpcAddresses.matches(key,asset,owner),
+                "operating balance owner differs from the independently enrolled key");
         Instant started=clock.instant();var chain=ChainType.valueOf(asset.chain());Amounts amounts;
-        if(chain.isEvm())amounts=evm(asset,owner);
+        if(chain.isEvm())amounts=evm(asset,key,owner,quarantinedRead);
         else amounts=switch(chain) {
             case ADA -> cardano(asset,owner);
             case SUI -> sui(asset,owner);
@@ -48,15 +209,54 @@ public class ApprovalOperatingBalanceReader {
             case HYPERCORE -> hyperCore(asset,owner);
             default -> throw new IllegalArgumentException("UTXO operating balance requires the actual fixed live input set");
         };
-        return new Balance(asset.chain(),asset.networkIdentity(),asset.symbol(),asset.decimals(),asset.nativeDecimals(),key.keyId(),owner,amounts.available(),amounts.nativeAmount(),started);
+        return new Balance(asset.chain(),asset.networkIdentity(),asset.symbol(),asset.decimals(),asset.nativeDecimals(),key.keyId(),owner,amounts.available(),amounts.nativeAmount(),started,
+                amounts.accountCodeState(),amounts.delegatedTo(),amounts.observedBlockHash(),amounts.observedBlockHeight());
     }
-    private Amounts evm(ApprovalAssetSnapshot asset,String owner) {
+    private Amounts evm(ApprovalAssetSnapshot asset,RegisteredMpcKey key,String owner,boolean incident) {
         var reads=rpc.open(asset,"DEFAULT");require(asset.networkIdentity().equals("eip155:"+quantity(reads.rpc("eth_chainId",List.of()))),"operating EVM node chain ID differs");
         var block=reads.rpc("eth_getBlockByNumber",List.of("latest",false));require(block.path("hash").asText().matches("0x[0-9a-f]{64}") && block.path("number").isString(),"operating EVM canonical tip missing");String number=block.path("number").asText();
         BigInteger nativeAmount=quantity(reads.rpc("eth_getBalance",List.of(owner,number))),amount=nativeAmount;
         if(asset.tokenIdentifier()!=null)amount=quantity(reads.rpc("eth_call",List.of(Map.of("to",asset.tokenIdentifier(),"data","0x70a08231"+"0".repeat(24)+owner.substring(2)),number)));
-        return new Amounts(amount,nativeAmount);
+        var code=evmCode(reads,key,owner,number,incident);
+        var confirmed=reads.rpc("eth_getBlockByNumber",List.of(number,false));
+        require(block.path("hash").asText().equalsIgnoreCase(confirmed.path("hash").asText())
+                && number.equals(confirmed.path("number").asText()),
+                "independent EVM balance observation crossed a chain reorganization");
+        BigInteger height=quantity(block.path("number"));
+        require(height.bitLength()<=63,"independent EVM block height is out of range");
+        String hash=block.path("hash").asText().toLowerCase(Locale.ROOT);
+        return new Amounts(amount,nativeAmount,code.state(),code.delegatedTo(),hash,height.longValueExact());
     }
+    private static EvmCode evmCode(ApprovalChainRpcClient.Reads reads,RegisteredMpcKey key,
+            String owner,String blockNumber,boolean incident) {
+        String raw=reads.rpc("eth_getCode",List.of(owner,blockNumber)).asText();
+        require(raw.matches("0x(?:[0-9a-fA-F]{2}){0,65536}"),
+                "independent EVM account code is malformed or oversized");
+        if(raw.equals("0x"))return new EvmCode("EMPTY",null);
+        if(!raw.matches("(?i)0xef0100[0-9a-f]{40}")) {
+            require(incident,"hot wallet account has unrecognized executable code");
+            return new EvmCode("UNRECOGNIZED_CODE",null);
+        }
+        String delegate="0x"+raw.substring(8).toLowerCase(Locale.ROOT);
+        if(!incident) {
+            boolean approved=false;
+            for(String purpose:List.of("payoutDelegate","collectionDelegate")) {
+                String installed=reads.optionalParameter(purpose+"."+key.tenantId());
+                if(installed==null || !delegate.equalsIgnoreCase(installed))continue;
+                String expectedHash=reads.optionalParameter(purpose+"CodeHash."+key.tenantId());
+                require(expectedHash!=null && expectedHash.matches("(?i)0x[0-9a-f]{64}"),
+                        "installed hot wallet delegate code hash is missing");
+                String delegateCode=reads.rpc("eth_getCode",List.of(delegate,blockNumber)).asText();
+                require(delegateCode.matches("0x(?:[0-9a-fA-F]{2}){1,65536}")
+                        && expectedHash.equalsIgnoreCase(Hash.sha3(delegateCode)),
+                        "hot wallet delegate bytecode differs from independent policy");
+                approved=true;break;
+            }
+            require(approved,"hot wallet delegates to an unapproved EIP-7702 implementation");
+        }
+        return new EvmCode("EIP7702_DELEGATED",delegate);
+    }
+    private record EvmCode(String state,String delegatedTo) { }
     private Amounts aptos(ApprovalAssetSnapshot asset,String owner) {
         var reads=rpc.open(asset,"DEFAULT");var ledger=reads.ledger();require(asset.networkIdentity().equals("aptos:"+integer(ledger.path("chain_id"))),"operating Aptos REST chain ID differs");
         var nativeResult=reads.rest("/view",Map.of("function","0x1::coin::balance","type_arguments",List.of("0x1::aptos_coin::AptosCoin"),"arguments",List.of(owner)));
@@ -205,7 +405,12 @@ public class ApprovalOperatingBalanceReader {
     private static BigInteger quantity(JsonNode value){require(value.isString() && value.asText().matches("0x[0-9a-fA-F]{1,64}"),"independent balance is not a bounded hex integer");return Numeric.toBigInt(value.asText());}
     private static BigInteger decimalAtomic(JsonNode value,int decimals){require(value.isNumber() || value.isString(),"independent decimal balance missing");var decimal=new BigDecimal(value.asText());require(decimal.signum()>=0 && decimal.precision()<=80 && decimal.scale()<=36 && decimal.scale()>=-80,"independent decimal balance out of range");return decimal.movePointRight(decimals).toBigIntegerExact();}
     private static BigInteger cardanoInteger(Cardano.BigInt value){var amount=switch(value.getBigIntCase()){case INT->BigInteger.valueOf(value.getInt());case BIG_U_INT->new BigInteger(1,value.getBigUInt().toByteArray());default->throw new IllegalArgumentException("Cardano owned balance integer absent/negative");};require(amount.signum()>=0,"negative Cardano owned balance");return amount;}
-    private record Amounts(BigInteger available,BigInteger nativeAmount){private Amounts {require(available.signum()>=0 && nativeAmount.signum()>=0,"negative independent balance");}}
-    public record Balance(String chain,String networkIdentity,String symbol,int decimals,int nativeDecimals,UUID keyId,String owner,BigInteger availableAtomic,BigInteger nativeAtomic,Instant observedAt) { }
+    private record Amounts(BigInteger available,BigInteger nativeAmount,String accountCodeState,
+                           String delegatedTo,String observedBlockHash,Long observedBlockHeight){
+        private Amounts(BigInteger available,BigInteger nativeAmount){this(available,nativeAmount,null,null,null,null);}
+        private Amounts {require(available.signum()>=0 && nativeAmount.signum()>=0,"negative independent balance");}
+    }
+    public record Balance(String chain,String networkIdentity,String symbol,int decimals,int nativeDecimals,UUID keyId,String owner,BigInteger availableAtomic,BigInteger nativeAtomic,Instant observedAt,
+                          String accountCodeState,String delegatedTo,String observedBlockHash,Long observedBlockHeight) { }
     private static void require(boolean value,String message){if(!value)throw new IllegalArgumentException(message);}
 }

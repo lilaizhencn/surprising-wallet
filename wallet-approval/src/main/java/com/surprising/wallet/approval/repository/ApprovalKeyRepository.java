@@ -43,6 +43,17 @@ public class ApprovalKeyRepository {
                 where tenant_id=? and key_id=? and epoch=? and public_key_hex=? and state='ACTIVE'
                 """,r.epoch(),json.writeValueAsString(r),json.writeValueAsString(ceremony.observations()),previous.tenantId(),previous.keyId(),previous.epoch(),previous.publicKeyHex());
     }
+    public int quarantine(UUID tenant, UUID key, String descriptorHash) {
+        return jdbc.update("""
+                update approval.key set state='DISABLED', quarantine_hash=?, updated_at=now()
+                where tenant_id=? and key_id=? and state in ('ACTIVE','DISABLED') and quarantine_hash is null
+                """, descriptorHash, tenant, key);
+    }
+    public Optional<String> quarantineHash(UUID tenant, UUID key) {
+        var values = jdbc.query("select quarantine_hash from approval.key where tenant_id=? and key_id=?",
+                (r,n)->r.getString(1), tenant, key);
+        return values.isEmpty() ? Optional.empty() : Optional.ofNullable(values.getFirst());
+    }
     private static RegisteredMpcKey map(ResultSet r) throws SQLException {
         return new RegisteredMpcKey(r.getObject("tenant_id",UUID.class),r.getObject("key_id",UUID.class),r.getString("key_group"),r.getString("algorithm"),
                 r.getInt("epoch"),r.getString("public_key_hex"),r.getString("public_address"),r.getString("state"));

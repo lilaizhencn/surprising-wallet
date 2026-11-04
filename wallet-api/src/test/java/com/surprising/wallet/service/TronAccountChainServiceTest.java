@@ -11,6 +11,7 @@ import com.surprising.wallet.chain.tron.*;
 import com.surprising.wallet.common.chain.*;
 import com.surprising.wallet.model.mpc.*;
 import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.TronTransactionRepository;
 import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import java.math.BigDecimal;
@@ -112,12 +113,20 @@ class TronAccountChainServiceTest {
         final TronClientFactory factory=mock(TronClientFactory.class);
         final TronTridentClient client=mock(TronTridentClient.class);
         final TronSubmissionService submissions=mock(TronSubmissionService.class);
+        final ChainProfileRepository profiles=mock(ChainProfileRepository.class);
+        final HotWalletBroadcastFence broadcastFence=mock(HotWalletBroadcastFence.class);
         final TronAccountChainService service=new TronAccountChainService(collections,submissions,assets,factory,
-                new TronTransactionService(),new TronTrc20Service());
+                new TronTransactionService(),new TronTrc20Service(),profiles,broadcastFence);
         TronSigningPayload payload;MpcSignRequest request;MpcTronTransactionCodec.Signed signed;
         long timestamp=System.currentTimeMillis();
         Fixture() throws Exception {
+            when(profiles.findAccountByChain("TRON")).thenReturn(Optional.of(profile));
+            when(broadcastFence.withPayoutBroadcastPermit(any(),anyString(),any(),any()))
+                    .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(3)).send());
+            when(broadcastFence.withAccountCollectionBroadcastPermit(any(),anyString(),anyString(),anyString(),anyString(),any(),any()))
+                    .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(6)).send());
             when(factory.create()).thenReturn(client);
+            when(submissions.intent(any())).thenAnswer(call->Optional.ofNullable(request));
             when(collections.claimSigningDurable(any(),anyString(),anyString())).thenReturn(1);
             when(assets.isNative(same(profile),anyString())).thenAnswer(call->"TRX".equals(call.getArgument(1)));
             when(assets.requireToken(profile,"USDT")).thenReturn(TokenDefinition.builder().symbol("USDT").contractAddress(recipient).decimals(6).build());

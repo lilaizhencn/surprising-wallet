@@ -20,4 +20,7 @@ public class ApprovalTenantRepository {
     public boolean lockActive(UUID tenant) {
         return !jdbc.queryForList("select id from approval.tenant where id=? and status='ACTIVE' for no key update", UUID.class, tenant).isEmpty();
     }
+    public boolean lockExisting(UUID tenant) {
+        return !jdbc.queryForList("select id from approval.tenant where id=? for no key update", UUID.class, tenant).isEmpty();
+    }
 }

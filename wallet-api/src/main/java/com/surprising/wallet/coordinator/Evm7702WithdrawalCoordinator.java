@@ -14,7 +14,9 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -22,6 +24,8 @@ import com.surprising.wallet.chain.evm.Evm7702SignedBatchTransaction;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.service.CustodyGasAccountingService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
+import com.surprising.wallet.service.HotWalletReservationLifecycleService;
+import com.surprising.wallet.service.HotWalletPayoutClaimSourceService;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.Evm7702ConfigurationService;
 import com.surprising.wallet.repository.Evm7702ConfigRepository.Configuration;
@@ -60,6 +64,9 @@ public class Evm7702WithdrawalCoordinator {
     private final tools.jackson.databind.ObjectMapper json;
     private final EvmNonceRepository nonces;
     private final WithdrawalSettlementService settlements;
+    private final HotWalletReservationLifecycleService hotReservations;
+    private final HotWalletPayoutClaimSourceService hotClaimSources;
+    private final CustodyTenantChainTableRepository tenantChains;
     private final Evm7702ConfigurationService configurations;
 
     public static com.surprising.wallet.service.Evm7702SigningService.Operation operation(Batch batch) {
@@ -178,6 +185,7 @@ public class Evm7702WithdrawalCoordinator {
                     if (withdrawalOrderRepository.markFailed(item.tenantId(), item.withdrawalOrderId(), truncate(error, 1000)) != 1) {
                         throw new IllegalStateException("unable to mark failed payout withdrawal");
                     }
+                    hotReservations.close(item.tenantId(), batch.chain(), item.orderNo(), "FAILED");
                 } else if (withdrawalOrderRepository.markRetrying(item.tenantId(), item.withdrawalOrderId(), truncate(error, 1000)) != 1) {
                     throw new IllegalStateException("unable to retry failed payout withdrawal");
                 }
@@ -206,15 +214,17 @@ public class Evm7702WithdrawalCoordinator {
         }
         batchAttemptRepository.markConfirmed(batch.tenantId(), batch.batchId(), txHash);
         var row = batchRepository.find(batch.tenantId(), batch.batchId()).orElseThrow();
-        payoutAccountRepository.markCompleted(
+        if(payoutAccountRepository.markCompleted(
                 batch.tenantId(),
                 row.chain(),
+                row.hotWallet(),
                 Boolean.TRUE.equals(row.authorizationIncluded()),
                 row.authorizationNonce(),
                 row.operationNonce().add(BigInteger.ONE),
                 txHash,
                 claimed(batch.tenantId(),batch.batchId()).orElseThrow().config().payoutDelegateAddress(),
-                row.delegateVersion());
+                row.delegateVersion())!=1)
+            throw new IllegalStateException("original payout account completion projection is missing");
         gasAccounting.settle(batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(), actualFee, "EVM_RECEIPT", txHash);
     }
 
@@ -253,6 +263,7 @@ public class Evm7702WithdrawalCoordinator {
                 if (withdrawalOrderRepository.markFailed(item.tenantId(), item.withdrawalOrderId(), truncate(error, 1000)) != 1) {
                     throw new IllegalStateException("unable to fail reverted payout withdrawal");
                 }
+                hotReservations.close(item.tenantId(), batch.chain(), item.orderNo(), "FAILED");
             } else if (withdrawalOrderRepository.markRetrying(item.tenantId(), item.withdrawalOrderId(), truncate(error, 1000)) != 1) {
                 throw new IllegalStateException("unable to retry reverted payout withdrawal");
             }
@@ -280,15 +291,17 @@ public class Evm7702WithdrawalCoordinator {
         batchAttemptRepository.markFailed(batch.tenantId(), batch.batchId(), txHash, "OUTER_REVERTED", errorHash);
         var row = batchRepository.find(batch.tenantId(), batch.batchId()).orElseThrow();
         String delegateAddress=claimed(batch.tenantId(),batch.batchId()).orElseThrow().config().payoutDelegateAddress();
-        payoutAccountRepository.markReverted(
+        if(payoutAccountRepository.markReverted(
                 batch.tenantId(),
                 row.chain(),
+                row.hotWallet(),
                 Boolean.TRUE.equals(row.authorizationIncluded()),
                 row.authorizationNonce(),
                 row.operationNonce(),
                 txHash,
                 delegateAddress,
-                row.delegateVersion());
+                row.delegateVersion())!=1)
+            throw new IllegalStateException("original payout account revert projection is missing");
         gasAccounting.settle(batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(), actualFee, "EVM_REVERTED_RECEIPT", txHash);
     }
 
@@ -323,6 +336,7 @@ public class Evm7702WithdrawalCoordinator {
             } else if (!isTerminalWithdrawal(item)) {
                 throw new IllegalStateException("pre-broadcast payout withdrawal failure transition lost");
             }
+            hotReservations.close(item.tenantId(), batch.chain(), item.orderNo(), "FAILED");
             int itemUpdated = batchItemRepository.markPreBroadcastFailed(
                     item.tenantId(),
                     item.batchId(),
@@ -364,8 +378,11 @@ public class Evm7702WithdrawalCoordinator {
         List<TokenConfiguration> tokens = tokenConfigRepository.listEnabled(chain, network);
         var candidates = withdrawalOrderRepository.listClaimable(chain, 500);
         CandidateGroup group = null;
+        Map<UUID,Boolean> openTenants=new HashMap<>();
         for (var order : candidates) {
-            CandidateGroup candidate = mapCandidate(order, chain, assets, tokens);
+            if (!openTenants.computeIfAbsent(order.getTenantId(),
+                    tenant -> tenantChains.lockWithdrawalRoutingEnabled(tenant, chain))) continue;
+            CandidateGroup candidate = mapCandidate(order, chain, network, assets, tokens);
             if (candidate == null) {
                 continue;
             }
@@ -430,13 +447,14 @@ public class Evm7702WithdrawalCoordinator {
         }
         UUID batchId = UUID.randomUUID();
         String batchHash = Numeric.toHexString(Hash.sha3((group.tenantId() + ":WITHDRAWAL:" + batchId).getBytes(StandardCharsets.UTF_8)));
-        payoutAccountRepository.upsert(
+        if(payoutAccountRepository.upsert(
                 UUID.randomUUID(),
                 group.tenantId(),
                 chain,
                 network,
                 group.hotChainAddress().getId(),
-                group.hotWallet());
+                group.hotWallet())!=1)
+            throw new IllegalStateException("payout authority projection changed identity");
         Instant deadline = Instant.now().plusSeconds(config.signatureTtlSeconds());
         Batch batch = new Batch(
                 batchId,
@@ -591,6 +609,7 @@ public class Evm7702WithdrawalCoordinator {
     private CandidateGroup mapCandidate(
             WithdrawalOrderRecord order,
             String chain,
+            String network,
             List<ChainAsset> assets,
             List<TokenConfiguration> tokens) {
         UUID tenantId = order.getTenantId();
@@ -608,7 +627,11 @@ public class Evm7702WithdrawalCoordinator {
                 tenantId,
                 chain,
                 String.valueOf(order.getFromAddress())).orElse(null);
-        if (hot == null || !hasActiveGasAddress(tenantId, chain, String.valueOf(order.getFromAddress()))) {
+        if (hot == null) return null;
+        boolean claimable="HOT_WITHDRAW".equals(hot.getWalletRole())
+                ? hotClaimSources.isClaimable(tenantId, chain, network, assetSymbol, hot)
+                : hasActiveGasAddress(tenantId, chain, String.valueOf(order.getFromAddress()));
+        if (!claimable) {
             return null;
         }
         return new CandidateGroup(

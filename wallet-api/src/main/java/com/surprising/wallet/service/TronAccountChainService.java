@@ -15,6 +15,7 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,8 @@ class TronAccountChainService {
     private final TronClientFactory tronClientFactory;
     private final TronTransactionService tronTransactionService;
     private final TronTrc20Service tronTrc20Service;
+    private final ChainProfileRepository profiles;
+    private final HotWalletBroadcastFence broadcastFence;
 
     String broadcast(
             AccountChainProfile profile,
@@ -114,7 +117,13 @@ class TronAccountChainService {
             if(MpcTronTransactionCodec.restore(payload.unsigned()).getRawData().getExpiration()<=System.currentTimeMillis())
                 throw new IllegalStateException("TRON accepted transaction expired; chain reconciliation is required");
             var transaction=Chain.Transaction.parseFrom(HexFormat.of().parseHex(signed.transactionHex()));
-            String hash=client.broadcast(transaction);
+            var sourceKeyId=submissions.intent(operation).orElseThrow().command().keyId();
+            String hash=operation.kind()==TronSubmissionService.Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(operation.tenantId(),"TRON",
+                            profiles.findAccountByChain("TRON").orElseThrow().getNetwork(),operation.reference(),
+                            signed.txId(),sourceKeyId,()->client.broadcast(transaction))
+                    :broadcastFence.withPayoutBroadcastPermit(operation.tenantId(),"TRON",sourceKeyId,
+                            ()->client.broadcast(transaction));
             if(!signed.txId().equals(hash)) throw new IllegalStateException("TRON broadcast response differs from committed hash");
         }
         submissions.observed(operation,signed.txId());

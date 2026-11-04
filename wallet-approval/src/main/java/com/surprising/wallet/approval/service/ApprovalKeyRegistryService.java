@@ -5,6 +5,7 @@ import com.surprising.wallet.approval.model.RegisteredMpcKey;
 import com.surprising.wallet.approval.repository.*;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.signing.MpcClient;
+import com.surprising.wallet.common.approval.ApprovalKeyQuarantine;
 import java.util.HexFormat;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -52,6 +53,26 @@ public class ApprovalKeyRegistryService {
             audit.insert(request.tenantId(),"SERVICE",serviceIdentity,"KEY.REGISTER",request.keyId(),
                     Map.of("keyGroup",group,"epoch",request.epoch(),"sessionId",request.sessionId().toString(),"holders",ceremony.observations()));
             return keys.find(request.tenantId(),request.keyId()).orElseThrow();
+        });
+    }
+    public ApprovalKeyQuarantine.Receipt quarantine(ApprovalKeyQuarantine event, String serviceIdentity) {
+        return transaction.execute(status -> {
+            require(tenants.lockExisting(event.tenantId()), "independent tenant is not enrolled");
+            var key = keys.lock(event.tenantId(), event.keyId()).orElseThrow(
+                    () -> new IllegalArgumentException("independent key is not registered"));
+            String descriptorHash = event.hash();
+            String originalHash = keys.quarantineHash(event.tenantId(), event.keyId()).orElse(null);
+            if (originalHash != null) {
+                require(originalHash.equals(descriptorHash) && key.state().equals("DISABLED"),
+                        "original key quarantine descriptor cannot change");
+            } else {
+                require(keys.quarantine(event.tenantId(), event.keyId(), descriptorHash) == 1,
+                        "independent key quarantine raced");
+                audit.insert(event.tenantId(), "SERVICE", serviceIdentity, "KEY.WALLET_QUARANTINE", event.keyId(),
+                        Map.of("descriptorHash", descriptorHash, "walletActorId", event.actorId(),
+                                "walletQuarantinedAt", event.quarantinedAt(), "reason", event.reason()));
+            }
+            return new ApprovalKeyQuarantine.Receipt(event.tenantId(), event.keyId(), descriptorHash);
         });
     }
     private static MpcClient.Algorithm groupAlgorithm(String group) {

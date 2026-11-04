@@ -68,6 +68,8 @@ class TronSubmissionIntegrationTest {
         context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class,
+                ()->com.surprising.wallet.testutil.CustodyTestSupport.hotReservationLifecycle(jdbc));
         context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(ObjectMapper.class,()->json);context.registerBean(TronSubmissionService.class);context.refresh();
         service=context.getBean(TronSubmissionService.class);

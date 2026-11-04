@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
+import com.surprising.wallet.common.approval.ApprovalKeyQuarantine;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import tools.jackson.databind.JsonNode;
@@ -71,6 +72,8 @@ public final class MpcClient implements AutoCloseable {
         public Result { monero = monero == null ? null : monero.deepCopy(); }
         @Override public JsonNode monero() { return monero == null ? null : monero.deepCopy(); }
     }
+    public record QuarantineReceipt(UUID tenantId, UUID keyId, String descriptorHash,
+                                    boolean quarantined, String partyId) { }
 
     /** A call failure never proves that a signing request was not accepted. */
     public static final class CallException extends RuntimeException {
@@ -120,6 +123,31 @@ public final class MpcClient implements AutoCloseable {
     public Result result(Request request) {
         return invoke("/v1/results", request, Map.of("sessionId", request.sessionId().toString(),
                 "tenantId", request.tenantId().toString(), "keyId", request.keyId().toString()));
+    }
+
+    /** Durable one-way fence on this holder; repeating the original event is safe. */
+    public QuarantineReceipt quarantineKey(ApprovalKeyQuarantine event) {
+        Objects.requireNonNull(event, "key quarantine event is required");
+        var body = Map.of("tenantId", event.tenantId().toString(), "keyId", event.keyId().toString(),
+                "descriptorHash", event.hash());
+        try {
+            var request = HttpRequest.newBuilder(node.endpoint().resolve("/v1/key-quarantines"))
+                    .timeout(timeout).header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(json.writeValueAsBytes(body))).build();
+            var response = http.send(request, HttpResponse.BodyHandlers.limiting(
+                    HttpResponse.BodyHandlers.ofByteArray(), 4096));
+            if (response.statusCode() != 200) throw new CallException("MPC holder rejected key quarantine", null);
+            var receipt = json.readValue(response.body(), QuarantineReceipt.class);
+            require(receipt.quarantined() && event.tenantId().equals(receipt.tenantId())
+                    && event.keyId().equals(receipt.keyId()) && event.hash().equals(receipt.descriptorHash())
+                    && node.partyId().equals(receipt.partyId()), "MPC holder quarantine receipt differs");
+            return receipt;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new CallException("MPC holder quarantine interrupted", interrupted);
+        } catch (IOException failure) {
+            throw new CallException("MPC holder quarantine unavailable", failure);
+        }
     }
 
     private Result invoke(String path, Request expected, Map<String, ?> body) {

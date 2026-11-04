@@ -38,6 +38,7 @@ import static org.mockito.Mockito.*;
 @EnabledIfEnvironmentVariable(named="SW_TEST_CUSTODY_DB_URL",matches=".+")
 class EvmSubmissionIntegrationTest {
     private static final UUID TENANT=UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private final UUID actor=UUID.randomUUID();
     private static final String RECIPIENT="0x"+"34".repeat(20);
     private final Credentials key=newSigner(); // Generated in memory for this isolated test only.
     private final String sender=key.getAddress().toLowerCase(Locale.ROOT);
@@ -72,6 +73,11 @@ class EvmSubmissionIntegrationTest {
         var ds=CustodyIntegrationDatabase.dataSource(); CustodyIntegrationDatabase.reset(ds);
         jdbc=new JdbcTemplate(ds);
         jdbc.update("update chain_profile set enabled=(network='sepolia'),withdraw_enabled=true where chain='ETH'");
+        jdbc.update("insert into custody_tenant_user(id,tenant_id,email,display_name,password_hash,role,status) "
+                +"values (?,?,?,'EVM test admin','test-only-hash','TENANT_ADMIN','ACTIVE')",
+                actor,TENANT,"evm-submission-"+actor+"@example.test");
+        new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc)
+                .setStatus(TENANT,"ETH","ACTIVE",actor);
         orders=new WithdrawalOrderRepository(jdbc); transactions=new EvmTransactionRepository(jdbc);
         nonces=new EvmNonceRepository(jdbc); collections=new CollectionRecordRepository(jdbc);
         recoveries=new CustodyAssetRecoveryRepository(jdbc);
@@ -126,12 +132,16 @@ class EvmSubmissionIntegrationTest {
         context.registerBean(EvmNonceRepository.class,()->nonces);
         context.registerBean(CustodyAssetRecoveryRepository.class,()->recoveries);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(com.surprising.wallet.repository.CustodyHotWalletWithdrawalReservationRepository.class,
+                ()->new com.surprising.wallet.repository.CustodyHotWalletWithdrawalReservationRepository(jdbc));
         context.registerBean(WalletMpcSignRequestRepository.class,()->requests);
         context.registerBean(MpcSigningService.class,()->signing);
         context.registerBean(MpcNodes.class,()->mpcNodes);
         context.registerBean(ObjectMapper.class,()->mapper);
         context.registerBean(ChainProfileRepository.class,()->new ChainProfileRepository(jdbc));
-        context.registerBean(EvmSubmissionService.class); context.registerBean(WithdrawalSettlementService.class);
+        context.registerBean(EvmSubmissionService.class);
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class);
+        context.registerBean(WithdrawalSettlementService.class);
         context.refresh(); submissions=context.getBean(EvmSubmissionService.class); settlements=context.getBean(WithdrawalSettlementService.class);
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,'ETH','ETH','principal',5,0,5)",TENANT);
         orders.createForTenant(TENANT,orderNo,42L,"ETH","ETH",sender,"principal",RECIPIENT,BigDecimal.ONE,BigDecimal.ZERO);
@@ -289,6 +299,29 @@ class EvmSubmissionIntegrationTest {
         assertEquals("BROADCAST",recoveries.require(id).status());
     }
 
+    @Test void signedAssetRecoveryCannotFirstBroadcastAfterTenantEmergencyPause() throws Exception {
+        var operation=recovery();
+        var request=submissions.reserve(operation,"ETH",source,BigInteger.ZERO,nonce->EvmSigningPayload.of(
+                RawTransaction.createEtherTransaction(nonce,BigInteger.valueOf(1_000_000_000L),
+                        BigInteger.valueOf(21_000),RECIPIENT,BigInteger.TEN.pow(18)),
+                11155111L,"ETH",null,BigDecimal.ONE,18,18));
+        submissions.sign(TENANT,request.id());
+        var prepared=submissions.commit(operation,"ETH",request.id());
+        var chainRows=new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc);
+        assertEquals(1,chainRows.setWithdrawalPaused(TENANT,"ETH",true,actor));
+        var broadcasts=new AtomicInteger();
+        startRpc(rpc->switch(String.valueOf(rpc.get("method"))) {
+            case "eth_getTransactionByHash" -> null;
+            case "eth_getBalance" -> "0x56bc75e2d63100000";
+            case "eth_sendRawTransaction" -> { broadcasts.incrementAndGet(); yield prepared.getTxHash(); }
+            default -> throw new AssertionError("unexpected recovery RPC: "+rpc.get("method"));
+        });
+
+        assertThrows(IllegalStateException.class,()->service().recover(operation,"ETH"));
+        assertEquals(0,broadcasts.get());
+        assertEquals(prepared.getTxHash(),recoveries.require(UUID.fromString(operation.reference())).recoveryTxHash());
+    }
+
     @Test void recoveryBeforeAnyAcceptedIntentMayReturnToApproval() {
         var operation=recovery();
         UUID id=UUID.fromString(operation.reference());
@@ -413,7 +446,14 @@ class EvmSubmissionIntegrationTest {
         when(nodes.withFailover(eq("ETH"),anyString(),any())).thenAnswer(call->((Function<ChainRpcNode,Object>)call.getArgument(2)).apply(node));
         when(nodes.authHeaders(node)).thenReturn(Map.of("Authorization","Bearer test-only-rpc"));
         return new EvmAccountTransactionService(orders,collections,transactions,new ChainProfileRepository(jdbc),new ChainAssetRepository(jdbc),
-                nodes,new EvmTransactionBuilder(),http,settlements,submissions,recoveries);
+                nodes,new EvmTransactionBuilder(),http,settlements,submissions,recoveries,
+                new com.surprising.wallet.service.HotWalletBroadcastFence(
+                        new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyHotWalletRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+                        new com.surprising.wallet.repository.ChainAddressRepository(jdbc),collections,
+                        new com.surprising.wallet.repository.CustodyHotWalletInventoryObservationRepository(jdbc),
+                        new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource())));
     }
     private void receiptRpc(String hash,boolean success,boolean canonical) throws Exception {
         String blockHash="0x"+"aa".repeat(32);

@@ -59,10 +59,15 @@ class MoneroSubmissionIntegrationTest {
         context.registerBean(PlatformTransactionManager.class,()->fixture.manager);
         context.registerBean(WithdrawalOrderRepository.class,()->orders);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(CustodyHotWalletWithdrawalReservationRepository.class,()->new CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(HotWalletReservationLifecycleService.class);
         context.registerBean(WithdrawalSettlementService.class);context.refresh();
         service=new MoneroSubmissionService(orders,new CollectionRecordRepository(jdbc),transactions,new WalletMpcSignRequestRepository(jdbc),
                 new WalletMpcKeyEpochRepository(jdbc,json),signing,fixture.nodes,new ChainProfileRepository(jdbc),new ChainAddressRepository(jdbc),
-                heights,new ChainAssetRepository(jdbc),context.getBean(WithdrawalSettlementService.class),CustodyTestSupport.gasAccounting(jdbc),json,fixture.manager);
+                heights,new ChainAssetRepository(jdbc),context.getBean(WithdrawalSettlementService.class),CustodyTestSupport.gasAccounting(jdbc),json,fixture.manager,
+                new HotWalletBroadcastFence(new CustodyTenantChainTableRepository(jdbc),new CustodyHotWalletRepository(jdbc),
+                        new CustodyAddressRepository(jdbc),new ChainAddressRepository(jdbc),new CollectionRecordRepository(jdbc),
+                        new CustodyHotWalletInventoryObservationRepository(jdbc),fixture.manager));
         createOrder(REFERENCE);
     }
     @AfterEach void close(){if(context!=null)context.close();}
@@ -137,11 +142,11 @@ class MoneroSubmissionIntegrationTest {
     }
     @Test void relayRequiresCommittedOriginalSelectionAndNeverRunsInsideATransaction() {
         var request=service.reserve(op(),source,draft());selection(request,HASH);
-        assertThrows(IllegalStateException.class,()->service.relay(op()));verify(signing,never()).relayMonero(any(),any(),anyString(),any());
+        assertThrows(IllegalStateException.class,()->service.relay(op()));verify(signing,never()).relayMonero(any(),any(),anyString(),any(),any());
         service.commit(op(),request.id());
         doAnswer(call->{assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
             assertEquals(HASH,orders.findTxHash("XMR",REFERENCE,TENANT).orElseThrow());throw new MpcPendingException(request.id(),"RELAY_UNKNOWN");
-        }).when(signing).relayMonero(TENANT,request.id(),HASH,fixture.nodes);
+        }).when(signing).relayMonero(eq(TENANT),eq(request.id()),eq(HASH),eq(fixture.nodes),any());
         assertThrows(MpcPendingException.class,()->service.relay(op()));service.unknown(op(),"lost reply");assertEquals(0,service.releaseUnsigned(op()));
         jdbc.update("update chain_profile set enabled=false,withdraw_confirmations=99 where chain='XMR'");
         jdbc.update("update chain_address set enabled=false where chain='XMR'");service.restoreSent(op(),HASH);

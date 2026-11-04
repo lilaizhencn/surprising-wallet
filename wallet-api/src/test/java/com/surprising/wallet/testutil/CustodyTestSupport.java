@@ -7,6 +7,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /** Explicit construction of custody fixtures; application classes keep one injected constructor. */
 public final class CustodyTestSupport {
+    public static com.surprising.wallet.service.HotWalletWithdrawalRoutingService hotRouting(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.HotWalletWithdrawalRoutingService(
+                new CustodyHotWalletRepository(jdbc), new CustodyHotWalletAssetPolicyRepository(jdbc),
+                new CustodyHotWalletInventoryObservationRepository(jdbc),
+                new CustodyHotWalletWithdrawalReservationRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
+                new WalletMpcKeyRepository(jdbc), new CustodyTenantChainTableRepository(jdbc));
+    }
+
     public static com.surprising.wallet.service.CustodyPoolFundingService poolFunding(org.springframework.jdbc.core.JdbcTemplate jdbc) {
         return new com.surprising.wallet.service.CustodyPoolFundingService(
                 new com.surprising.wallet.repository.LedgerBalanceRepository(jdbc),
@@ -29,7 +38,8 @@ public final class CustodyTestSupport {
         return new com.surprising.wallet.service.CustodyTenantChainService(new CustodyTenantChainTableRepository(jdbc),
                 new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
                 new Evm7702ConfigRepository(jdbc), new CustodyGasAccountRepository(jdbc),
-                new CustodyAddressRepository(jdbc), new CustodyAuditRepository(jdbc), runtime);
+                new CustodyAddressRepository(jdbc), new CustodyAuditRepository(jdbc), runtime,
+                new com.surprising.wallet.repository.CustodyHotWalletRepository(jdbc));
     }
 
     public static com.surprising.wallet.service.CustodyAddressService addresses(JdbcTemplate jdbc,
@@ -149,7 +159,20 @@ public final class CustodyTestSupport {
     }
 
     public static WithdrawalSettlementService settlements(JdbcTemplate jdbc) {
-        return new WithdrawalSettlementService(new WithdrawalOrderRepository(jdbc), new LedgerBalanceRepository(jdbc));
+        return new WithdrawalSettlementService(new WithdrawalOrderRepository(jdbc), new LedgerBalanceRepository(jdbc),
+                hotReservationLifecycle(jdbc));
+    }
+    public static com.surprising.wallet.service.HotWalletReservationLifecycleService hotReservationLifecycle(JdbcTemplate jdbc) {
+        return new com.surprising.wallet.service.HotWalletReservationLifecycleService(
+                new CustodyHotWalletWithdrawalReservationRepository(jdbc),new WithdrawalOrderRepository(jdbc));
+    }
+    public static com.surprising.wallet.service.HotWalletBroadcastFence hotWalletBroadcastFence(
+            JdbcTemplate jdbc,org.springframework.transaction.PlatformTransactionManager manager) {
+        return new com.surprising.wallet.service.HotWalletBroadcastFence(
+                new CustodyTenantChainTableRepository(jdbc),new CustodyHotWalletRepository(jdbc),
+                new CustodyAddressRepository(jdbc),new ChainAddressRepository(jdbc),
+                new CollectionRecordRepository(jdbc),
+                new CustodyHotWalletInventoryObservationRepository(jdbc),manager);
     }
     public static com.surprising.wallet.service.CustodyGasAccountingService gasAccounting(JdbcTemplate jdbc) {
         return new com.surprising.wallet.service.CustodyGasAccountingService(new CustodyGasUsageRepository(jdbc),
@@ -211,7 +234,13 @@ public final class CustodyTestSupport {
               new EvmCollectionBatchRepository(jdbc), new EvmCollectionBatchItemRepository(jdbc),
               new EvmCollectionBatchAttemptRepository(jdbc), new Evm7702ConfigRepository(jdbc),
               coordinator, new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
-              rpc, mpc, crypto, runtime);
+              rpc, mpc, crypto, runtime,
+              new com.surprising.wallet.service.HotWalletBroadcastFence(
+                      new CustodyTenantChainTableRepository(jdbc),new CustodyHotWalletRepository(jdbc),
+                      new CustodyAddressRepository(jdbc),new ChainAddressRepository(jdbc),
+                      new CollectionRecordRepository(jdbc),
+                      new CustodyHotWalletInventoryObservationRepository(jdbc),
+                      new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource())));
   }
 
     public static com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator evmWithdrawals(JdbcTemplate jdbc) {
@@ -241,6 +270,12 @@ public final class CustodyTestSupport {
                 new tools.jackson.databind.ObjectMapper(),
                 new EvmNonceRepository(jdbc),
                 settlements(jdbc),
+                hotReservationLifecycle(jdbc),
+                new com.surprising.wallet.service.HotWalletPayoutClaimSourceService(
+                        new CustodyHotWalletRepository(jdbc),new CustodyAddressRepository(jdbc),
+                        new CustodyHotWalletInventoryObservationRepository(jdbc),
+                        new WalletMpcKeyRepository(jdbc)),
+                new CustodyTenantChainTableRepository(jdbc),
                 new com.surprising.wallet.service.Evm7702ConfigurationService(new Evm7702ConfigRepository(jdbc), new ChainAddressRepository(jdbc)));
     }
   public static com.surprising.wallet.service.Evm7702WithdrawalWorkflowService evmWithdrawalWorkflow(JdbcTemplate jdbc,
@@ -253,6 +288,12 @@ public final class CustodyTestSupport {
               new EvmWithdrawalBatchRepository(jdbc), new EvmWithdrawalBatchItemRepository(jdbc),
               new EvmWithdrawalBatchAttemptRepository(jdbc), new Evm7702ConfigRepository(jdbc),
               coordinator, new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
-              rpc, mpc, crypto, runtime);
+              rpc, mpc, crypto, runtime,
+              new com.surprising.wallet.service.HotWalletBroadcastFence(
+                      new CustodyTenantChainTableRepository(jdbc), new CustodyHotWalletRepository(jdbc),
+                      new CustodyAddressRepository(jdbc),new ChainAddressRepository(jdbc),
+                      new CollectionRecordRepository(jdbc),
+                      new CustodyHotWalletInventoryObservationRepository(jdbc),
+                      new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource())));
   }
 }

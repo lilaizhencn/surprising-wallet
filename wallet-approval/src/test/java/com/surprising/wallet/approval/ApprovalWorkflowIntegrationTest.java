@@ -33,6 +33,14 @@ class ApprovalWorkflowIntegrationTest {
     private static JdbcTemplate jdbc;
     private static com.sun.net.httpserver.HttpServer feeNode;
     private static final java.util.Map<String,java.math.BigInteger> nativeBalances=new java.util.concurrent.ConcurrentHashMap<>(),tokenBalances=new java.util.concurrent.ConcurrentHashMap<>();
+    private static final AtomicReference<String> incidentEvmCode=new AtomicReference<>("0x");
+    private static final String INSTALLED_HOT_DELEGATE="0x5555555555555555555555555555555555555555";
+    private static final AtomicReference<String> installedDelegateCode=new AtomicReference<>("0x6000");
+    private static final AtomicReference<String> evmFollowupHash=new AtomicReference<>("0x"+"a".repeat(64));
+    private static final AtomicReference<String> evmLatestNumber=new AtomicReference<>("0x42");
+    private static final AtomicReference<String> evmLatestHash=new AtomicReference<>("0x"+"a".repeat(64));
+    private static final AtomicReference<tools.jackson.databind.JsonNode> finalizedReceipt=new AtomicReference<>();
+    private static final AtomicReference<tools.jackson.databind.JsonNode> finalizedTransaction=new AtomicReference<>();
     private static ApprovalWorkflowService service;
     private static MutableClock clock;
     private static final UUID tenant=UUID.randomUUID(), other=UUID.randomUUID(), admin=UUID.randomUUID(), reviewer=UUID.randomUUID(), reviewer2=UUID.randomUUID();
@@ -78,8 +86,21 @@ class ApprovalWorkflowIntegrationTest {
             var response=mapper.createObjectNode().put("jsonrpc","2.0");response.set("id",request.path("id"));
             switch(request.path("method").asText()) {
                 case "eth_chainId" -> response.put("result","0xaa36a7");
-                case "eth_getBlockByNumber" -> response.set("result",mapper.createObjectNode().put("hash","0x"+"a".repeat(64)).put("number","0x42"));
+                case "eth_getBlockByNumber" -> {
+                    String tag=request.path("params").path(0).asText();
+                    response.set("result",mapper.createObjectNode()
+                            .put("hash",tag.equals("0x42")?evmFollowupHash.get()
+                                    :tag.equals("latest") || tag.equals(evmLatestNumber.get())
+                                    ?evmLatestHash.get():"0x"+"a".repeat(64))
+                            .put("number",tag.equals("latest") || tag.equals(evmLatestNumber.get())
+                                    ?evmLatestNumber.get():"0x42"));
+                }
                 case "eth_getBalance" -> response.put("result","0x"+nativeBalances.getOrDefault(request.path("params").path(0).asText(),java.math.BigInteger.TEN.pow(20)).toString(16));
+                case "eth_getCode" -> response.put("result",
+                        request.path("params").path(0).asText().equalsIgnoreCase(INSTALLED_HOT_DELEGATE)
+                                ?installedDelegateCode.get():incidentEvmCode.get());
+                case "eth_getTransactionReceipt" -> response.set("result",finalizedReceipt.get());
+                case "eth_getTransactionByHash" -> response.set("result",finalizedTransaction.get());
                 case "eth_call" -> {
                     String callData=request.path("params").path(0).path("data").asText();
                     if(!callData.startsWith("0x70a08231") || callData.length()!=74)throw new IllegalArgumentException("unexpected balance fixture call");
@@ -92,7 +113,10 @@ class ApprovalWorkflowIntegrationTest {
         });feeNode.start();
         context.registerBean(com.surprising.wallet.approval.config.ApprovalChainRpcProperties.class,()->new com.surprising.wallet.approval.config.ApprovalChainRpcProperties(
                 List.of(new com.surprising.wallet.approval.config.ApprovalChainRpcProperties.Profile("ETH","eip155:11155111","DEFAULT","eip155:11155111",
-                    java.net.URI.create("http://127.0.0.1:"+feeNode.getAddress().getPort()),null,java.util.Map.of("feeModel","standard","maximumSignedTransactionBytes","4096"))),Duration.ofSeconds(3)));
+                    java.net.URI.create("http://127.0.0.1:"+feeNode.getAddress().getPort()),null,java.util.Map.of(
+                            "feeModel","standard","maximumSignedTransactionBytes","4096",
+                            "payoutDelegate."+tenant,INSTALLED_HOT_DELEGATE,
+                            "payoutDelegateCodeHash."+tenant,org.web3j.crypto.Hash.sha3("0x6000")))),Duration.ofSeconds(3)));
         context.registerBean(com.surprising.wallet.approval.config.ApprovalAutomationProperties.class,()->new com.surprising.wallet.approval.config.ApprovalAutomationProperties(List.of()));
         context.registerBean(org.springframework.transaction.PlatformTransactionManager.class,()->new DataSourceTransactionManager(data));
         clock=new MutableClock();context.registerBean(Clock.class,()->clock);
@@ -121,7 +145,9 @@ class ApprovalWorkflowIntegrationTest {
     }
     @AfterAll static void stop() { if(context!=null)context.close();if(feeNode!=null)feeNode.stop(0); }
     @BeforeEach void fixture() {
-        clock.time.set(NOW);nativeBalances.clear();tokenBalances.clear();
+        clock.time.set(NOW);nativeBalances.clear();tokenBalances.clear();incidentEvmCode.set("0x");
+        installedDelegateCode.set("0x6000");
+        evmLatestNumber.set("0x42");evmLatestHash.set("0x"+"a".repeat(64));
         org.mockito.Mockito.reset(context.getBean(com.surprising.wallet.approval.gateway.ApprovalUtxoRpcClient.class));
         org.mockito.Mockito.when(context.getBean(com.surprising.wallet.approval.gateway.ApprovalUtxoRpcClient.class).rbfPolicy(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(new com.surprising.wallet.approval.gateway.ApprovalUtxoRpcClient.RbfPolicy(0,0,0));
@@ -136,6 +162,46 @@ class ApprovalWorkflowIntegrationTest {
                     entry[0],tenant,entry[0]+"@example.test","Reviewer","not-a-login-hash",entry[1]);
     }
     private com.surprising.wallet.approval.service.ApprovalMemberService management() { return context.getBean(com.surprising.wallet.approval.service.ApprovalMemberService.class); }
+    @Test void keyQuarantineIsOneWayIdempotentAndBoundToOriginalEvent() {
+        UUID key = UUID.randomUUID();
+        jdbc.update("""
+                insert into approval.key(key_id,tenant_id,key_group,algorithm,epoch,public_key_hex,ceremony_request,observations)
+                values (?,?,'EVM','ECDSA_SECP256K1',1,?,'{}'::jsonb,'[]'::jsonb)
+                """, key, tenant, PUBLIC_KEY);
+        jdbc.update("update approval.tenant set status='DISABLED' where id=?", tenant);
+        var registry = context.getBean(com.surprising.wallet.approval.service.ApprovalKeyRegistryService.class);
+        var event = new com.surprising.wallet.common.approval.ApprovalKeyQuarantine(
+                tenant, key, admin, NOW, "suspected key compromise");
+        assertEquals(event.hash(), registry.quarantine(event, "wallet-client").descriptorHash());
+        assertEquals(event.hash(), registry.quarantine(event, "wallet-client").descriptorHash());
+        assertEquals("DISABLED", context.getBean(ApprovalKeyRepository.class).find(tenant, key).orElseThrow().state());
+        var oldAddress=operatingAddress(key);
+        tokenBalances.put(oldAddress,java.math.BigInteger.valueOf(12_345_678));
+        String delegatedTo="0x"+"b".repeat(40);
+        incidentEvmCode.set("0xef0100"+delegatedTo.substring(2));
+        var observed=context.getBean(com.surprising.wallet.approval.service.ApprovalAutomationService.class)
+                .incidentInventory(tenant,"ETH","eip155:11155111","USDC",key);
+        assertEquals(oldAddress,observed.address());
+        assertEquals(java.math.BigInteger.valueOf(12_345_678),observed.availableAtomic());
+        assertEquals("DISABLED",observed.keyState());
+        assertEquals(event.hash(),observed.quarantineHash());
+        assertEquals("EIP7702_DELEGATED",observed.accountCodeState());
+        assertEquals(delegatedTo,observed.delegatedTo());
+        assertEquals("0x"+"a".repeat(64),observed.observedBlockHash());
+        jdbc.update("update approval.tenant set status='ACTIVE' where id=?", tenant);
+        assertThrows(IllegalArgumentException.class, () -> context.getBean(
+                com.surprising.wallet.approval.service.ApprovalAutomationService.class)
+                .hotInventory(tenant,"ETH","eip155:11155111","USDC",key));
+        assertEquals(0, jdbc.queryForObject("select count(*) from approval.signing_grant", Integer.class));
+        assertThrows(IllegalArgumentException.class, () -> registry.quarantine(
+                new com.surprising.wallet.common.approval.ApprovalKeyQuarantine(
+                        tenant, key, admin, NOW, "different compromise reason"), "wallet-client"));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                () -> jdbc.update("update approval.key set state='ACTIVE' where tenant_id=? and key_id=?", tenant, key));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                () -> jdbc.update("delete from approval.key where tenant_id=? and key_id=?", tenant, key));
+        assertEquals(1, jdbc.queryForObject("select count(*) from approval.audit where action='KEY.WALLET_QUARANTINE'", Integer.class));
+    }
     private com.surprising.wallet.approval.service.ApprovalMemberService.Activation invite() {
         return management().invite(tenant,admin,new com.surprising.wallet.approval.service.ApprovalMemberService.Invite(UUID.randomUUID(),"new-reviewer@example.test","New reviewer","independent identity verified",0L));
     }
@@ -383,6 +449,190 @@ class ApprovalWorkflowIntegrationTest {
         assertEquals(0,jdbc.queryForObject("select count(*) from approval.signing_grant",Integer.class));assertEquals(0,jdbc.queryForObject("select count(*) from approval.automatic_operation",Integer.class));
         assertEquals(0,jdbc.queryForObject("select count(*) from approval.spend_lock",Integer.class));
     }
+    @Test void multipleInstalledCollectionDestinationsSelectTheirExactIndependentRule() {
+        grantKey();UUID first=registerOperatingKey(2),second=registerOperatingKey(3),unknown=registerOperatingKey(4);
+        var firstRule=collectionRule(UUID.randomUUID(),first);
+        var secondRule=collectionRule(UUID.randomUUID(),second);
+        var rules=List.of(firstRule,secondRule);
+        var signing=operatingSigning(rules);
+        var firstGrant=signing.authorize(automaticEvm("COLL-reserve-a",0,first),"wallet-client");
+        assertEquals(firstRule.id(),firstGrant.automaticOperation().ruleId());
+        assertThrows(IllegalArgumentException.class,()->signing.authorize(
+                automaticEvm("COLL-unregistered",1,unknown),"wallet-client"));
+        clock.time.set(NOW.plusSeconds(61));
+        var secondGrant=signing.authorize(automaticEvm("COLL-reserve-b",1,second),"wallet-client");
+        assertEquals(secondRule.id(),secondGrant.automaticOperation().ruleId());
+        assertEquals(2,jdbc.queryForObject("select count(*) from approval.automatic_operation",Integer.class));
+        assertThrows(IllegalArgumentException.class,()->new com.surprising.wallet.approval.config.ApprovalAutomationProperties(
+                List.of(firstRule,collectionRule(UUID.randomUUID(),first))));
+    }
+    @Test void multipleInstalledParentDestinationsCannotRetargetAnOriginalCollection() {
+        grantKey();UUID first=registerOperatingKey(2),second=registerOperatingKey(3);
+        var firstRule=collectionRule(UUID.randomUUID(),first);
+        var secondRule=collectionRule(UUID.randomUUID(),second);
+        var automation=operatingAutomation(List.of(firstRule,secondRule));
+        var firstPolicy=automation.collectionDestination(tenant,"ETH","eip155:11155111","USDC",first);
+        assertEquals(firstRule.id(),firstPolicy.ruleId());
+        assertEquals(operatingAddress(first),firstPolicy.destinationAddress());
+        tokenBalances.put(operatingAddress(first),java.math.BigInteger.valueOf(12_345_678));
+        var inventory=automation.hotInventory(tenant,"ETH","eip155:11155111","USDC",first);
+        assertEquals(firstRule.id(),inventory.collectionRuleId());
+        assertEquals(firstPolicy.ruleFingerprint(),inventory.collectionRuleFingerprint());
+        assertEquals(java.math.BigInteger.valueOf(12_345_678),inventory.availableAtomic());
+        assertEquals(operatingAddress(first),inventory.address());
+        assertEquals(66L,inventory.observedBlockHeight());
+        assertEquals("0x"+"a".repeat(64),inventory.observedBlockHash());
+        evmFollowupHash.set("0x"+"b".repeat(64));
+        try {
+            assertThrows(IllegalArgumentException.class,()->automation.hotInventory(
+                    tenant,"ETH","eip155:11155111","USDC",first));
+        } finally {
+            evmFollowupHash.set("0x"+"a".repeat(64));
+        }
+        incidentEvmCode.set("0xef0100"+INSTALLED_HOT_DELEGATE.substring(2));
+        try {
+            assertEquals(66L,automation.hotInventory(
+                    tenant,"ETH","eip155:11155111","USDC",first).observedBlockHeight());
+            installedDelegateCode.set("0x6001");
+            assertThrows(IllegalArgumentException.class,()->automation.hotInventory(
+                    tenant,"ETH","eip155:11155111","USDC",first));
+            incidentEvmCode.set("0xef0100"+"9".repeat(40));
+            assertThrows(IllegalArgumentException.class,()->automation.hotInventory(
+                    tenant,"ETH","eip155:11155111","USDC",first));
+        } finally {
+            incidentEvmCode.set("0x");installedDelegateCode.set("0x6000");
+        }
+        String txHash="0x"+"f".repeat(64),recipient="0x"+"8".repeat(40);
+        String contract="0x3333333333333333333333333333333333333333";
+        java.math.BigInteger amountAtomic=java.math.BigInteger.valueOf(5_000_000);
+        String transferInput="0xa9059cbb"+"0".repeat(24)+recipient.substring(2)
+                +String.format("%064x",amountAtomic);
+        var mapper=context.getBean(ObjectMapper.class);
+        var transaction=mapper.createObjectNode().put("hash",txHash)
+                .put("from",operatingAddress(first)).put("to",contract).put("value","0x0")
+                .put("input",transferInput)
+                .put("blockNumber","0x42").put("blockHash","0x"+"a".repeat(64));
+        var log=mapper.createObjectNode().put("address",contract).put("data","0x"+amountAtomic.toString(16))
+                .put("transactionHash",txHash).put("blockNumber","0x42")
+                .put("blockHash","0x"+"a".repeat(64)).put("removed",false);
+        log.set("topics",mapper.createArrayNode()
+                .add("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+                .add("0x"+"0".repeat(24)+operatingAddress(first).substring(2))
+                .add("0x"+"0".repeat(24)+recipient.substring(2)));
+        var receipt=mapper.createObjectNode().put("transactionHash",txHash).put("status","0x1")
+                .put("from",operatingAddress(first)).put("to",contract)
+                .put("blockNumber","0x42").put("blockHash","0x"+"a".repeat(64));
+        receipt.set("logs",mapper.createArrayNode().add(log));
+        evmLatestNumber.set("0x44");evmLatestHash.set("0x"+"c".repeat(64));
+        finalizedTransaction.set(transaction);finalizedReceipt.set(receipt);
+        try {
+            var request=new com.surprising.wallet.common.approval.HotWalletSettledSpendRequest(
+                    tenant,"ETH","eip155:11155111","USDC",first,txHash,recipient,amountAtomic);
+            var finalized=automation.settledDirectSpend(request);
+            assertEquals(66L,finalized.receiptBlockHeight());
+            assertEquals(68L,finalized.observedBlockHeight());
+            assertEquals("0x"+"c".repeat(64),finalized.observedBlockHash());
+            assertEquals(txHash,finalized.txHash());
+            assertEquals(java.math.BigInteger.valueOf(12_345_678),finalized.availableAtomic());
+            transaction.put("input","0xdead");
+            assertThrows(IllegalArgumentException.class,()->automation.settledDirectSpend(request));
+            transaction.put("input",transferInput);
+            log.put("data","0x1");
+            assertThrows(IllegalArgumentException.class,()->automation.settledDirectSpend(request));
+            log.put("data","0x"+amountAtomic.toString(16));
+            evmLatestNumber.set("0x41");
+            assertThrows(IllegalArgumentException.class,()->automation.settledDirectSpend(request));
+            evmLatestNumber.set("0x44");
+            incidentEvmCode.set("0xef0100"+"9".repeat(40));
+            assertThrows(IllegalArgumentException.class,()->automation.settledDirectSpend(request));
+        } finally {
+            finalizedTransaction.set(null);finalizedReceipt.set(null);
+            evmLatestNumber.set("0x42");evmLatestHash.set("0x"+"a".repeat(64));
+            incidentEvmCode.set("0x");
+        }
+        var nativeAsset=new com.surprising.wallet.common.approval.ApprovalAssetSnapshot(
+                "ETH","eip155:11155111","ETH","ETH","eip155:11155111",null,18,18,
+                new BigDecimal("0.02"));
+        var registered=context.getBean(ApprovalKeyRepository.class).find(tenant,first).orElseThrow();
+        var reader=context.getBean(com.surprising.wallet.approval.gateway.ApprovalOperatingBalanceReader.class);
+        String nativeHash="0x"+"e".repeat(64),nativeRecipient="0x"+"9".repeat(40);
+        java.math.BigInteger nativeValue=new java.math.BigInteger("2000000000000000000");
+        finalizedTransaction.set(mapper.createObjectNode().put("hash",nativeHash)
+                .put("from",operatingAddress(first)).put("to",nativeRecipient)
+                .put("value","0x"+nativeValue.toString(16)).put("input","0x")
+                .put("blockNumber","0x42").put("blockHash","0x"+"a".repeat(64)));
+        var nativeReceipt=mapper.createObjectNode().put("transactionHash",nativeHash).put("status","0x1")
+                .put("from",operatingAddress(first)).put("to",nativeRecipient)
+                .put("blockNumber","0x42").put("blockHash","0x"+"a".repeat(64));
+        nativeReceipt.set("logs",mapper.createArrayNode());finalizedReceipt.set(nativeReceipt);
+        try {
+            var nativeProof=reader.observeFinalizedDirectSpend(nativeAsset,registered,
+                    operatingAddress(first),nativeRecipient,nativeHash,nativeValue);
+            assertEquals(66L,nativeProof.observedBlockHeight());
+            assertEquals(nativeValue,nativeProof.amountAtomic());
+            nativeReceipt.put("status","0x0");
+            assertThrows(IllegalArgumentException.class,()->reader.observeFinalizedDirectSpend(nativeAsset,
+                    registered,operatingAddress(first),nativeRecipient,nativeHash,nativeValue));
+        } finally {
+            finalizedTransaction.set(null);finalizedReceipt.set(null);
+        }
+        assertEquals(secondRule.id(),automation.collectionDestination(
+                tenant,"ETH","eip155:11155111","USDC",second).ruleId());
+        assertThrows(IllegalArgumentException.class,()->automation.collectionDestination(
+                tenant,"ETH","eip155:11155111","USDC",evmKey));
+        var original=new com.surprising.wallet.common.approval.AutomaticParentPlan(tenant,evmKey,
+                "ETH","eip155:11155111","USDC","planned-a",operatingAddress(first),new BigDecimal("10"),null);
+        assertEquals(firstRule.id(),automation.plan(original,"wallet-client").ruleId());
+        var retarget=new com.surprising.wallet.common.approval.AutomaticParentPlan(tenant,evmKey,
+                "ETH","eip155:11155111","USDC","planned-a",operatingAddress(second),new BigDecimal("10"),null);
+        assertThrows(IllegalArgumentException.class,()->automation.plan(retarget,"wallet-client"));
+        clock.time.set(NOW.plusSeconds(61));
+        var next=new com.surprising.wallet.common.approval.AutomaticParentPlan(tenant,evmKey,
+                "ETH","eip155:11155111","USDC","planned-b",operatingAddress(second),new BigDecimal("10"),null);
+        assertEquals(secondRule.id(),automation.plan(next,"wallet-client").ruleId());
+        assertEquals(2,jdbc.queryForObject("select count(*) from approval.automatic_operation",Integer.class));
+    }
+    @Test void finalizedDirectCollectionRequiresOriginalSourceTransferAndReceivingBalance() {
+        grantKey();UUID source=registerOperatingKey(2),target=registerOperatingKey(3);
+        var automation=operatingAutomation(List.of(collectionRule(UUID.randomUUID(),target)));
+        String from=operatingAddress(source),to=operatingAddress(target),hash="0x"+"e".repeat(64);
+        String contract="0x3333333333333333333333333333333333333333";
+        var amount=java.math.BigInteger.valueOf(5_000_000);
+        var mapper=context.getBean(ObjectMapper.class);
+        String input="0xa9059cbb"+"0".repeat(24)+to.substring(2)+String.format("%064x",amount);
+        var transaction=mapper.createObjectNode().put("hash",hash).put("from",from)
+                .put("to",contract).put("value","0x0").put("input",input)
+                .put("blockNumber","0x42").put("blockHash","0x"+"a".repeat(64));
+        var log=mapper.createObjectNode().put("address",contract).put("data","0x"+amount.toString(16))
+                .put("transactionHash",hash).put("blockNumber","0x42")
+                .put("blockHash","0x"+"a".repeat(64)).put("removed",false);
+        log.set("topics",mapper.createArrayNode()
+                .add("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+                .add("0x"+"0".repeat(24)+from.substring(2))
+                .add("0x"+"0".repeat(24)+to.substring(2)));
+        var receipt=mapper.createObjectNode().put("transactionHash",hash).put("status","0x1")
+                .put("from",from).put("to",contract).put("blockNumber","0x42")
+                .put("blockHash","0x"+"a".repeat(64));
+        receipt.set("logs",mapper.createArrayNode().add(log));
+        tokenBalances.put(to,java.math.BigInteger.valueOf(12_345_678));
+        finalizedTransaction.set(transaction);finalizedReceipt.set(receipt);
+        evmLatestNumber.set("0x44");evmLatestHash.set("0x"+"c".repeat(64));
+        try {
+            var request=new com.surprising.wallet.common.approval.HotWalletSettledCollectionRequest(
+                    tenant,"ETH","eip155:11155111","USDC",source,from,target,to,hash,amount);
+            var proof=automation.settledDirectCollection(request);
+            assertEquals(target,proof.destinationKeyId());
+            assertEquals(java.math.BigInteger.valueOf(12_345_678),proof.availableAtomic());
+            assertEquals(66L,proof.receiptBlockHeight());assertEquals(68L,proof.observedBlockHeight());
+            transaction.put("input","0xdead");
+            assertThrows(IllegalArgumentException.class,()->automation.settledDirectCollection(request));
+            transaction.put("input",input);log.put("data","0x1");
+            assertThrows(IllegalArgumentException.class,()->automation.settledDirectCollection(request));
+        } finally {
+            finalizedTransaction.set(null);finalizedReceipt.set(null);
+            evmLatestNumber.set("0x42");evmLatestHash.set("0x"+"a".repeat(64));
+        }
+    }
     @Test void parentPlanningReservesOneFixedOwnedPaymentAndCannotManufactureOrResetExposure() {
         grantKey();UUID treasury=registerOperatingKey(2),wrong=registerOperatingKey(3);var rule=collectionRule(UUID.randomUUID(),treasury);var automation=operatingAutomation(List.of(rule));
         var plan=new com.surprising.wallet.common.approval.AutomaticParentPlan(tenant,evmKey,"ETH","eip155:11155111","USDC","planned-collection",operatingAddress(treasury),new BigDecimal("10"),null);
@@ -427,7 +677,8 @@ class ApprovalWorkflowIntegrationTest {
                 context.getBean(ApprovalFeeReservationRepository.class),context.getBean(ApprovalAuditRepository.class),service,context.getBean(com.surprising.wallet.approval.service.ApprovalAssetRegistry.class),budgets,
                 context.getBean(com.surprising.wallet.approval.service.ApprovalGrantSigner.class),context.getBean(com.surprising.wallet.approval.config.ApprovalNativeProperties.class),manager,json,clock,
                 context.getBean(com.surprising.wallet.approval.chain.ApprovalWithdrawalVerifiers.class),context.getBean(com.surprising.wallet.approval.gateway.ApprovalUtxoRpcClient.class),context.getBean(ApprovalSpendLockRepository.class),
-                context.getBean(com.surprising.wallet.approval.gateway.ApprovalNativeRegistryClient.class),automation);
+                context.getBean(com.surprising.wallet.approval.gateway.ApprovalNativeRegistryClient.class),automation,
+                context.getBean(com.surprising.wallet.approval.gateway.ApprovalOperatingBalanceReader.class));
     }
     private com.surprising.wallet.approval.service.ApprovalAutomationService operatingAutomation(List<com.surprising.wallet.approval.config.ApprovalAutomationProperties.Rule> rules) {
         return new com.surprising.wallet.approval.service.ApprovalAutomationService(new com.surprising.wallet.approval.config.ApprovalAutomationProperties(rules),
@@ -650,6 +901,9 @@ class ApprovalWorkflowIntegrationTest {
                 execution.operation(),execution.algorithm(),List.of("b".repeat(64),"c".repeat(64)),execution.messageHex());
         var replay=new com.surprising.wallet.common.approval.SigningCandidate(original.signingRequestId(),original.approvalRequestIds(),original.command(),retryExecution,
                 "operator-7","recover original EVM account nonce after holder outage");
+        incidentEvmCode.set("0x6000");
+        try { assertThrows(IllegalArgumentException.class,()->signing().authorize(replay,"wallet")); }
+        finally { incidentEvmCode.set("0x"); }
         var second=signing().authorize(replay,"wallet");assertNotEquals(first.grant().id(),second.grant().id());
         var firstClaims=com.surprising.wallet.common.approval.SigningAuthorization.verifyOriginalProof(first.grant().proof(),issuer.getPublic(),execution);
         var nextClaims=com.surprising.wallet.common.approval.SigningAuthorization.verify(second.grant().proof(),issuer.getPublic(),retryExecution,clock.instant());
@@ -727,6 +981,16 @@ class ApprovalWorkflowIntegrationTest {
         assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->jdbc.update("update approval.request set status='EXPIRED' where id=?",i.id()));
         assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->jdbc.update("update approval.signing_grant set proof='{}'"));
         assertEquals("AUTHORIZED",signing().authorize(c,"wallet").status());
+    }
+    @Test void ordinaryEvmWithdrawalChecksLiveAccountCodeBeforeIndependentSigning() {
+        policy(null,null,false,false,1);grantKey();var i=intent("1");service.submit(i,"wallet");var candidate=candidate(i,1);
+        incidentEvmCode.set("0xef0100"+"9".repeat(40));
+        try {
+            assertThrows(IllegalArgumentException.class,()->signing().authorize(candidate,"wallet"));
+            assertFalse(service.status(tenant,i.id()).signingStarted());
+            incidentEvmCode.set("0xef0100"+INSTALLED_HOT_DELEGATE.substring(2));
+            assertEquals("AUTHORIZED",signing().authorize(candidate,"wallet").status());
+        } finally { incidentEvmCode.set("0x"); }
     }
     @Test void changingNativeFeeUnitsWithinTheRollingWindowCannotMixAtomicAmounts() {
         policy(null,null,false,false,1);grantKey();var i=intent("1");service.submit(i,"wallet");

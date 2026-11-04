@@ -26,6 +26,7 @@ public class AptosTransactionService {
     private final WithdrawalOrderRepository orders;
     private final CollectionRecordRepository collections;
     private final WalletRuntimeConfigService runtime;
+    private final HotWalletBroadcastFence broadcastFence;
     public String send(Operation op,ChainAddressRecord source){runtime.requireTaskEnabled("APTOS",WalletRuntimeConfigService.TASK_WITHDRAW,"Aptos withdrawal");if(op.kind()!=Kind.WITHDRAWAL)throw new IllegalArgumentException("withdrawal operation required");return transfer(op,source);}
     public String collect(UUID tenant,String reference,ChainAddressRecord source) {
         runtime.requireTaskEnabled("APTOS",WalletRuntimeConfigService.TASK_COLLECTION,"Aptos collection");var previous=collections.findTxHash(tenant,"APTOS",reference);if(previous.isPresent())return previous.get();
@@ -54,7 +55,15 @@ public class AptosTransactionService {
         var known=rpc.transactionByHash(signed.txId());if(known==null||known.isNull()) {
             long seconds=rpc.ledgerInfo().path("ledger_timestamp").asLong()/1_000_000;
             if(seconds<=0||seconds>=payload.unsigned().expiration())throw new IllegalStateException("Aptos fixed transaction expired or ledger time unavailable; reconciliation required");
-            String observed=rpc.submitTransaction(JSON.readValue(signed.json(),ObjectNode.class));if(!signed.txId().equals(observed))throw new IllegalStateException("Aptos node returned a different selected transaction hash");
+            var sourceKeyId=submissions.intent(op).orElseThrow().command().keyId();
+            String observed=op.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(op.tenantId(),"APTOS",
+                            profiles.findAccountByChain("APTOS").orElseThrow().getNetwork(),op.reference(),
+                            signed.txId(),sourceKeyId,
+                            ()->rpc.submitTransaction(JSON.readValue(signed.json(),ObjectNode.class)))
+                    :broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"APTOS",sourceKeyId,
+                            ()->rpc.submitTransaction(JSON.readValue(signed.json(),ObjectNode.class)));
+            if(!signed.txId().equals(observed))throw new IllegalStateException("Aptos node returned a different selected transaction hash");
         }
         submissions.observed(op,signed.txId());return signed.txId();
     }

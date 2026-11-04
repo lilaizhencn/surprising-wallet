@@ -16,7 +16,9 @@ public record ApprovalAutomationProperties(List<Rule> rules) {
     public ApprovalAutomationProperties {
         rules=rules==null?List.of():List.copyOf(rules);
         if(rules.stream().map(Rule::id).distinct().count()!=rules.size()
-                || rules.stream().map(r->r.tenantId()+":"+r.chain()+":"+r.network()+":"+r.symbol()+":"+r.businessType()).distinct().count()!=rules.size())
+                || rules.stream().map(r->r.tenantId()+":"+r.chain()+":"+r.network()+":"+r.symbol()+":"+r.businessType()
+                        + (Set.of("COLLECTION", "RECOVERY").contains(r.businessType()) ? ":"+r.destinationKeyId() : ""))
+                        .distinct().count()!=rules.size())
             throw new IllegalArgumentException("ambiguous independent operating rules");
     }
     public record Rule(UUID id,UUID tenantId,String chain,String network,String symbol,String businessType,Set<UUID> sourceKeyIds,UUID destinationKeyId,

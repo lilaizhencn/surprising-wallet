@@ -15,6 +15,7 @@ import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.common.signing.EvmSigningPayload;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.service.WithdrawalSettlementService;
+import com.surprising.wallet.service.HotWalletBroadcastFence;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -62,6 +63,7 @@ public class EvmAccountTransactionService {
     private final WithdrawalSettlementService settlements;
     private final EvmSubmissionService submissions;
     private final com.surprising.wallet.repository.CustodyAssetRecoveryRepository recoveries;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String sendNative(
             Operation operation, String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
@@ -108,7 +110,8 @@ public class EvmAccountTransactionService {
         }
         var stable = prepared;
         int precision = submissions.payload(request).nativeDecimals();
-        return withWeb3(profile, (web3j, http) -> broadcastPrepared(web3j, profile, stable, precision));
+        return withWeb3(profile, (web3j, http) -> broadcastPrepared(web3j, profile, stable, precision,
+                operation,request.command().keyId()));
     }
 
     private record UnsignedPlan(BigInteger chainNonce, BigInteger gasLimit, EvmFeeSupport.FeeQuote quote) { }
@@ -266,7 +269,8 @@ public class EvmAccountTransactionService {
                 quote.maxPriorityFeePerGas(), quote.maxFeePerGas());
     }
 
-    private String broadcastPrepared(Web3j web3j, AccountChainProfile profile, EvmTransactionRecord prepared, int nativeDecimals) throws Exception {
+    private String broadcastPrepared(Web3j web3j, AccountChainProfile profile, EvmTransactionRecord prepared,
+                                     int nativeDecimals,Operation operation,UUID sourceKeyId) throws Exception {
         String hash = prepared.getTxHash();
         if (!Hash.sha3(prepared.getRawPayload()).equalsIgnoreCase(hash)) throw new IllegalStateException("prepared EVM hash mismatch");
         var decoded = (org.web3j.crypto.SignedRawTransaction) org.web3j.crypto.TransactionDecoder.decode(prepared.getRawPayload());
@@ -280,7 +284,17 @@ public class EvmAccountTransactionService {
         EvmFeeSupport.requireBalance(web3j, prepared.getFromAddress(), decoded.getValue().add(fee), "EVM sender");
         evmTransactionRepository.updatePreparedFee(profile.getChain(), hash,
                 EvmFeeSupport.atomicToNative(fee, nativeDecimals, RoundingMode.UP));
-        EthSendTransaction sent = web3j.ethSendRawTransaction(prepared.getRawPayload()).send();
+        EthSendTransaction sent = switch(operation.kind()) {
+            case COLLECTION -> broadcastFence.withEvmCollectionBroadcastPermit(operation.tenantId(),
+                    profile.getChain(),profile.getNetwork(),operation.reference(),hash,sourceKeyId,
+                    () -> web3j.ethSendRawTransaction(prepared.getRawPayload()).send());
+            case WITHDRAWAL -> broadcastFence.withPayoutBroadcastPermit(operation.tenantId(),
+                    profile.getChain(),sourceKeyId,
+                    () -> web3j.ethSendRawTransaction(prepared.getRawPayload()).send());
+            case RECOVERY -> broadcastFence.withPayoutBroadcastPermit(operation.tenantId(),
+                    profile.getChain(),sourceKeyId,
+                    () -> web3j.ethSendRawTransaction(prepared.getRawPayload()).send());
+        };
         if (sent.hasError()) {
             var known = web3j.ethGetTransactionByHash(hash).send();
             if (!known.hasError() && known.getTransaction().isPresent()
@@ -311,7 +325,8 @@ public class EvmAccountTransactionService {
         var prepared = existing;
         var profile = profile(chain);
         int precision = submissions.payload(request.get()).nativeDecimals();
-        String hash = withWeb3(profile, (web3j, http) -> broadcastPrepared(web3j, profile, prepared, precision));
+        String hash = withWeb3(profile, (web3j, http) -> broadcastPrepared(web3j, profile, prepared, precision,
+                operation,request.get().command().keyId()));
         return switch (operation.kind()) {
             case WITHDRAWAL -> withdrawalOrderRepository.recoverPreparedSent(operation.tenantId(), chain, operation.reference(), hash) == 1;
             case COLLECTION -> collectionRecordRepository.recoverPreparedSent(operation.tenantId(), chain, operation.reference(), hash) == 1;

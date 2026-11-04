@@ -39,6 +39,131 @@ public class ApprovalAutomationService {
             require(rule.maximumNetworkFee().compareTo(asset.networkFeeLimit())<=0,"operating fee ceiling exceeds independent asset policy");
         }
     }
+    /** Advisory policy lookup for Wallet activation; every payment is still admitted independently. */
+    public CollectionDestinationPolicy collectionDestination(UUID tenant,String chain,String network,String symbol,UUID destinationKeyId) {
+        require(tenant!=null && chain!=null && network!=null && symbol!=null && destinationKeyId!=null,"complete collection destination domain required");
+        require(tenants.active(tenant),"independent tenant is disabled");
+        var matches=policies.rules().stream().filter(r->r.tenantId().equals(tenant) && r.chain().equals(chain)
+                && r.network().equals(network) && r.symbol().equals(symbol) && r.businessType().equals("COLLECTION")
+                && r.destinationKeyId().equals(destinationKeyId)).toList();
+        require(matches.size()==1,"one independently installed collection destination rule required");
+        var rule=matches.getFirst();var asset=assets.require(chain,network,symbol);
+        var key=keys.find(tenant,destinationKeyId).orElseThrow(()->new IllegalArgumentException("independently registered destination key required"));
+        require(!rule.sourceKeyIds().contains(destinationKeyId),"collection destination cannot also be a source");
+        require(key.state().equals("ACTIVE") && key.keyGroup().equals(ChainType.valueOf(chain).isEvm()?"EVM":chain),
+                "collection destination key is disabled or belongs to another chain group");
+        return new CollectionDestinationPolicy(tenant,chain,network,symbol,destinationKeyId,
+                RegisteredMpcAddresses.address(key,asset),rule.id(),fingerprint(rule),
+                rule.maximumAmount(),rule.maximum24hAmount());
+    }
+    /** Independent chain observation for a configured hot-wallet destination; no Wallet balance is trusted. */
+    public HotWalletInventoryObservation hotInventory(UUID tenant,String chain,String network,String symbol,UUID keyId) {
+        require(!TransactionSynchronizationManager.isActualTransactionActive(),"hot inventory observation requires no database transaction");
+        var policy=collectionDestination(tenant,chain,network,symbol,keyId);
+        var asset=assets.require(chain,network,symbol);
+        var key=keys.find(tenant,keyId).orElseThrow();
+        require(RegisteredMpcAddresses.matches(key,asset,policy.destinationAddress()),"independent hot key/address changed");
+        var balance=balanceReader.observe(asset,key,policy.destinationAddress(),null);
+        var current=keys.find(tenant,keyId).orElseThrow();
+        require(tenants.active(tenant) && current.state().equals("ACTIVE")
+                && current.epoch()==key.epoch() && current.publicKeyHex().equals(key.publicKeyHex())
+                && balance.keyId().equals(keyId) && balance.owner().equals(policy.destinationAddress())
+                && balance.chain().equals(chain) && balance.networkIdentity().equals(asset.networkIdentity())
+                && balance.symbol().equals(symbol) && balance.decimals()==asset.decimals(),
+                "independent hot inventory changed during observation");
+        return new HotWalletInventoryObservation(tenant,keyId,chain,network,asset.networkIdentity(),symbol,
+                policy.destinationAddress(),asset.decimals(),asset.nativeDecimals(),
+                balance.availableAtomic(),balance.nativeAtomic(),balance.observedAt(),
+                policy.ruleId(),policy.ruleFingerprint(),
+                balance.observedBlockHeight(),balance.observedBlockHash());
+    }
+    /** Read-only finalized direct-payment evidence; it never authorizes a fresh signature. */
+    public HotWalletSettledSpendObservation settledDirectSpend(HotWalletSettledSpendRequest request) {
+        require(!TransactionSynchronizationManager.isActualTransactionActive(),
+                "settled spend observation requires no database transaction");
+        require(request!=null && request.tenantId()!=null && request.keyId()!=null,
+                "owned settled spend request required");
+        var asset=assets.require(request.chain(),request.network(),request.assetSymbol());
+        require(ChainType.valueOf(request.chain()).isEvm(),"finalized direct reconciliation requires an EVM asset");
+        var policy=collectionDestination(request.tenantId(),request.chain(),request.network(),
+                request.assetSymbol(),request.keyId());
+        var key=keys.find(request.tenantId(),request.keyId()).orElseThrow();
+        require(RegisteredMpcAddresses.matches(key,asset,policy.destinationAddress()),
+                "independent settled spend key/address changed");
+        var observed=balanceReader.observeFinalizedDirectSpend(asset,key,policy.destinationAddress(),
+                request.recipient(),request.txHash(),request.amountAtomic());
+        var current=keys.find(request.tenantId(),request.keyId()).orElseThrow();
+        require(tenants.active(request.tenantId()) && current.state().equals("ACTIVE")
+                && current.epoch()==key.epoch() && current.publicKeyHex().equals(key.publicKeyHex()),
+                "independent settled spend key changed during finalized observation");
+        return new HotWalletSettledSpendObservation(request.tenantId(),request.keyId(),
+                request.chain(),request.network(),asset.networkIdentity(),request.assetSymbol(),
+                asset.tokenIdentifier(),observed.sourceAddress(),observed.recipient(),
+                observed.txHash(),observed.amountAtomic(),asset.decimals(),asset.nativeDecimals(),
+                observed.availableAtomic(),observed.nativeAtomic(),observed.receiptBlockHeight(),
+                observed.receiptBlockHash(),observed.observedBlockHeight(),observed.observedBlockHash(),
+                observed.observedAt(),policy.ruleId(),policy.ruleFingerprint());
+    }
+    /** Read-only proof that a direct payment reached the registered hot wallet before its fresh balance. */
+    public HotWalletSettledCollectionObservation settledDirectCollection(HotWalletSettledCollectionRequest request) {
+        require(!TransactionSynchronizationManager.isActualTransactionActive(),
+                "settled collection observation requires no database transaction");
+        require(request!=null && request.tenantId()!=null && request.sourceKeyId()!=null
+                && request.destinationKeyId()!=null && !request.sourceKeyId().equals(request.destinationKeyId()),
+                "owned direct collection request required");
+        var asset=assets.require(request.chain(),request.network(),request.assetSymbol());
+        require(ChainType.valueOf(request.chain()).isEvm(),"direct collection accounting requires an EVM asset");
+        var policy=collectionDestination(request.tenantId(),request.chain(),request.network(),
+                request.assetSymbol(),request.destinationKeyId());
+        require(policy.destinationAddress().equalsIgnoreCase(request.destinationAddress()),
+                "independent collection target differs from installed policy");
+        var sourceKey=keys.find(request.tenantId(),request.sourceKeyId()).orElseThrow();
+        var destinationKey=keys.find(request.tenantId(),request.destinationKeyId()).orElseThrow();
+        require(RegisteredMpcAddresses.matchesIdentity(sourceKey,asset,request.sourceAddress())
+                && RegisteredMpcAddresses.matches(destinationKey,asset,request.destinationAddress()),
+                "independent direct collection key/address differs");
+        var observed=balanceReader.observeFinalizedDirectCollection(asset,sourceKey,request.sourceAddress(),
+                destinationKey,request.destinationAddress(),request.txHash(),request.amountAtomic());
+        require(tenants.active(request.tenantId())
+                && sourceKey.equals(keys.find(request.tenantId(),request.sourceKeyId()).orElseThrow())
+                && destinationKey.equals(keys.find(request.tenantId(),request.destinationKeyId()).orElseThrow()),
+                "independent collection keys changed during finalized observation");
+        return new HotWalletSettledCollectionObservation(request.tenantId(),request.sourceKeyId(),
+                request.destinationKeyId(),request.chain(),request.network(),asset.networkIdentity(),
+                request.assetSymbol(),asset.tokenIdentifier(),observed.sourceAddress(),observed.recipient(),
+                observed.txHash(),observed.amountAtomic(),asset.decimals(),asset.nativeDecimals(),
+                observed.availableAtomic(),observed.nativeAtomic(),observed.receiptBlockHeight(),
+                observed.receiptBlockHash(),observed.observedBlockHeight(),observed.observedBlockHash(),
+                observed.observedAt(),policy.ruleId(),policy.ruleFingerprint());
+    }
+    /** Read-only incident evidence remains available after signing rights are permanently disabled. */
+    public HotWalletIncidentInventoryObservation incidentInventory(UUID tenant,String chain,String network,
+            String symbol,UUID keyId) {
+        require(!TransactionSynchronizationManager.isActualTransactionActive(),
+                "incident inventory observation requires no database transaction");
+        require(tenant!=null && chain!=null && network!=null && symbol!=null && keyId!=null,
+                "complete incident inventory domain required");
+        var asset=assets.require(chain,network,symbol);
+        var key=keys.find(tenant,keyId).orElseThrow();
+        String quarantineHash=keys.quarantineHash(tenant,keyId).orElse(null);
+        require(key.state().equals("DISABLED") && quarantineHash!=null
+                && key.keyGroup().equals(ChainType.valueOf(chain).isEvm()?"EVM":chain),
+                "incident inventory requires an independently quarantined key");
+        String address=RegisteredMpcAddresses.address(key,asset);
+        var balance=balanceReader.observeQuarantined(asset,key,address);
+        var current=keys.find(tenant,keyId).orElseThrow();
+        require(current.state().equals("DISABLED") && quarantineHash.equals(keys.quarantineHash(tenant,keyId).orElse(null))
+                && current.epoch()==key.epoch() && current.publicKeyHex().equals(key.publicKeyHex())
+                && balance.keyId().equals(keyId) && balance.owner().equals(address)
+                && balance.chain().equals(chain) && balance.networkIdentity().equals(asset.networkIdentity())
+                && balance.symbol().equals(symbol) && balance.decimals()==asset.decimals(),
+                "independent incident inventory changed during observation");
+        return new HotWalletIncidentInventoryObservation(tenant,keyId,chain,network,
+                asset.networkIdentity(),symbol,asset.tokenIdentifier(),address,asset.decimals(),asset.nativeDecimals(),
+                balance.availableAtomic(),balance.nativeAtomic(),balance.observedAt(),
+                current.state(),quarantineHash,balance.accountCodeState(),
+                balance.delegatedTo(),balance.observedBlockHash());
+    }
     /** Reserve a fixed owned collection before short-lived wire preparation. It grants no native signing permission. */
     public AutomaticOperation plan(AutomaticParentPlan plan,String serviceIdentity) {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"parent planning requires committed Wallet intent");
@@ -57,9 +182,12 @@ public class ApprovalAutomationService {
         });
     }
     private Planning preparePlan(AutomaticParentPlan plan) {
+        var asset=assets.require(plan.chain(),plan.network(),plan.assetSymbol());
         var eligible=policies.rules().stream().filter(r->r.tenantId().equals(plan.tenantId()) && r.chain().equals(plan.chain()) && r.network().equals(plan.network())
-                && r.symbol().equals(plan.assetSymbol()) && r.businessType().equals("COLLECTION")).toList();require(eligible.size()==1,"one independently installed collection rule required");var rule=eligible.getFirst();
-        var asset=assets.require(plan.chain(),plan.network(),plan.assetSymbol());var required=List.of(plan.sourceKeyId(),rule.destinationKeyId()).stream().distinct().sorted().toList();var locked=new HashMap<UUID,RegisteredMpcKey>();
+                && r.symbol().equals(plan.assetSymbol()) && r.businessType().equals("COLLECTION")
+                && RegisteredMpcAddresses.matches(keys.find(plan.tenantId(),r.destinationKeyId()).orElse(null),asset,plan.recipient()))
+                .toList();require(eligible.size()==1,"one independently installed collection destination rule required");var rule=eligible.getFirst();
+        var required=List.of(plan.sourceKeyId(),rule.destinationKeyId()).stream().distinct().sorted().toList();var locked=new HashMap<UUID,RegisteredMpcKey>();
         for(var id:required)locked.put(id,keys.lock(plan.tenantId(),id).orElseThrow());var source=locked.get(plan.sourceKeyId());var treasury=locked.get(rule.destinationKeyId());
         require(source.state().equals("ACTIVE") && treasury.state().equals("ACTIVE") && !source.keyId().equals(treasury.keyId())
                 && (rule.sourceKeyIds().isEmpty() || rule.sourceKeyIds().contains(source.keyId())) && RegisteredMpcAddresses.matches(treasury,asset,plan.recipient()),"planned source/treasury differs from installed independent roles");
@@ -92,7 +220,15 @@ public class ApprovalAutomationService {
                 && (decoded.symbol().equals("EIP7702_ATOMIC") || r.symbol().equals(decoded.symbol())) && (decoded.network()==null || r.network().equals(decoded.network()))).toList();
         eligible=eligible.stream().filter(r->networkMatches(command,assets.require(r.chain(),r.network(),r.symbol()))).toList();
         if(decoded.symbol().equals("EIP7702_ATOMIC"))eligible=eligible.stream().filter(r->eipAssetMatches(command,assets.require(r.chain(),r.network(),r.symbol()))).toList();
-        require(eligible.size()==1,"one explicit independent operating rule/network/asset is required");var rule=eligible.getFirst();var asset=assets.require(rule.chain(),rule.network(),rule.symbol());
+        if(command.businessType()==MpcSignCommand.BusinessType.COLLECTION || command.businessType()==MpcSignCommand.BusinessType.RECOVERY) {
+            var transfers=decoded.transfers();
+            eligible=eligible.stream().filter(r->{
+                var destination=keys.find(command.tenantId(),r.destinationKeyId()).orElse(null);
+                var asset=assets.require(r.chain(),r.network(),r.symbol());
+                return transfers.stream().allMatch(t->RegisteredMpcAddresses.matches(destination,asset,t.recipient()));
+            }).toList();
+        }
+        require(eligible.size()==1,"one explicit independent operating rule/network/asset/destination is required");var rule=eligible.getFirst();var asset=assets.require(rule.chain(),rule.network(),rule.symbol());
         require(!addressPreparation || asset.chain().equals("XRP") && asset.tokenIdentifier()!=null,"XRP address preparation requires an independently installed issued asset");
         var descriptor=decoded;
         if(command.chain()==ChainType.SOLANA) {

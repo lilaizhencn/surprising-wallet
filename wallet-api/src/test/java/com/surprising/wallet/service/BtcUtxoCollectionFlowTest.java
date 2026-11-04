@@ -148,8 +148,11 @@ class BtcUtxoCollectionFlowTest {
         when(queue.lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim)).thenReturn(true);
         when(runtime.broadcastSignedTransaction(any(), any())).thenReturn(hash);
         when(collections.updateStatus(TENANT, "BTC", "COLL-RBF", "SENT", hash, null, null)).thenReturn(1);
+        var fence=mock(HotWalletBroadcastFence.class);
+        when(fence.withExternalLegacyBroadcastPermit(any(),anyString(),any()))
+                .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(2)).send());
         var service=new UtxoBroadcastService(signing,orders,collections,mock(UtxoMpcSigningService.class),
-                runtime,queue,new ObjectMapper(),mock(WalletTaskLeaseService.class));
+                runtime,queue,new ObjectMapper(),mock(WalletTaskLeaseService.class),fence);
         assertTrue(service.complete(service.broadcast(service.prepare(result,claim))));
         verify(collections).updateStatus(TENANT, "BTC", "COLL-RBF", "SENT", hash, null, null);
         verify(queue).lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim);

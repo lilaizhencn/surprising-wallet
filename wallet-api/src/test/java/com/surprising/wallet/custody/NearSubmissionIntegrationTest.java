@@ -65,6 +65,8 @@ class NearSubmissionIntegrationTest {
         context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(CustodyHotWalletWithdrawalReservationRepository.class,()->new CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(HotWalletReservationLifecycleService.class);
         context.registerBean(WithdrawalSettlementService.class);context.registerBean(ObjectMapper.class,()->json);
         context.registerBean(CustodyGasUsageRepository.class,()->new CustodyGasUsageRepository(jdbc));
         context.registerBean(CustodyAddressRepository.class,()->new CustodyAddressRepository(jdbc));
@@ -74,6 +76,16 @@ class NearSubmissionIntegrationTest {
         createOrder(REFERENCE,"NEAR");
     }
     @AfterEach void close(){if(context!=null)context.close();}
+    private static HotWalletBroadcastFence permissiveBroadcastFence() {
+        var fence=mock(HotWalletBroadcastFence.class);
+        try {
+            when(fence.withPayoutBroadcastPermit(any(),anyString(),any(),any()))
+                    .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(3)).send());
+            when(fence.withAccountCollectionBroadcastPermit(any(),anyString(),anyString(),anyString(),anyString(),any(),any()))
+                    .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(6)).send());
+        } catch(Exception error){throw new IllegalStateException(error);}
+        return fence;
+    }
     private record RegistrationFixture(NearOperation op,ChainAddressRecord gas,NearRegistrationPayload payload) { }
     private RegistrationFixture registrationFixture() {
         createOrder("TOKEN","USDC");var op=op("TOKEN");
@@ -247,7 +259,7 @@ class NearSubmissionIntegrationTest {
         var rpc=mock(NearRpcClient.class);when(rpc.forNetwork("testnet")).thenReturn(rpc);when(rpc.status()).thenReturn(json.createObjectNode().put("chain_id","testnet").put("genesis_hash",GENESIS));when(rpc.genesisConfig()).thenReturn(json.createObjectNode().put("chain_id","testnet").put("transaction_validity_period",100));
         when(rpc.accessKey(anyString(),anyString())).thenReturn(json.createObjectNode().put("permission","FullAccess").put("nonce",6).put("block_height",100).put("block_hash",GENESIS));
         var block=json.createObjectNode();block.putObject("header").put("hash",GENESIS).put("height",100);when(rpc.block(anyString())).thenReturn(block);when(rpc.latestFinalBlockHeight()).thenReturn(100L);
-        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new NearTransactionService(mock(com.surprising.wallet.service.MpcAuthorizationService.class),rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),runtime);
+        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new NearTransactionService(mock(com.surprising.wallet.service.MpcAuthorizationService.class),rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),runtime,permissiveBroadcastFence());
         var accepted=new java.util.concurrent.atomic.AtomicBoolean();
         when(rpc.knownTransaction(anyString(),anyString())).thenAnswer(call->{if(!accepted.get())throw new IllegalStateException("UNKNOWN_TRANSACTION");var value=json.createObjectNode();value.putObject("transaction").put("hash",call.getArgument(0,String.class));return value;});
         when(rpc.sendTransaction(anyString())).thenAnswer(call->{
@@ -262,7 +274,7 @@ class NearSubmissionIntegrationTest {
     @Test void expiredUnknownIntentCannotReplaceNonceOrReleasePrincipal(){
         var signed=prepared(op(),"NEAR");service.unknown(op(),"offline before response");
         var rpc=mock(NearRpcClient.class);when(rpc.forNetwork("testnet")).thenReturn(rpc);when(rpc.status()).thenReturn(json.createObjectNode().put("chain_id","testnet").put("genesis_hash",GENESIS));when(rpc.knownTransaction(anyString(),anyString())).thenThrow(new IllegalStateException("UNKNOWN_TRANSACTION"));when(rpc.latestFinalBlockHeight()).thenReturn(201L);
-        var transfers=new NearTransactionService(mock(com.surprising.wallet.service.MpcAuthorizationService.class),rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),mock(WalletRuntimeConfigService.class));
+        var transfers=new NearTransactionService(mock(com.surprising.wallet.service.MpcAuthorizationService.class),rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),mock(NearRegistrationService.class),mock(WalletRuntimeConfigService.class),permissiveBroadcastFence());
         assertThrows(IllegalStateException.class,()->transfers.recover(op()));verify(rpc,never()).sendTransaction(anyString());assertEquals(0,service.releaseUnsigned(op()));assertEquals(signed.txHash(),orders.findTxHash("NEAR",REFERENCE,TENANT).orElseThrow());
         assertEquals(0,new BigDecimal("1.1").compareTo(new LedgerBalanceRepository(jdbc).find(TENANT,"NEAR","NEAR",ACCOUNT).orElseThrow().getLockedBalance()));
     }

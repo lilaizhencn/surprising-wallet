@@ -166,7 +166,8 @@ public class MpcSigningService {
     }
 
     /** Relay only the original completed transaction, using one surviving original material holder. */
-    public MoneroRelay relayMonero(UUID tenant,UUID requestId,String expectedHash,MpcNodes nodes) {
+    public MoneroRelay relayMonero(UUID tenant,UUID requestId,String expectedHash,MpcNodes nodes,
+                                  HotWalletBroadcastFence broadcastFence) {
         requireOutsideTransaction();var selected=selectedMonero(tenant,requestId);
         require(selected.transactionHash().equals(expectedHash),"Monero relay differs from the selected original transaction");
         var request=requests.find(tenant,requestId).orElseThrow();
@@ -187,7 +188,9 @@ public class MpcSigningService {
             for(var relay:relays) {
                 var proof=authorizations.authorizeMoneroRelay(requestId,selected.signSessionId(),relay);
                 if(proof==null)continue; // Only try another original material holder; never construct another payment.
-                var exchange=exchange(relay,nodes.clients(),proof);var result=exchange.results().get(relay.online().getFirst());
+                var exchange=broadcastFence.withExternalLegacyBroadcastPermit(tenant,"XMR",
+                        ()->exchange(relay,nodes.clients(),proof));
+                var result=exchange.results().get(relay.online().getFirst());
                 if(result!=null && result.state()==MpcClient.State.COMPLETED) {
                     require(key.publicKeyHex().equals(result.publicKeyHex()) && payload.sender().equals(result.publicAddress()),
                             "Monero relay holder changed its registered public identity");

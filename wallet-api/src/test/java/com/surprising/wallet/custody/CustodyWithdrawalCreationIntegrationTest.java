@@ -37,6 +37,7 @@ class CustodyWithdrawalCreationIntegrationTest {
     private AnnotationConfigApplicationContext context;
     private CustodyWithdrawalService service;
     private CustodyTenantChainService tenantChains;
+    private CollectionPlanningService planning;
     private CustodyGasService gas;
     private com.surprising.wallet.gateway.WithdrawalApprovalClient authority;
     private com.surprising.wallet.service.CustodyGasReconciliationService gasProjection;
@@ -52,6 +53,12 @@ class CustodyWithdrawalCreationIntegrationTest {
         jdbc.update("update chain_profile set enabled=true, withdraw_enabled=true where chain='ETH' and network='sepolia'");
         jdbc.update("insert into custody_tenant(id,slug,name,derivation_namespace) values (?,?,'Withdrawal fixture',nextval('custody_derivation_namespace_seq'))",
                 tenant, "withdraw-test-" + tenant);
+        UUID chainAdmin = UUID.randomUUID();
+        jdbc.update("insert into custody_tenant_user(id,tenant_id,email,display_name,password_hash,role,status) "
+                        + "values (?,?,?,'Chain admin','test-only-hash','TENANT_ADMIN','ACTIVE')",
+                chainAdmin, tenant, "chain-" + chainAdmin + "@example.test");
+        new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc)
+                .setStatus(tenant, "ETH", "ACTIVE", chainAdmin);
         long chainAddressId = jdbc.queryForObject("""
                 insert into chain_address(tenant_id,chain,asset_symbol,account_id,user_id,biz,address_index,
                     address,owner_address,derivation_path,wallet_role,enabled)
@@ -65,13 +72,14 @@ class CustodyWithdrawalCreationIntegrationTest {
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,'ETH','ETH','withdraw-account',5,0,5)", tenant);
         var runtime = mock(BlockchainRuntimeService.class);
         when(runtime.checkAddress(eq("ETH"), anyString())).thenReturn(true);
-        var planning = mock(CollectionPlanningService.class);
+        planning = mock(CollectionPlanningService.class);
         when(planning.destination(tenant, "ETH")).thenReturn(Optional.empty());
         var properties = new CustodySecurityProperties(); properties.setSecretMasterKey("33".repeat(32));
         var mapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         var execution = new CustodyWithdrawalExecutionService(new WithdrawalOrderRepository(jdbc), planning,
                 RuntimeTestSupport.database(jdbc), runtime, new ChainAssetRepository(jdbc),
-                new ChainProfileRepository(jdbc), new TokenConfigRepository(jdbc), new LedgerBalanceRepository(jdbc), CustodyTestSupport.poolFunding(jdbc));
+                new ChainProfileRepository(jdbc), new TokenConfigRepository(jdbc), new LedgerBalanceRepository(jdbc),
+                CustodyTestSupport.poolFunding(jdbc), CustodyTestSupport.hotRouting(jdbc));
         tenantChains = mock(CustodyTenantChainService.class);
         context = new AnnotationConfigApplicationContext(); context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(dataSource));
@@ -81,7 +89,8 @@ class CustodyWithdrawalCreationIntegrationTest {
                     UUID.randomUUID(),tenant,UUID.randomUUID(),"WITHDRAWAL",invocation.getArgument(1),"fixture-order","ETH","ETH",new BigDecimal("0.01"),null,"RESERVED","TEST",null,null,java.time.Instant.now(),java.time.Instant.now(),null);
             return org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation);
         });
-        context.registerBean(WithdrawalSettlementService.class, () -> new WithdrawalSettlementService(new WithdrawalOrderRepository(jdbc), new LedgerBalanceRepository(jdbc)));
+        context.registerBean(WithdrawalSettlementService.class, () -> new WithdrawalSettlementService(new WithdrawalOrderRepository(jdbc),
+                new LedgerBalanceRepository(jdbc),CustodyTestSupport.hotReservationLifecycle(jdbc)));
         authority=mock(com.surprising.wallet.gateway.WithdrawalApprovalClient.class);
         gasProjection=mock(CustodyGasReconciliationService.class);
         context.registerBean(CustodyWithdrawalReconciliationService.class,()->new CustodyWithdrawalReconciliationService(new CustodyWithdrawalRepository(jdbc),new WithdrawalOrderRepository(jdbc),
@@ -91,7 +100,8 @@ class CustodyWithdrawalCreationIntegrationTest {
                 new UnsignedWithdrawalCancellationService(new WalletMpcSignRequestRepository(jdbc),new WalletMpcSignAttemptRepository(jdbc,mapper),
                     new ChainSigningTransactionRepository(jdbc,mapper),new UtxoRepository(jdbc),new EvmWithdrawalBatchRepository(jdbc),
                     new EvmWithdrawalBatchItemRepository(jdbc),new EvmWithdrawalBatchAttemptRepository(jdbc),new WithdrawalOrderRepository(jdbc),
-                    new AccountSequenceRepository(jdbc),new EvmNonceRepository(jdbc),new CustodyGasUsageRepository(jdbc),CustodyTestSupport.gasAccounting(jdbc),new CustodyAuditRepository(jdbc),mapper)));
+                    new AccountSequenceRepository(jdbc),new EvmNonceRepository(jdbc),new CustodyGasUsageRepository(jdbc),CustodyTestSupport.gasAccounting(jdbc),new CustodyAuditRepository(jdbc),mapper),
+                CustodyTestSupport.hotReservationLifecycle(jdbc)));
 
         context.registerBean(MpcAuthorizationService.class,()->com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,mapper,context.getBean(PlatformTransactionManager.class),authority));
         context.registerBean(MpcSigningService.class,()->new MpcSigningService(new CustodyTenantTableRepository(jdbc),new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,mapper),
@@ -114,6 +124,84 @@ class CustodyWithdrawalCreationIntegrationTest {
         assertEquals(0,count("custody_idempotency_key"));
         assertEquals(1,count("custody_withdrawal"));
         assertNotNull(new WithdrawalOrderRepository(jdbc).find("ETH",original.orderNo(),tenant).orElseThrow());
+    }
+    @Test void activeHotSourceAndInventoryReservationCommitWithOrderAndSettleTogether() {
+        UUID key=UUID.randomUUID(), hotAddressId=UUID.randomUUID(), hotWalletId=UUID.randomUUID();
+        String hotAddress="0x"+"56".repeat(20);
+        int namespace=jdbc.queryForObject("select derivation_namespace from custody_tenant where id=?",Integer.class,tenant);
+        jdbc.update("""
+                insert into wallet_mpc_key(id,tenant_id,key_group,user_id,biz,address_index,
+                    algorithm,state,active_epoch,public_key_hex)
+                values (?,?,'EVM',?,?,2,'ECDSA_SECP256K1','ACTIVE',1,?)
+                """,key,tenant,17,namespace,"02"+"1".repeat(64));
+        long chainAddress=jdbc.queryForObject("""
+                insert into chain_address(tenant_id,mpc_key_id,chain,asset_symbol,account_id,user_id,biz,address_index,
+                    address,owner_address,derivation_path,wallet_role,enabled)
+                values (?,?,'ETH','ETH',?,?,?,2,?,?,'hot-route-test','HOT_WITHDRAW',true) returning id
+                """,Long.class,tenant,key,hotAddress,17,namespace,hotAddress,hotAddress);
+        jdbc.update("""
+                insert into custody_address(id,tenant_id,chain_address_id,chain,network,address,subject,source,
+                    status,derivation_subject,derivation_child)
+                values (?,?,?,'ETH','sepolia',?,'hot-route-test','CONSOLE','ACTIVE',17,2)
+                """,hotAddressId,tenant,chainAddress,hotAddress);
+        var hotWallets=new CustodyHotWalletRepository(jdbc);
+        assertEquals(1,hotWallets.insertStandby(hotWalletId,tenant,hotAddressId,key,"ETH","sepolia","Reserve",actor()));
+        assertEquals(1,new CustodyHotWalletAssetPolicyRepository(jdbc).upsert(
+                new CustodyHotWalletAssetPolicyRepository.Policy(tenant,hotWalletId,"ETH","ETH",
+                        BigDecimal.ONE,new BigDecimal("5"),new BigDecimal("2"),new BigDecimal("3"))));
+        var observedAt=java.time.Instant.now();
+        assertEquals(1,new CustodyHotWalletInventoryObservationRepository(jdbc).record(
+                new CustodyHotWalletInventoryObservationRepository.Observation(tenant,hotWalletId,"ETH","ETH",
+                        key,hotAddress,"eip155:11155111",18,18,
+                        new java.math.BigInteger("3000000000000000000"),
+                        new java.math.BigInteger("3000000000000000000"),observedAt,UUID.randomUUID(),"a".repeat(64),
+                        42L,"0x"+"a".repeat(64))));
+        assertEquals(1,jdbc.update("update custody_hot_wallet set status='ACTIVE' where id=?",hotWalletId));
+        var accepted=create("127.0.0.1");
+        var original=new WithdrawalOrderRepository(jdbc).find("ETH",accepted.orderNo(),tenant).orElseThrow();
+        assertEquals(hotAddress,original.getFromAddress());
+        var reservations=new CustodyHotWalletWithdrawalReservationRepository(jdbc);
+        var reserved=reservations.findByOrder(tenant,"ETH",accepted.orderNo()).orElseThrow();
+        assertEquals(hotWalletId,reserved.walletId());
+        assertEquals(hotAddress,reserved.sourceAddress());
+        assertEquals(0,BigDecimal.ONE.compareTo(reserved.amount()));
+        assertEquals("OPEN",reserved.status());
+        assertEquals(0,new BigDecimal("4").compareTo(balance("available_balance")));
+        assertEquals(0,BigDecimal.ONE.compareTo(balance("locked_balance")));
+        rejectGas=true;
+        var retryCommand=command();
+        retryCommand=new CustodyWithdrawalService.CreateWithdrawalCommand(retryCommand.custodyAddressId(),
+                retryCommand.chain(),retryCommand.assetSymbol(),retryCommand.toAddress(),retryCommand.amount(),
+                "external-second",retryCommand.confirmed(),retryCommand.subject(),retryCommand.fundingSource());
+        var rejectedCommand=retryCommand;
+        assertThrows(IllegalStateException.class,()->service.create(CustodyTestSupport.tenantAdmin(tenant),
+                rejectedCommand,"API","rejected-gas-hot-route","127.0.0.1"));
+        assertEquals(1,reservations.listOpen(10).size());
+        assertEquals(1,count("withdrawal_order"));
+        rejectGas=false;
+        String hash="0x"+"a".repeat(64);
+        assertEquals(1,jdbc.update("update withdrawal_order set status='SENT',tx_hash=? where id=?",hash,original.getId()));
+        assertTrue(context.getBean(WithdrawalSettlementService.class).confirm(tenant,"ETH",accepted.orderNo(),hash));
+        assertEquals("CONFIRMED",reservations.findByOrder(tenant,"ETH",accepted.orderNo()).orElseThrow().status());
+        assertEquals(0,new BigDecimal("4").compareTo(balance("total_balance")));
+        assertEquals(0,BigDecimal.ZERO.compareTo(balance("locked_balance")));
+        var next=command();
+        next=new CustodyWithdrawalService.CreateWithdrawalCommand(next.custodyAddressId(),next.chain(),
+                next.assetSymbol(),next.toAddress(),next.amount(),"external-third",next.confirmed(),
+                next.subject(),next.fundingSource());
+        var rejected=service.create(CustodyTestSupport.tenantAdmin(tenant),next,"API",
+                "hot-route-independent-rejection","127.0.0.1");
+        when(authority.submit(any())).thenReturn(independent(rejected.id(),"REJECTED",false));
+        assertEquals("REJECTED",context.getBean(WithdrawalApprovalService.class)
+                .reconcile(tenant,rejected.id()).state());
+        assertEquals("CANCELLED",reservations.findByOrder(tenant,"ETH",rejected.orderNo()).orElseThrow().status());
+        assertEquals(0,new BigDecimal("4").compareTo(balance("available_balance")));
+        assertEquals(0,BigDecimal.ZERO.compareTo(balance("locked_balance")));
+    }
+
+    private UUID actor() {
+        return jdbc.queryForObject("select id from custody_tenant_user where tenant_id=? and role='TENANT_ADMIN'",
+                UUID.class,tenant);
     }
     private WalletWithdrawalApprovalRepository approvalRows() {
         return new WalletWithdrawalApprovalRepository(jdbc,new CustodyJacksonConfiguration().custodyObjectMapper());
@@ -640,6 +728,7 @@ class CustodyWithdrawalCreationIntegrationTest {
         jdbc.update("insert into custody_address(id,tenant_id,chain_address_id,chain,network,address,subject,source,status,derivation_subject,derivation_child) values (?,?,?,'ETH','sepolia',?,'system:gas','API','ACTIVE',3,0)",id,tenant,chainAddress,physical);
         jdbc.update("insert into custody_gas_account(id,tenant_id,custody_address_id,chain,network,native_symbol,low_balance_threshold,status) values (?,?,?,'ETH','sepolia','ETH',0,'ACTIVE')",UUID.randomUUID(),tenant,id);
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,'ETH','ETH','pool-physical',100,0,100)",tenant);
+        when(planning.destination(tenant, "ETH")).thenReturn(Optional.of(physical));
         return id;
     }
     private CustodyWithdrawalService.WithdrawalView poolCreate(String reference,String amount,String subject) {

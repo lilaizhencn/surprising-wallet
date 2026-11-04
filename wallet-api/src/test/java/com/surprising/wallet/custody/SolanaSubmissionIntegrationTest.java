@@ -58,7 +58,10 @@ class SolanaSubmissionIntegrationTest {
         context.registerBean(ChainAddressRepository.class,()->new ChainAddressRepository(jdbc));context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(CustodyGasAccountRepository.class,()->new CustodyGasAccountRepository(jdbc));context.registerBean(CustodyAddressRepository.class,()->new CustodyAddressRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
-        context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));context.registerBean(WithdrawalSettlementService.class);
+        context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class,
+                ()->com.surprising.wallet.testutil.CustodyTestSupport.hotReservationLifecycle(jdbc));
+        context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(ObjectMapper.class,()->json);context.registerBean(SolanaSubmissionService.class);context.refresh();service=context.getBean(SolanaSubmissionService.class);
         createOrder(REFERENCE,"SOL");
     }

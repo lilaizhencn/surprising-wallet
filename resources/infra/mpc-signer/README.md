@@ -21,7 +21,7 @@
 
 `wallet-mpc-signer` 为独立节点入口，采用 mTLS HTTPS JSON，降低 Java 接入与运行依赖成本。配置固定三个节点的 SPKI SHA256 身份、地址以及客户端证书到租户/操作的明确授权。协议通道把请求摘要、发送者身份和顺序号绑定到会话；接收限额与超时在节点内处理。每个进程同时只执行一个 cb-mpc 协议，以符合上游线程安全边界。
 
-当前节点接口为 `POST /v1/sessions`、`POST /v1/results` 与节点间专用的 `POST /v1/messages`；XMR 原签名材料恢复另有受原参与方约束的内部接口。节点支持初始建钥、签名和三方 REFRESH；刷新通过持有者专用 `/v1/refresh-prepared`、持久 fence/ready 及 Java 原子版本切换完成。已受理请求和结果加密持久化，重启后未完成的执行返回 `INTERRUPTED`，不能自动作为无签名失败处理。签名执行异常返回 `INDETERMINATE`。XMR 仅能按下文规则恢复原有材料；其余算法不能重启未知签名。当前服务用于隔离验收，不得用于真实资金。
+当前节点接口为 `POST /v1/sessions`、`POST /v1/results`、单向隔离的 `POST /v1/key-quarantines` 与节点间专用的 `POST /v1/messages`；XMR 原签名材料恢复另有受原参与方约束的内部接口。节点支持初始建钥、签名和三方 REFRESH；刷新通过持有者专用 `/v1/refresh-prepared`、持久 fence/ready 及 Java 原子版本切换完成。已受理请求和结果加密持久化，重启后未完成的执行返回 `INTERRUPTED`，不能自动作为无签名失败处理。签名执行异常返回 `INDETERMINATE`。XMR 仅能按下文规则恢复原有材料；其余算法不能重启未知签名。当前服务用于隔离验收，不得用于真实资金。
 
 Java `common.signing.MpcClient` 是单节点客户端：固定 TLS 1.3、CA/主机名校验、握手阶段 SPKI pinning，拒绝重定向；请求绑定租户/密钥/版本/会话和规范化意图摘要，限制响应大小与调用时间，并用 Java 独立验签。它只加载通信证书私钥，不加载钱包私钥或份额。`MpcSigningService` 编排钱包持久化，地址和交易业务使用远程持有者。客户端异常表示调用结果未知，调用方必须先对账原会话。
 
@@ -379,6 +379,12 @@ XRP 和 TRON 的旧私钥验收入口已改为真实 MPC：`resources/scripts/re
 
 HyperCore 的当前正式入口为 `resources/scripts/regtest/run-hypercore-flow.sh`，必填 `MPC_SIGNER_BIN`、原 `MPC_HYPERCORE_ACCEPTANCE_ROOT`、已激活的 `MPC_HYPERCORE_RECIPIENT`、稳定的 `MPC_HYPERCORE_FUNDED_RUN_ID`、`MPC_HYPERCORE_FUNDED_PAYER_ROLE=source|collector` 与 `MPC_HYPERCORE_FUNDED_PHASE`。编译/单测仅使用独立的 `surprising_wallet_test_hypercore_build_*`，随后恢复或复用原已充值账本；原节点、密钥、已选会话和账本不重置。付款角色只允许原 source/collector，两者的内部转账可用于验收余额调配。相同批次、角色和阶段保持原业务引用，不能为未知付款临时换批次。退出时备份最新账本并清理编译库；保留资金验收库，全部阶段完成并核对快照后再清理。资金快照必须符合当前目标 schema；入口不自动执行兼容迁移。此改动仅涉及验收脚本和探针，不改变生产数据流或数据库基线。
 
+
+## One-way hot key quarantine
+
+`POST /v1/key-quarantines` accepts only an enrolled mTLS client with `QUARANTINE_KEY` for the specified tenant. Its JSON body contains exactly `tenantId`, `keyId`, and the lowercase SHA-256 `descriptorHash` of the immutable Wallet quarantine event. Each holder stores that hash in its encrypted local store. A byte-identical retry returns the same receipt; a different hash for the same key is rejected. The fence cannot be removed through the node API.
+
+Every holder rejects new signing and original-session resubmission for a quarantined key. Running protocols are notified and check the fence before persisting a result. Original results remain readable through `/v1/results` for reconciliation. A signature already returned or broadcast before the fence, and any on-chain EIP-7702 authorization, cannot be revoked by this endpoint. Wallet confirms the incident fence only after all three holder receipts and the independent approval key-disable receipt match the same event.
 
 ## Independent approval authorization (integration in progress)
 

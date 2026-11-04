@@ -9,6 +9,7 @@ import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.CustodyGasService;
+import com.surprising.wallet.service.HotWalletBroadcastFence;
 import com.surprising.wallet.service.SolanaSubmissionService;
 import com.surprising.wallet.service.SolanaSubmissionService.Operation;
 import com.surprising.wallet.service.SolanaSubmissionService.Kind;
@@ -33,6 +34,7 @@ public class SolanaTransactionService {
     private final TokenConfigRepository tokens;
     private final CustodyGasService gas;
     private final WalletRuntimeConfigService runtime;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String send(Operation operation,ChainAddressRecord source) {
         runtime.requireTaskEnabled("SOLANA",WalletRuntimeConfigService.TASK_WITHDRAW,"Solana withdrawal");
@@ -76,7 +78,14 @@ public class SolanaTransactionService {
         if(status==null || status.isNull() || status.isMissingNode()) {
             long height=rpc.call("getBlockHeight",List.of(Map.of("commitment","confirmed"))).asLong();
             if(height>payload.lastValidBlockHeight())throw new IllegalStateException("Solana accepted message expired; chain reconciliation is required");
-            String observed=rpc.sendTransaction(Base64.getDecoder().decode(signed.transactionBase64()));
+            var sourceKeyId=submissions.intent(operation).orElseThrow().command().keyId();
+            String observed=operation.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(operation.tenantId(),"SOLANA",
+                            profiles.findAccountByChain("SOLANA").orElseThrow().getNetwork(),operation.reference(),
+                            signed.signature(),sourceKeyId,
+                            ()->rpc.sendTransaction(Base64.getDecoder().decode(signed.transactionBase64())))
+                    :broadcastFence.withPayoutBroadcastPermit(operation.tenantId(),"SOLANA",sourceKeyId,
+                            ()->rpc.sendTransaction(Base64.getDecoder().decode(signed.transactionBase64())));
             if(!signed.signature().equals(observed))throw new IllegalStateException("Solana RPC returned another transaction signature");
         }
         submissions.observed(operation,signed.signature());return signed.signature();

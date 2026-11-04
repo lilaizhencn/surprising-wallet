@@ -131,6 +131,10 @@ Monero daemon 的原高度与 tip 保持一致；恢复后先领取原未领取 
 
 该验收平台为 glibc2.39，实际 ELF 所需最高符号为 GLIBC2.38、GLIBCXX3.4.32、CXXABI1.3.13。部署机需满足这些运行库条件，或在目标发行版重新构建。cb-mpc、patched OpenSSL 均静态链接，动态依赖不指向构建目录，也不加载系统 libssl/libcrypto。该验收二进制构建于本分支提交前的工作区，manifest 保留当时的 dirty 记录；运行时代码与当前验收版本一致，归档是验收产物，不是已经批准的生产版本。原节点配置、秘密和份额不包含在包中。
 
+### Hot-key incident fence
+
+For a hot-key incident, pause the tenant chain and quarantine the affected hot wallet in Console. Wallet saves the original event first, sends its hash to all three holders, then disables the key in independent approval; the custody retry job replays the same event until all four receipts match. Monitor `quarantine_fence_confirmed_at`; a pending value means the fence has not been confirmed everywhere. Reconcile original `/v1/results`, chain mempools, confirmed transfers and EIP-7702 delegations separately. A signed or on-chain authorization remains effective until it is explicitly handled on-chain. The release package acceptance record above predates this fence and does not validate the changed binary.
+
 ### Independent approval gate (feature integration in progress)
 
 The approval branch requires `authorizationPublicKeys` on every holder and independent proofs on `SIGN`/`MONERO_RELAY`. Existing Wallet Java call sites still need the new authority grant integration, so deploying only the new holder binary will stop payment signing. Deploy the completed authority, Wallet integration and all holders together only after end-to-end acceptance; this development branch is not ready for production.

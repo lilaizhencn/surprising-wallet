@@ -24,6 +24,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ArchitectureBoundaryTest {
     @Test
+    void hotWalletRepositoriesKeepAddressAndAssetPolicyInSeparateTables() throws IOException {
+        var wallet = Files.readString(sourceRoot().resolve("repository/CustodyHotWalletRepository.java"));
+        var policy = Files.readString(sourceRoot().resolve("repository/CustodyHotWalletAssetPolicyRepository.java"));
+        var inventory = Files.readString(sourceRoot().resolve("repository/CustodyHotWalletInventoryObservationRepository.java"));
+        var reservation = Files.readString(sourceRoot().resolve("repository/CustodyHotWalletWithdrawalReservationRepository.java"));
+        assertTrue(wallet.contains("@Repository") && wallet.contains("custody_hot_wallet"));
+        assertFalse(wallet.contains("custody_hot_wallet_asset_policy"));
+        assertTrue(policy.contains("@Repository") && policy.contains("custody_hot_wallet_asset_policy"));
+        assertFalse(policy.matches("(?s).*\\b(from|join|into|update)\\s+custody_hot_wallet\\b.*"));
+        assertTrue(inventory.contains("@Repository") && inventory.contains("custody_hot_wallet_inventory_observation"));
+        assertFalse(inventory.matches("(?s).*\\b(from|join|into|update)\\s+(?:custody_hot_wallet|custody_hot_wallet_asset_policy)\\b.*"));
+        assertTrue(reservation.contains("@Repository") && reservation.contains("custody_hot_wallet_withdrawal_reservation"));
+        assertFalse(reservation.matches("(?s).*\\b(from|join|into|update)\\s+(?:custody_hot_wallet|withdrawal_order|ledger_balance)\\b.*"));
+    }
+
+    @Test
     void hyperCoreReceiptRepositoryOnlyOwnsActionRecords() throws IOException {
         var source=Files.readString(sourceRoot().resolve("repository/HyperCoreActionRepository.java"));
         assertTrue(source.contains("tenant_id") && source.contains("request_id") && source.contains("execution_receipt"));

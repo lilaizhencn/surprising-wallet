@@ -20,6 +20,7 @@ public class ApprovalChainRpcClient implements AutoCloseable {
             "server_info","account_info","ledger","block","status","gas_price","query","EXPERIMENTAL_protocol_config",
             "getMasterchainInfo","getWalletInformation","getAddressInformation","runGetMethod","estimateFee","getAddressBalance","userRole",
             "eth_chainId","eth_getCode","eth_getStorageAt","eth_getTransactionCount","eth_call","eth_getBlockByNumber","eth_getBalance",
+            "eth_getTransactionReceipt","eth_getTransactionByHash",
             "getBalance","getTokenAccountBalance","account_lines","get_info","get_block_header_by_height");
     private static final Set<String> PATHS=Set.of("/wallet/getblockbynum","/wallet/getnowblock","/wallet/getchainparameters","/wallet/getaccount","/info",
             "/v1/polkadot/network-info","/v1/polkadot/payment-info","/v1/polkadot/latest-finalized","/v1/polkadot/signing-facts",
@@ -63,6 +64,7 @@ public class ApprovalChainRpcClient implements AutoCloseable {
         private final Endpoint endpoint;private final long deadline=System.nanoTime()+timeout.toNanos();
         private Reads(Endpoint endpoint){this.endpoint=endpoint;}
         public String parameter(String name) {var value=endpoint.profile().parameters().get(name);require(value!=null && !value.isBlank(),"independent RPC parameter is required: "+name);return value;}
+        public String optionalParameter(String name) {var value=endpoint.profile().parameters().get(name);return value==null || value.isBlank()?null:value;}
         public JsonNode rpc(String method,Object parameters) {
             return rpc(method,parameters,false);
         }

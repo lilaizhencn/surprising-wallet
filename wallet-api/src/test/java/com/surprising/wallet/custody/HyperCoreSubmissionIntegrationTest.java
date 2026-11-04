@@ -65,11 +65,19 @@ class HyperCoreSubmissionIntegrationTest {
         context.registerBean(ChainProfileRepository.class,()->new ChainProfileRepository(jdbc));
         context.registerBean(ChainAddressRepository.class,()->new ChainAddressRepository(jdbc));context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
-        context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));context.registerBean(WithdrawalSettlementService.class);
+        context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(CustodyHotWalletWithdrawalReservationRepository.class,()->new CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(HotWalletReservationLifecycleService.class);context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(ObjectMapper.class,()->json);context.registerBean(HyperCoreSubmissionService.class);
         context.registerBean(HyperCoreLedgerCursorRepository.class,()->new HyperCoreLedgerCursorRepository(jdbc));
         context.registerBean(DepositService.class,()->depositContext.getBean(DepositService.class));context.registerBean(HyperCoreDepositService.class);
         context.registerBean(HyperCoreApiClient.class,()->api);context.registerBean(WalletRuntimeConfigService.class,()->com.surprising.wallet.testutil.RuntimeTestSupport.enabled());
+        var broadcastFence=mock(HotWalletBroadcastFence.class);
+        when(broadcastFence.withPayoutBroadcastPermit(any(),anyString(),any(),any()))
+                .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(3)).send());
+        when(broadcastFence.withAccountCollectionBroadcastPermit(any(),anyString(),anyString(),anyString(),anyString(),any(),any()))
+                .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(6)).send());
+        context.registerBean(HotWalletBroadcastFence.class,()->broadcastFence);
         context.registerBean(HyperCoreTransactionService.class);context.refresh();service=context.getBean(HyperCoreSubmissionService.class);transfers=context.getBean(HyperCoreTransactionService.class);
         createOrder(REFERENCE,"USDC");
     }

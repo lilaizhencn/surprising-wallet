@@ -45,7 +45,8 @@ class NearMoneyPrecisionIntegrationTest {
         for(String table:List.of("deposit_record","custody_deposit","custody_ledger_entry"))amount(YOCTO,jdbc.queryForObject("select amount from "+table+" where tenant_id=? and chain='NEAR'",BigDecimal.class,TENANT));
     }
     @Test void oneYoctoPrincipalAndFeeSettleAndRefundExactlyOnce() {
-        credit(YOCTO.multiply(BigDecimal.TEN));var settlements=new WithdrawalSettlementService(orders,balances);
+        credit(YOCTO.multiply(BigDecimal.TEN));var settlements=new WithdrawalSettlementService(orders,balances,
+                com.surprising.wallet.testutil.CustodyTestSupport.hotReservationLifecycle(jdbc));
         sent("precision-paid");assertTrue(Boolean.TRUE.equals(transaction.execute(status->settlements.confirm(TENANT,"NEAR","precision-paid","precision-paid-hash"))));
         assertFalse(Boolean.TRUE.equals(transaction.execute(status->settlements.confirm(TENANT,"NEAR","precision-paid","precision-paid-hash"))));
         sent("precision-failed");assertTrue(Boolean.TRUE.equals(transaction.execute(status->settlements.fail(TENANT,"NEAR","precision-failed","precision-failed-hash","verified failure"))));

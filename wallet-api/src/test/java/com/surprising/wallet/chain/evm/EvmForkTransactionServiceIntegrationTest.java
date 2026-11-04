@@ -118,7 +118,8 @@ class EvmForkTransactionServiceIntegrationTest {
                     httpServices,
                     context.getBean(WithdrawalSettlementService.class),
                     context.getBean(com.surprising.wallet.service.EvmSubmissionService.class),
-                    new com.surprising.wallet.repository.CustodyAssetRecoveryRepository(jdbc));
+                    new com.surprising.wallet.repository.CustodyAssetRecoveryRepository(jdbc),
+                    context.getBean(com.surprising.wallet.service.HotWalletBroadcastFence.class));
 
             sendUnlockedNative(web3j, accounts.getFirst(), from.getAddress(), new BigDecimal("2"));
             var nativeOperation = prepareOperation(repository,jdbc,localProfile,from,localProfile.getNativeSymbol(),accounts.get(1),new BigDecimal("0.25"),new BigDecimal("0.01"));

@@ -83,7 +83,7 @@ public class CustodyGasAccountRepository {
 
     /** 查询租户指定链上的启用 Gas 账户。 */
     public List<Definition> listActiveByTenantAndChain(UUID tenantId, String chain) {
-        return jdbc.query("select " + COLUMNS + " from custody_gas_account where tenant_id = ? and chain = ? and status = 'ACTIVE'",
+        return jdbc.query("select " + COLUMNS + " from custody_gas_account where tenant_id = ? and chain = ? and status = 'ACTIVE' order by id",
                 CustodyGasAccountRepository::mapDefinition, tenantId, chain);
     }
 

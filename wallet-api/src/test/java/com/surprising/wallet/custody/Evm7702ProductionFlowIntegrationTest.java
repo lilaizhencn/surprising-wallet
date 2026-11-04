@@ -239,7 +239,8 @@ class Evm7702ProductionFlowIntegrationTest {
                         new ChainAssetRepository(jdbc),
                         new ChainProfileRepository(jdbc),
                         new TokenConfigRepository(jdbc),
-                        new LedgerBalanceRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.poolFunding(jdbc));
+                        new LedgerBalanceRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.poolFunding(jdbc),
+                        com.surprising.wallet.testutil.CustodyTestSupport.hotRouting(jdbc));
         withdrawalService = new CustodyWithdrawalService(
 
 

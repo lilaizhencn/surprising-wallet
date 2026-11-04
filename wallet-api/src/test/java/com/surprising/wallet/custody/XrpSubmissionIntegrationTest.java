@@ -56,7 +56,9 @@ class XrpSubmissionIntegrationTest {
         context.registerBean(ChainProfileRepository.class,()->new ChainProfileRepository(jdbc));
         context.registerBean(ChainAddressRepository.class,()->new ChainAddressRepository(jdbc));context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
-        context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));context.registerBean(WithdrawalSettlementService.class);
+        context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(CustodyHotWalletWithdrawalReservationRepository.class,()->new CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(HotWalletReservationLifecycleService.class);context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(ObjectMapper.class,()->json);context.registerBean(CustodyGasAccountingService.class,()->com.surprising.wallet.testutil.CustodyTestSupport.gasAccounting(jdbc));context.registerBean(XrpSubmissionService.class);context.refresh();service=context.getBean(XrpSubmissionService.class);
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,total_balance) values (?,'XRP','XRP',?,5,5)",TENANT,ACCOUNT);
         createOrder(REFERENCE);

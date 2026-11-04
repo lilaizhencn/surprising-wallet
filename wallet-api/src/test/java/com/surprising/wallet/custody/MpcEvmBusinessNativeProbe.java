@@ -107,7 +107,8 @@ final class MpcEvmBusinessNativeProbe {
             rpc(forward,json,endpoint,"anvil_setBalance",List.of(source.getAddress(),"0x56bc75e2d63100000"));
             var service=new EvmAccountTransactionService(orders,collections,transactions,profiles,new ChainAssetRepository(jdbc),
                     new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc),"mpc-test",1),new EvmTransactionBuilder(),http,
-                    context.getBean(WithdrawalSettlementService.class),submissions,recoveries);
+                    context.getBean(WithdrawalSettlementService.class),submissions,recoveries,
+                    context.getBean(com.surprising.wallet.service.HotWalletBroadcastFence.class));
             BigInteger before=Numeric.decodeQuantity(rpc(forward,json,endpoint,"eth_getBalance",List.of(RECIPIENT,"latest")).asText());
             for(String policy:List.of("legacy-gas-price","eip1559")) {
                 jdbc.update("update chain_profile set gas_policy=? where chain='ETH' and enabled=true",policy);

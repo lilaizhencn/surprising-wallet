@@ -2,6 +2,7 @@ package com.surprising.wallet.service;
 
 import com.surprising.wallet.repository.CustodyReorgDeficitRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
+import com.surprising.wallet.repository.CustodyTenantChainTableRepository;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WithdrawalClaimService {
     private final WithdrawalOrderRepository orders;
     private final CustodyReorgDeficitRepository deficits;
+    private final CustodyTenantChainTableRepository tenantChains;
 
     @Transactional(rollbackFor = Throwable.class)
     public int claim(UUID tenantId, String chain, String orderNo, String fromAddress) {
@@ -28,7 +30,8 @@ public class WithdrawalClaimService {
     private int claim(UUID tenantId, String chain, String orderNo, String fromAddress, boolean durable) {
         Objects.requireNonNull(tenantId, "withdrawal tenantId is required");
         var order = orders.find(chain, orderNo, tenantId).orElse(null);
-        if (order == null || deficits.existsOpenAsset(tenantId,chain,order.getAssetSymbol())) return 0;
+        if (order == null || tenantChains.withdrawalPaused(tenantId, chain)
+                || deficits.existsOpenAsset(tenantId,chain,order.getAssetSymbol())) return 0;
         return durable ? orders.claimSigningDurable(tenantId,chain,orderNo,fromAddress) : orders.claimSigning(tenantId, chain, orderNo, fromAddress);
     }
 }

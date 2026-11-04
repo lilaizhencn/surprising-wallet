@@ -27,7 +27,10 @@ public final class MpcAuthorizationTestSupport {
                 new WalletWithdrawalApprovalRepository(jdbc,json),new CustodyAuditRepository(jdbc),authority,json,manager,
                 new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,json),new WalletMpcRelayRepository(jdbc,json),new CustodyTenantUserRepository(jdbc),
                 new MpcNonceAdmissionService(new EvmNonceRepository(jdbc),new AccountSequenceRepository(jdbc),new WalletMpcKeyRepository(jdbc),
-                        new WalletMpcSignRequestRepository(jdbc),new WalletMpcSignAttemptRepository(jdbc,json),json));
+                        new WalletMpcSignRequestRepository(jdbc),new WalletMpcSignAttemptRepository(jdbc,json),json),
+                new CustodyTenantChainTableRepository(jdbc), new CustodyHotWalletRepository(jdbc),
+                new CustodyHotWalletInventoryObservationRepository(jdbc),
+                new CustodyAddressRepository(jdbc),new ChainAddressRepository(jdbc));
     }
     /** Explicit DB-only substitute. Actual native probes must use service(), never this helper. */
     public static MpcAuthorizationService forBoundaryTests(JdbcTemplate jdbc,ObjectMapper json,PlatformTransactionManager manager) {

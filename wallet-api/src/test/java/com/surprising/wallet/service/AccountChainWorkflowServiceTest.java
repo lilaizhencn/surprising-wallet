@@ -22,6 +22,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
@@ -143,7 +145,7 @@ class AccountChainWorkflowServiceTest {
 
         createCollectionCandidates(service, profile);
 
-        assertEquals(1, repository.collectionAddressLookups);
+        assertEquals(2, repository.collectionAddressLookups);
         assertEquals(2, repository.createdCount);
         Mockito.verify(repository.chainAssetRepository, Mockito.times(1)).findActiveDefinition("APTOS", "APT");
         Mockito.verify(repository.chainProfileRepository, Mockito.never()).findAccountByChain(Mockito.anyString());
@@ -401,11 +403,18 @@ class AccountChainWorkflowServiceTest {
             fake.withdrawalSettlements++;
             return true;
         });
+        var hotRouting = Mockito.mock(HotWalletCollectionRoutingService.class);
+        Mockito.when(hotRouting.destination(any(), anyString(), anyString(), any())).thenReturn(Optional.empty());
+        var transactionManager = Mockito.mock(PlatformTransactionManager.class);
+        Mockito.when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
+        var admission = new CollectionAdmissionService(repository.collectionRecordRepository,
+                repository.collectionPlanningService, hotRouting, transactionManager);
         return new AccountChainWorkflowService(
                 repository.chainProfileRepository, repository.evm7702ConfigRepository,
                 repository.withdrawalOrderRepository, repository.collectionRecordRepository,
                 repository.withdrawalClaimService, repository.evmBatchOwnershipService,
-                repository.collectionPlanningService, repository.tokenConfigRepository, repository.chainAddressRepository,
+                repository.collectionPlanningService, admission,
+                repository.tokenConfigRepository, repository.chainAddressRepository,
                 Mockito.mock(WalletRuntimeConfigService.class), Mockito.mock(AccountChainDepositWorkflow.class),
                 new AccountChainAssetService(repository.evm7702ConfigRepository, repository.chainAddressRepository,
                         repository.tokenConfigRepository, repository.chainAssetRepository,
@@ -713,7 +722,8 @@ class AccountChainWorkflowServiceTest {
                     null,
                     null,
                     mock(WithdrawalSettlementService.class),
-                    mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class));
+                    mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class),
+                    mock(HotWalletBroadcastFence.class));
         }
 
         /**
@@ -749,7 +759,8 @@ class AccountChainWorkflowServiceTest {
                     null,
                     null,
                     mock(WithdrawalSettlementService.class),
-                    mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class));
+                    mock(EvmSubmissionService.class), mock(com.surprising.wallet.repository.CustodyAssetRecoveryRepository.class),
+                    mock(HotWalletBroadcastFence.class));
         }
 
         /**
@@ -866,7 +877,7 @@ class AccountChainWorkflowServiceTest {
     private static final class CapturingAptosService extends AptosTransactionService {
         private AptosSubmissionService.Operation operation;
         private ChainAddressRecord source;
-        private CapturingAptosService(){super(null,null,mock(ChainProfileRepository.class),mock(TokenConfigRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),RuntimeTestSupport.enabled());}
+        private CapturingAptosService(){super(null,null,mock(ChainProfileRepository.class),mock(TokenConfigRepository.class),mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),RuntimeTestSupport.enabled(),mock(HotWalletBroadcastFence.class));}
         @Override public String send(AptosSubmissionService.Operation operation,ChainAddressRecord source){this.operation=operation;this.source=source;return "0xaptos-fa";}
     }
 
@@ -881,7 +892,7 @@ class AccountChainWorkflowServiceTest {
         private boolean messageConfirmed;
         private CapturingTonService() {
             super(null,null,mock(ChainProfileRepository.class),mock(TokenConfigRepository.class),
-                    mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),RuntimeTestSupport.enabled());
+                    mock(WithdrawalOrderRepository.class),mock(CollectionRecordRepository.class),RuntimeTestSupport.enabled(),mock(HotWalletBroadcastFence.class));
         }
         @Override public String send(TonSubmissionService.Operation operation,ChainAddressRecord from) {
             this.operation=operation;this.from=from;return "ton-hash";

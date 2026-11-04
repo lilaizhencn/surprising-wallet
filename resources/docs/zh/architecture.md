@@ -33,6 +33,20 @@ Controller 不直接依赖仓储；Job 不执行资金或链流程。Service 使
 
 `chain_address` 绑定不可变的 tenant/key/公开地址与主体；客户、Gas、归集和平台中继均有明确归属。地址的公开编码由 `MpcPublicAddressCodec` 和链编码器完成。`ChainAddressRuntime` 只校验公开地址；`BitcoinLikeChainRuntime` 负责公开地址校验、区块观察和已选交易广播。租户地址发布使用统一托管服务。
 
+`CustodyHotWalletService` 经统一 MPC 地址发布流程为租户和链生成独立的备用热提地址，并将地址登记在 `custody_hot_wallet`；对应 `chain_address.wallet_role` 为 `HOT_WITHDRAW`。每种资产的精确库存目标、库存上限、单笔及 24 小时提现上限登记在 `custody_hot_wallet_asset_policy`。两个表各有单表 Repository，Service 组合地址、资产及审计。新登记地址只处于 `STANDBY`，不可仅凭登记或额度配置进入签名路由；Gas 账户仍按租户每链一个，与热提地址分开。链扫描到 `HOT_WITHDRAW` 地址的入款只保留原始 `deposit_record` 观察，不产生客户可用余额、托管充值投影或客户 Webhook；`CustodyPoolFundingService` 也排除全部热提账户，防止其库存被当作客户可用本金。实际库存需按链上余额及内部补款记录独立对账。
+
+`ApprovalOperatingBalanceReader` 可按独立登记的目的 key 和资产读取链上精确原子单位余额；Wallet 通过服务 mTLS 获取并核对租户、地址、精度、规则指纹与 60 秒时效，再写入 `custody_hot_wallet_inventory_observation`。对应单表 Repository 只维护单调更新时间的观察缓存，不写客户账本。缓存余额尚须扣除在途支出并与链上最终状态对账，不能直接当成可出款额度；Bitcoin-like UTXO 与 Monero 的观察仍需各自原生输入或快照机制。
+
+`custody_hot_wallet_withdrawal_reservation` 将热钱包出款额度与固定订单、来源地址、资产和观察时点绑定。活跃钱包的账户链新订单在原创建事务中依据新鲜库存、单笔及滚动 24 小时上限选择来源并插入预留；有活跃钱包而无容量时拒绝，不退回旧 Gas/归集地址。链上确认、确定失败或独立无签名取消与资金状态同事务关闭预留；广播未知保持 OPEN。已确认支出不能凭墙钟时间较新的只读节点响应释放。普通 EVM 单笔提现可由独立审批核对 finalized 区块中的原交易、成功回执、原目标与金额，并在 Wallet 同事务刷新对应 finalized 余额、永久绑定回执锚点后仅释放库存本金占额；后台限量轮询未核销预留，遇到无法证明的原订单保留占额并继续扫描后续订单，Console 也支持单笔重试。滚动 24 小时敞口仍计入。EIP-7702 批次、其他链和归集流入尚未接入该证明，继续保守占额。该预留不替代独立审批额度；钱包启用、归集目标切换、UTXO 库存及应急资产转移仍待闭环。
+
+热钱包泄露后的隔离、链上授权撤销、库存预留与切换顺序见[热钱包泄露应急与分层损失上限](hot-wallet-incident-response.md)。
+
+提现订单的链上来源由 `withdrawal_order.from_address` 绑定：托管申请在创建时绑定，旧 UTXO 排队订单在首次选币时绑定。租户订单仓储对后续状态转移校验已有来源，数据库触发器禁止改写已绑定来源及转移租户归属，因此热钱包轮换不会悄悄迁移在途订单。
+
+EIP-7702 提现中继交易的签名 key 与实际付款权威 key 可以不同。`MpcAuthorizationService` 从原批次准备载荷读取并校验权威 key，在独立授权请求及回执提交时同时检查其热钱包状态；`HotWalletBroadcastFence` 在新广播和未知交易重广播前再检查租户链暂停与权威 key 状态。已上链交易仍照常确认和对账；已签原始交易和链上委托不因本地状态变更自动失效。
+
+登记行保存同租户原 MPC key ID，地址和 key 由 `CustodyHotWalletService` 在同一发布事务中核对。Console 隔离先在 Wallet 事务中把钱包状态不可逆地置为 `QUARANTINED`，保存操作者、时间和原因；`MpcAuthorizationService` 在申请和最终保存授权证明时按 tenant、chain、key 检查，仅 `ACTIVE` 可继续。随后 Wallet 以 mTLS 将同一事件哈希送到三名原生持有者；每名持有者分别把租户/key 隔离标记不可变地存入加密存储，拒绝新签名及原会话重入，通知正在运行的协议中止，并在最终保存结果前再次检查。三名均返回匹配回执后，Wallet 才向独立审批服务发送原事件；审批服务在自己的事务中锁定 `approval.key` 并置为 `DISABLED`，保存不可更改的事件哈希并审计。同一原事件可重试，其他描述不能覆盖。全部四个隔离回执得到后 Wallet 单独提交 `quarantine_fence_confirmed_at`；失败时 Console 显示待确认并允许重试，`HotWalletQuarantineRetryJob` 也在 custody 调度池中周期重送原事件。独立审批在返回缓存授权和 Monero relay 凭据前仍检查主签名 key 状态，新授权继续检查所有所需 key。已经产出的签名、已广播交易以及 EIP-7702 等链上授权不能通过服务端隔离撤回，必须按原业务引用单独追踪和处理。
+
 `MpcNodes` 配置三个不同的持有者身份和 HTTPS 端点，校验 CA、客户端证书及传输私钥。配置概览使用 `mpcConfigured`。应用没有 Java 签名模式切换，`wallet-api` 固定运行 Web/API 和业务调度。
 
 ## 签名与恢复
@@ -167,7 +181,9 @@ TON/NEAR/DOT 和 TRON 带宽等协议没有覆盖所有成本的单一 signed ma
 
 ### 独立自动用途规则与原操作凭据（新增代码，未统一验证）
 
-`ApprovalAutomationProperties` 的用途规则由审批主机安装，按 tenant/chain/network/asset/businessType 唯一选择，Wallet/mTLS 和租户浏览器不能增补 treasury/Gas 身份或补充费用额度。集合包含显式 source key 集合、归集/找回固定 destination key、最小/最大金额、24h 金额/数量、永久累计金额/原生费用额度、源账户最小间隔及原生金额/费用比例；FUNDING/DEV_FAUCET 只能使用明确指定的一名来源，RECOVERY 也要求显式来源。归集来源排除已安装的 treasury/Gas/faucet 角色，防止这些角色相互制造扫款循环。
+`ApprovalAutomationProperties` 的用途规则由审批主机安装；COLLECTION/RECOVERY 按 tenant/chain/network/asset/businessType/destinationKeyId 唯一，其他用途按 tenant/chain/network/asset/businessType 唯一。独立审批从已登记目的 key 推导链地址，并按原计划或原交易的实际收款地址精确选中一条规则；Wallet/mTLS 和租户浏览器不能增补 treasury/Gas 身份或补充费用额度。集合包含显式 source key 集合、归集/找回固定 destination key、最小/最大金额、24h 金额/数量、永久累计金额/原生费用额度、源账户最小间隔及原生金额/费用比例；FUNDING/DEV_FAUCET 只能使用明确指定的一名来源，RECOVERY 也要求显式来源。归集来源排除已安装的 treasury/Gas/faucet 角色，防止这些角色相互制造扫款循环。
+
+独立服务的只读 `GET /approval/service/v1/automatic-plans/destinations` 仅对已认证 Wallet 服务返回指定租户、链、网络、资产及目的 key 的规则身份、目的地址和额度摘要，用于热钱包启用前检查。它不是签名证明；每笔实际归集仍需重新经过原始计划、链上余额、规则指纹和额度核验。
 
 自动业务与人工提现走同一个最终 wire 校验、永久 spend lock、版本/槽/原 native session 证明流程，但没有伪造的人类审批行。`AutomaticOperation` 把 SYSTEM 来源、零人工审核员与 INDEPENDENT_OPERATING_RULE 明确记录在独立用途凭据中；用途规则 fingerprint 绑定进不可变意图哈希。公开人工申请入口继续只接受 API/CONSOLE，不能提交 SYSTEM 绕过审核。Wallet 先验证原证明和用途收据，再把二者及审计同事务写入 wallet_mpc_sign_attempt.authorization_proof/automatic_operation；原证明已保存后，用途收据也禁止改变。
 

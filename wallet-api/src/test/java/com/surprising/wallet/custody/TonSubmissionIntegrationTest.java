@@ -56,11 +56,23 @@ class TonSubmissionIntegrationTest {
         context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(CustodyHotWalletWithdrawalReservationRepository.class,()->new CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(HotWalletReservationLifecycleService.class);
         context.registerBean(WithdrawalSettlementService.class);context.registerBean(ObjectMapper.class,()->json);
         context.registerBean(TonSubmissionService.class);context.refresh();service=context.getBean(TonSubmissionService.class);
         createOrder(REFERENCE,"TON");
     }
     @AfterEach void close(){if(context!=null)context.close();}
+    private static HotWalletBroadcastFence permissiveBroadcastFence() {
+        var fence=mock(HotWalletBroadcastFence.class);
+        try {
+            when(fence.withPayoutBroadcastPermit(any(),anyString(),any(),any()))
+                    .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(3)).send());
+            when(fence.withAccountCollectionBroadcastPermit(any(),anyString(),anyString(),anyString(),anyString(),any(),any()))
+                    .thenAnswer(call->((HotWalletBroadcastFence.Broadcast<?>)call.getArgument(6)).send());
+        } catch(Exception error){throw new IllegalStateException(error);}
+        return fence;
+    }
     private TonSubmissionService.Operation op(){return op(REFERENCE);}
     private TonSubmissionService.Operation op(String reference){return new TonSubmissionService.Operation(TENANT,reference,TonSubmissionService.Kind.WITHDRAWAL);}
     private void createOrder(String reference,String symbol){
@@ -186,7 +198,7 @@ class TonSubmissionIntegrationTest {
     }
     @Test void lostReplyRecoversOriginalBocWithoutNewSequenceOrTaskApproval(){
         var rpc=mock(TonCenterClient.class);String owner=MpcTonTransactionCodec.canonicalAddress(source.getAddress());when(rpc.seqno(owner)).thenReturn(7L);
-        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new TonTransactionService(rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),runtime);
+        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new TonTransactionService(rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),runtime,permissiveBroadcastFence());
         var accepted=new java.util.concurrent.atomic.AtomicBoolean();
         when(rpc.findExternalMessageTransaction(anyString(),anyString(),anyInt())).thenAnswer(call->accepted.get()?Optional.of(json.createObjectNode()):Optional.empty());
         when(rpc.sendBoc(any())).thenAnswer(call->{

@@ -34,6 +34,7 @@
       "operations": [
         "CREATE_KEY",
         "SIGN",
+        "QUARANTINE_KEY",
         "READ_RESULT"
       ]
     },

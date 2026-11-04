@@ -46,6 +46,8 @@ class SuiSubmissionIntegrationTest {
         var ds=CustodyIntegrationDatabase.dataSource();CustodyIntegrationDatabase.reset(ds);jdbc=new JdbcTemplate(ds);
         jdbc.update("update chain_profile set enabled=false where chain='SUI'");
         jdbc.update("update chain_profile set enabled=true,default_fee_rate=10000000 where chain='SUI' and network='testnet'");
+        new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc).setStatus(TENANT,
+                "SUI","ACTIVE",UUID.fromString("00000000-0000-0000-0000-000000000002"));
         fixture=new MpcSigningTestSupport(jdbc);source=fixture.address(jdbc,TENANT,ChainType.SUI,42,1,"DEPOSIT");
         orders=new WithdrawalOrderRepository(jdbc);transactions=new SuiTransactionRepository(jdbc);
         context=new AnnotationConfigApplicationContext();context.register(Transactions.class);
@@ -58,6 +60,9 @@ class SuiSubmissionIntegrationTest {
         context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));
+        context.registerBean(com.surprising.wallet.repository.CustodyHotWalletWithdrawalReservationRepository.class,
+                ()->new com.surprising.wallet.repository.CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class);
         context.registerBean(WithdrawalSettlementService.class);context.registerBean(ObjectMapper.class,()->json);
         context.registerBean(SuiSubmissionService.class);context.refresh();service=context.getBean(SuiSubmissionService.class);
         createOrder(REFERENCE,"SUI");
@@ -162,7 +167,15 @@ class SuiSubmissionIntegrationTest {
     }
     @Test void lostReplyRecoversOriginalObjectsAndWireAfterNewTasksAreDisabled(){
         var rpc=mock(SuiRpcClient.class);when(rpc.serviceInfo()).thenReturn(new SuiRpcClient.ChainInfo(GENESIS,"unknown",0,123));when(rpc.referenceGasPrice()).thenReturn(1000L);when(rpc.coins(anyString(),anyString(),anyInt())).thenReturn(List.of(coin("ef")));
-        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new SuiTransactionService(rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),runtime);
+        var runtime=mock(WalletRuntimeConfigService.class);var transfers=new SuiTransactionService(rpc,service,new ChainProfileRepository(jdbc),new TokenConfigRepository(jdbc),orders,new CollectionRecordRepository(jdbc),runtime,
+                new com.surprising.wallet.service.HotWalletBroadcastFence(
+                        new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyHotWalletRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+                        new com.surprising.wallet.repository.ChainAddressRepository(jdbc),
+                        new CollectionRecordRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyHotWalletInventoryObservationRepository(jdbc),
+                        fixture.manager));
         var accepted=new java.util.concurrent.atomic.AtomicBoolean();
         when(rpc.transactionBlock(anyString())).thenAnswer(call->accepted.get()?json.createObjectNode().put("digest",call.<String>getArgument(0)):json.createObjectNode());
         when(rpc.executeSignedTransaction(anyString(),anyString())).thenAnswer(call->{
@@ -171,6 +184,13 @@ class SuiSubmissionIntegrationTest {
         });
         assertThrows(IllegalStateException.class,()->transfers.send(op(),source));service.unknown(op(),"lost reply");
         doThrow(new IllegalStateException("disabled")).when(runtime).requireTaskEnabled(anyString(),anyString(),anyString());
+        var chainRows=new com.surprising.wallet.repository.CustodyTenantChainTableRepository(jdbc);
+        accepted.set(false);
+        assertEquals(1,chainRows.setWithdrawalPaused(TENANT,"SUI",true,
+                UUID.fromString("00000000-0000-0000-0000-000000000002")));
+        assertThrows(IllegalStateException.class,()->transfers.recover(op()));
+        verify(rpc,times(1)).executeSignedTransaction(anyString(),anyString());
+        accepted.set(true);
         assertTrue(transfers.recover(op()));verify(rpc,times(1)).executeSignedTransaction(anyString(),anyString());verify(rpc,times(1)).coins(anyString(),anyString(),anyInt());
         assertEquals("SENT",orders.find("SUI",REFERENCE,TENANT).orElseThrow().getStatus());
     }

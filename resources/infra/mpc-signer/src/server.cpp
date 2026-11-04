@@ -151,6 +151,7 @@ struct Session {
   bool finished = false;
   bool recover_monero = false;
   bool recover_refresh = false;
+  bool quarantined = false;
 };
 
 class Node;
@@ -221,6 +222,30 @@ class Node {
       authorize(authenticated_party(request), query, "READ_RESULT");
       reply(response, result(query));
     });
+    server_.Post("/v1/key-quarantines", [&](const auto& request, auto& response) {
+      const Json event = Json::parse(request.body);
+      require(event.is_object() && event.size() == 3, "key quarantine fields differ");
+      const auto tenant = uuid(event, "tenantId");
+      const auto key = uuid(event, "keyId");
+      const auto digest = event.at("descriptorHash").get<std::string>();
+      require(digest.size() == 64 && std::all_of(digest.begin(), digest.end(), [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+      }), "key quarantine hash differs");
+      authorize(authenticated_party(request), event, "QUARANTINE_KEY");
+      std::lock_guard<std::mutex> lock(mutex_);
+      const auto record = "key-quarantine-" + tenant + "-" + key;
+      const auto previous = store_.get(record, "SW-MPC-KEY-QUARANTINE-V1");
+      if (previous) require(previous->to_string() == digest, "original key quarantine descriptor differs");
+      else store_.put(record, "SW-MPC-KEY-QUARANTINE-V1", mem_t(digest));
+      for (auto& [id, session] : sessions_) {
+        if (uuid(session->descriptor, "tenantId") != tenant || uuid(session->descriptor, "keyId") != key) continue;
+        std::lock_guard<std::mutex> session_lock(session->mutex);
+        session->quarantined = true;
+        session->ready.notify_all();
+      }
+      reply(response, Json{{"tenantId", tenant}, {"keyId", key}, {"descriptorHash", digest},
+                           {"quarantined", true}, {"partyId", identity_}});
+    });
     server_.Post("/v1/messages", [&](const auto& request, auto& response) {
       receive_message(authenticated_party(request), Json::parse(request.body));
       reply(response, Json{{"accepted", true}});
@@ -242,6 +267,7 @@ class Node {
           && descriptor.at("algorithm") == "MONERO_NATIVE_2_OF_3" && descriptor.at("epoch") == 1
           && descriptor.at("online").size() == 2 && descriptor.at("online").at(0) == caller
           && descriptor.at("online").at(1) == identity_, "only the original native proposer may fetch its co-signer's material");
+      require(!key_quarantined(descriptor), "native signing key is quarantined");
       const auto material = monero_recovery_material(descriptor, identity_, store_);
       reply(response, Json{{"material", material ? *material : Json(nullptr)}});
     });
@@ -340,6 +366,11 @@ class Node {
       const auto ready = store_.get(key_record(descriptor, "ready-"), aad);
       require(ready && ready->to_string() == metadata.dump(), "refreshed epoch has not passed the holder readiness barrier");
     }
+  }
+
+  bool key_quarantined(const Json& descriptor) const {
+    return store_.get("key-quarantine-" + uuid(descriptor, "tenantId") + "-" + uuid(descriptor, "keyId"),
+                      "SW-MPC-KEY-QUARANTINE-V1").has_value();
   }
 
   std::optional<Json> prepared_refresh(const Json& descriptor) {
@@ -450,6 +481,7 @@ class Node {
     Json authorization;
     if (needs_authorization) authorization = verify_authorization(proof, descriptor, authorization_keys_, 0, false);
     std::lock_guard<std::mutex> lock(mutex_);
+    if (operation != "MONERO_OBSERVE") require(!key_quarantined(descriptor), "native signing key is quarantined");
     bool admitted = false;
     if (needs_authorization) {
       const auto grant_id = "approval-" + uuid(authorization, "authorizationId");
@@ -569,6 +601,7 @@ class Node {
     auto payload = unhex(encoded, 4 * 1024 * 1024);
     const auto digest = hash(encoded);
     std::lock_guard<std::mutex> lock(session->mutex);
+    require(!session->quarantined, "native signing key is quarantined");
     auto& seen = session->received_hashes[sender];
     require(sequence >= 0 && sequence <= static_cast<int>(seen.size()), "protocol message is out of order");
     if (sequence < static_cast<int>(seen.size())) {
@@ -590,6 +623,8 @@ class Node {
     Json outcome{{"sessionId", id}, {"tenantId", descriptor.at("tenantId")},
                  {"keyId", descriptor.at("keyId")}, {"epoch", descriptor.at("epoch")}, {"intentHash", session->digest}};
     try {
+      if (descriptor.at("operation") != "MONERO_OBSERVE")
+        require(!key_quarantined(descriptor), "native signing key is quarantined");
       PeerTransport transport(*this, session);
       if (descriptor.at("algorithm") == "MONERO_NATIVE_2_OF_3") {
         auto exchange = [&](const Json& local) {
@@ -666,7 +701,12 @@ class Node {
       }
       }
       outcome["state"] = "COMPLETED";
-      store_.put((session->recover_monero || session->recover_refresh ? "recovered-result-" : "result-") + id, aad, mem_t(outcome.dump()));
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (descriptor.at("operation") != "MONERO_OBSERVE")
+          require(!key_quarantined(descriptor), "native signing key is quarantined");
+        store_.put((session->recover_monero || session->recover_refresh ? "recovered-result-" : "result-") + id, aad, mem_t(outcome.dump()));
+      }
     } catch (const std::exception& failure) {
       // A failed or lost result must never be interpreted as proof that no
       // usable signature was produced. The wallet must reconcile this state.
@@ -699,6 +739,7 @@ error_t PeerTransport::send(api::party_idx_t receiver, mem_t message) {
     Json envelope{{"sessionId", session_->descriptor.at("sessionId")}, {"intentHash", session_->digest},
                   {"sequence", next_sequence_[receiver]}, {"payloadHex", hex(message)}};
     while (Clock::now() < session_->deadline) {
+      { std::lock_guard<std::mutex> lock(session_->mutex); if (session_->quarantined) return E_NET_GENERAL; }
       if (node_.send_message(session_->online[receiver], envelope)) { ++next_sequence_[receiver]; return SUCCESS; }
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
@@ -711,8 +752,8 @@ error_t PeerTransport::receive(api::party_idx_t sender, buf_t& message) {
   const auto& identity = session_->online[sender];
   std::unique_lock<std::mutex> lock(session_->mutex);
   if (!session_->ready.wait_until(lock, session_->deadline, [&] {
-        return session_->finished || !session_->incoming[identity].empty();
-      }) || session_->finished) return E_NET_GENERAL;
+        return session_->finished || session_->quarantined || !session_->incoming[identity].empty();
+      }) || session_->finished || session_->quarantined) return E_NET_GENERAL;
   message = std::move(session_->incoming[identity].front());
   session_->incoming[identity].pop_front();
   session_->queued_bytes -= message.size();

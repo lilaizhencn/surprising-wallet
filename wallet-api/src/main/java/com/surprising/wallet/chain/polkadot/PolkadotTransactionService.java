@@ -33,6 +33,7 @@ public class PolkadotTransactionService {
     private final CustodyGasService gas;
     @NonNull private final WalletRuntimeConfigService runtime;
     private final MpcAuthorizationService authorizations;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String send(Operation op,ChainAddressRecord source) {
         runtime.requireTaskEnabled("DOT",WalletRuntimeConfigService.TASK_WITHDRAW,"DOT withdrawal");
@@ -119,7 +120,14 @@ public class PolkadotTransactionService {
             require(proof.path("finalizedHeight").asLong(-1)<p.unsigned().validUntilHeight(),"DOT original mortal era expired; retain payment for reconciliation");
             var info=rpc.networkInfo(p.unsigned().role(),p.unsigned().sender(),p.unsigned().assetId());requireIdentity(p,info);
             require(info.path("specVersion").asLong(-1)==p.unsigned().specVersion() && info.path("transactionVersion").asLong(-1)==p.unsigned().transactionVersion(),"DOT runtime changed; retain original payment for reconciliation");
-            require(selected.txHash().equals(rpc.broadcast(p.unsigned().role(),selected.extrinsicHex())),"DOT node returned a different selected extrinsic hash");
+            var sourceKeyId=submissions.intent(op).orElseThrow().command().keyId();
+            String observed=op.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(op.tenantId(),"DOT",
+                            p.unsigned().network(),op.reference(),selected.txHash(),sourceKeyId,
+                            ()->rpc.broadcast(p.unsigned().role(),selected.extrinsicHex()))
+                    :broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"DOT",sourceKeyId,
+                            ()->rpc.broadcast(p.unsigned().role(),selected.extrinsicHex()));
+            require(selected.txHash().equals(observed),"DOT node returned a different selected extrinsic hash");
         }
         submissions.observed(op,selected.txHash());return selected.txHash();
     }

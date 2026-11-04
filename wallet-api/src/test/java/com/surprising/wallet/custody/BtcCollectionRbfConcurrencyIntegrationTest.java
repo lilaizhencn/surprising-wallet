@@ -104,6 +104,8 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context.registerBean(WithdrawalSettlementService.class,
                 () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         context.registerBean(BitcoinLikeSettlementService.class);
+        context.registerBean(com.surprising.wallet.service.HotWalletBroadcastFence.class,
+                ()->com.surprising.wallet.testutil.CustodyTestSupport.hotWalletBroadcastFence(jdbc,manager));
         context.registerBean(UtxoBroadcastService.class);
         context.registerBean(com.surprising.wallet.service.QueuedUtxoWithdrawalService.class,()->mock(com.surprising.wallet.service.QueuedUtxoWithdrawalService.class));
         context.registerBean(com.surprising.wallet.service.WithdrawalQueueService.class);

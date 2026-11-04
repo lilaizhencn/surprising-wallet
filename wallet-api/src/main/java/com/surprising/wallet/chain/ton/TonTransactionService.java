@@ -25,6 +25,7 @@ public class TonTransactionService {
     private final WithdrawalOrderRepository orders;
     private final CollectionRecordRepository collections;
     private final WalletRuntimeConfigService runtime;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String send(Operation op, ChainAddressRecord source) {
         runtime.requireTaskEnabled("TON", WalletRuntimeConfigService.TASK_WITHDRAW, "TON withdrawal");
@@ -73,7 +74,14 @@ public class TonTransactionService {
     private String broadcast(Operation op, MpcTonTransactionCodec.Signed signed, TonSigningPayload payload) {
         if (rpc.findExternalMessageTransaction(payload.unsigned().sender(), signed.messageHashHex(), 100).isEmpty()) {
             if (Instant.now().getEpochSecond() >= payload.unsigned().validUntil()) throw new IllegalStateException("TON original message expired; reconciliation required");
-            String observed = rpc.sendBoc(Base64.getDecoder().decode(signed.bocBase64()));
+            var sourceKeyId=submissions.intent(op).orElseThrow().command().keyId();
+            String observed=op.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(op.tenantId(),"TON",
+                            profiles.findAccountByChain("TON").orElseThrow().getNetwork(),op.reference(),
+                            signed.messageHashHex(),sourceKeyId,
+                            ()->rpc.sendBoc(Base64.getDecoder().decode(signed.bocBase64())))
+                    :broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"TON",sourceKeyId,
+                            ()->rpc.sendBoc(Base64.getDecoder().decode(signed.bocBase64())));
             if (!TonCenterClient.sameHash(observed, signed.messageHashHex())) throw new IllegalStateException("TON node returned a different selected message hash");
         }
         submissions.observed(op, signed.messageHashHex()); return signed.messageHashHex();

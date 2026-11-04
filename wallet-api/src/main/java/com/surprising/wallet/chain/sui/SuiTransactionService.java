@@ -26,6 +26,7 @@ public class SuiTransactionService {
     private final WithdrawalOrderRepository orders;
     private final CollectionRecordRepository collections;
     @NonNull private final WalletRuntimeConfigService runtime;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String send(Operation op,ChainAddressRecord source) {
         runtime.requireTaskEnabled("SUI",WalletRuntimeConfigService.TASK_WITHDRAW,"Sui withdrawal");
@@ -74,7 +75,14 @@ public class SuiTransactionService {
         requireIdentity(p);
         var known=rpc.transactionBlock(signed.digest());
         if(!signed.digest().equals(known.path("digest").asText())) {
-            var answer=rpc.executeSignedTransaction(signed.txBytesBase64(),signed.signatureBase64());
+            var sourceKeyId=submissions.intent(op).orElseThrow().command().keyId();
+            var answer=op.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(op.tenantId(),"SUI",
+                            profiles.findAccountByChain("SUI").orElseThrow().getNetwork(),op.reference(),
+                            signed.digest(),sourceKeyId,
+                            ()->rpc.executeSignedTransaction(signed.txBytesBase64(),signed.signatureBase64()))
+                    :broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"SUI",sourceKeyId,
+                            ()->rpc.executeSignedTransaction(signed.txBytesBase64(),signed.signatureBase64()));
             if(!signed.digest().equals(answer.path("digest").asText()))throw new IllegalStateException("Sui node returned another selected transaction digest");
         }
         submissions.observed(op,signed.digest());return signed.digest();

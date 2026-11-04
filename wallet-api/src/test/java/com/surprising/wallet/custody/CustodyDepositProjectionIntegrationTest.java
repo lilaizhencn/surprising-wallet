@@ -52,6 +52,32 @@ class CustodyDepositProjectionIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
     }
 
+    @Test
+    void hotWithdrawalInboundIsObservedWithoutMintingCustomerBalance() {
+        var repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        transactions.executeWithoutResult(status -> {
+            var hot = createFixture("__sw_hot__:ETH:" + UUID.randomUUID(), "ACTIVE", "CONSOLE");
+            jdbc.update("update chain_address set wallet_role='HOT_WITHDRAW' where tenant_id=? and address=?",
+                    hot.tenantId(), hot.address());
+            var incoming = event(hot.address(), new BigDecimal("4.25"));
+            assertFalse(repository.depositService.recordAndCredit(incoming, 0L, 1, hot.accountId()));
+            assertEquals("CONFIRMED", jdbc.queryForObject(
+                    "select status from deposit_record where tenant_id=? and tx_hash=?", String.class,
+                    hot.tenantId(), incoming.txId()));
+            assertFalse(jdbc.queryForObject(
+                    "select credited from deposit_record where tenant_id=? and tx_hash=?", Boolean.class,
+                    hot.tenantId(), incoming.txId()));
+            assertEquals(0, jdbc.queryForObject(
+                    "select count(*) from ledger_balance where tenant_id=? and chain='ETH' and account_id=?",
+                    Integer.class, hot.tenantId(), hot.accountId()));
+            assertEquals(0, jdbc.queryForObject("select count(*) from custody_deposit where tenant_id=?",
+                    Integer.class, hot.tenantId()));
+            assertEquals(0, jdbc.queryForObject("select count(*) from custody_event where tenant_id=?",
+                    Integer.class, hot.tenantId()));
+            status.setRollbackOnly();
+        });
+    }
+
     /**
      * 验证 {@code confirmedDepositProjectsDisabledAddressAndSubjectAtomically} 对应的测试场景，明确输入、预期结果和异常边界。
      */

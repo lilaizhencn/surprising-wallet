@@ -114,6 +114,8 @@ class UtxoSigningPipelineIntegrationTest {
         context.registerBean(ChainFeeRateRepository.class, () -> rates);
         context.registerBean(WalletTaskLeaseService.class, () -> leases);
         context.registerBean(QueuedUtxoWithdrawalService.class, () -> mock(QueuedUtxoWithdrawalService.class));
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class,
+                ()->com.surprising.wallet.testutil.CustodyTestSupport.hotReservationLifecycle(jdbc));
         context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(BitcoinLikeSettlementService.class);
         context.registerBean(MpcSigningService.class, () -> fixture.signing);
@@ -123,6 +125,8 @@ class UtxoSigningPipelineIntegrationTest {
         context.registerBean(ChainProfileRepository.class, () -> new ChainProfileRepository(jdbc));
         context.registerBean(UtxoMpcSigningService.class);
         context.registerBean(UtxoBroadcastService.class);
+        context.registerBean(com.surprising.wallet.service.HotWalletBroadcastFence.class,
+                ()->com.surprising.wallet.testutil.CustodyTestSupport.hotWalletBroadcastFence(jdbc,fixture.manager));
         context.registerBean(UtxoSigningSubmissionService.class);
         context.registerBean(WithdrawalQueueService.class);
         context.registerBean(RbfBumpService.class);

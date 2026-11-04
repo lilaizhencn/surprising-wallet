@@ -15,6 +15,10 @@ import org.springframework.stereotype.Repository;
 /** collection_record 单表仓储。 */
 @Repository
 public class CollectionRecordRepository {
+    public record InboundAccounting(long id,UUID tenantId,UUID custodyAddressId,String collectionNo,
+            String chain,String assetSymbol,String fromAddress,String toAddress,BigDecimal amount,
+            String txHash,String status,Instant accountedAt,Long receiptBlockHeight,
+            String receiptBlockHash,Long observedBlockHeight,String observedBlockHash) { }
     private static final String COLUMNS = """
             id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
             amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
@@ -57,6 +61,67 @@ public class CollectionRecordRepository {
                 select id from collection_record where tenant_id = ? and chain = ? and collection_no = ?
                   and lower(to_address) = lower(?) limit 1
                 """, tenantId, chain, collectionNo, address).isEmpty();
+    }
+
+    /** Conservative inbound commitment: include every recorded transfer until canonical inclusion is proven. */
+    public BigDecimal inboundExposure(UUID tenantId, String chain, String asset, String destination) {
+        String addressPredicate = com.surprising.wallet.common.chain.ChainType.valueOf(chain).isEvm()
+                ? "lower(to_address)=lower(?)" : "to_address=?";
+        return jdbc.queryForObject("""
+                select coalesce(sum(amount),0) from collection_record
+                 where tenant_id=? and chain=? and asset_symbol=?
+                   and hot_inbound_accounted_at is null and
+                """ + addressPredicate, BigDecimal.class, tenantId, chain, asset, destination);
+    }
+
+    public Optional<InboundAccounting> findInboundAccounting(UUID tenant,String chain,String reference,boolean lock) {
+        return jdbc.query("""
+                select id,tenant_id,custody_address_id,collection_no,chain,asset_symbol,
+                       from_address,to_address,amount,tx_hash,status,hot_inbound_accounted_at,
+                       hot_inbound_receipt_block_height,hot_inbound_receipt_block_hash,
+                       hot_inbound_observed_block_height,hot_inbound_observed_block_hash
+                  from collection_record where tenant_id=? and chain=? and collection_no=?
+                """+(lock?" for update":""),CollectionRecordRepository::mapInbound,tenant,chain,reference)
+                .stream().findFirst();
+    }
+
+    public List<InboundAccounting> listConfirmedUnaccountedAfter(Long afterId,int limit) {
+        return jdbc.query("""
+                select id,tenant_id,custody_address_id,collection_no,chain,asset_symbol,
+                       from_address,to_address,amount,tx_hash,status,hot_inbound_accounted_at,
+                       hot_inbound_receipt_block_height,hot_inbound_receipt_block_hash,
+                       hot_inbound_observed_block_height,hot_inbound_observed_block_hash
+                  from collection_record
+                 where status='CONFIRMED' and hot_inbound_accounted_at is null
+                   and (?::bigint is null or id>?) order by id limit ?
+                """,CollectionRecordRepository::mapInbound,afterId,afterId,
+                Math.min(Math.max(limit,1),100));
+    }
+
+    public int markInboundAccounted(UUID tenant,String chain,String reference,String hash,
+            long receiptHeight,String receiptHash,long observedHeight,String observedHash) {
+        return jdbc.update("""
+                update collection_record set hot_inbound_accounted_at=now(),
+                    hot_inbound_accounted_tx_hash=?,hot_inbound_receipt_block_height=?,
+                    hot_inbound_receipt_block_hash=?,hot_inbound_observed_block_height=?,
+                    hot_inbound_observed_block_hash=?,updated_at=now()
+                 where tenant_id=? and chain=? and collection_no=? and status='CONFIRMED'
+                   and lower(tx_hash)=lower(?) and hot_inbound_accounted_at is null
+                """,hash,receiptHeight,receiptHash,observedHeight,observedHash,
+                tenant,chain,reference,hash);
+    }
+
+    private static InboundAccounting mapInbound(ResultSet rs,int row) throws SQLException {
+        var accounted=rs.getTimestamp("hot_inbound_accounted_at");
+        return new InboundAccounting(rs.getLong("id"),rs.getObject("tenant_id",UUID.class),
+                rs.getObject("custody_address_id",UUID.class),rs.getString("collection_no"),
+                rs.getString("chain"),rs.getString("asset_symbol"),rs.getString("from_address"),
+                rs.getString("to_address"),rs.getBigDecimal("amount"),rs.getString("tx_hash"),
+                rs.getString("status"),accounted==null?null:accounted.toInstant(),
+                rs.getObject("hot_inbound_receipt_block_height",Long.class),
+                rs.getString("hot_inbound_receipt_block_hash"),
+                rs.getObject("hot_inbound_observed_block_height",Long.class),
+                rs.getString("hot_inbound_observed_block_hash"));
     }
 
     /** 创建租户归集记录。 */

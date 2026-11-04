@@ -169,7 +169,9 @@ public class CustodyAddressService {
                 .tenantId(tenant.id()).mpcKeyId(key.id()).chain(profile.getChain()).assetSymbol(profile.getNativeSymbol())
                 .userId(userId).biz(key.biz()).addressIndex(prepared.childIndex()).address(address)
                 .accountId(bitcoinLike ? Long.toString(userId) : address).ownerAddress(bitcoinLike ? null : address)
-                .derivationPath("mpc:" + key.id()).walletRole("DEPOSIT").enabled(true).build());
+                .derivationPath("mpc:" + key.id())
+                .walletRole(prepared.subject().startsWith("__sw_hot__:") ? "HOT_WITHDRAW" : "DEPOSIT")
+                .enabled(true).build());
         if (!Boolean.TRUE.equals(chainAddress.getEnabled())) throw new IllegalStateException("MPC chain address is disabled");
         UUID addressId = UUID.randomUUID();
         int inserted = addressRepository.insert(addressId, tenant.id(), chainAddress.getId(), profile.getChain(),

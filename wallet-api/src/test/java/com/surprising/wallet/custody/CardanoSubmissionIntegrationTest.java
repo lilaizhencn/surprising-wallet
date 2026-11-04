@@ -68,6 +68,8 @@ class CardanoSubmissionIntegrationTest {
         context.registerBean(MpcSigningService.class, () -> fixture.signing); context.registerBean(MpcNodes.class, () -> fixture.nodes);
         context.registerBean(ObjectMapper.class, () -> json);
         context.registerBean(LedgerBalanceRepository.class, () -> new LedgerBalanceRepository(jdbc));
+        context.registerBean(CustodyHotWalletWithdrawalReservationRepository.class, () -> new CustodyHotWalletWithdrawalReservationRepository(jdbc));
+        context.registerBean(HotWalletReservationLifecycleService.class);
         context.registerBean(CustodyGasAccountingService.class, () -> CustodyTestSupport.gasAccounting(jdbc));
         context.registerBean(WithdrawalSettlementService.class); context.registerBean(CardanoSubmissionService.class); context.refresh();
         service = context.getBean(CardanoSubmissionService.class);

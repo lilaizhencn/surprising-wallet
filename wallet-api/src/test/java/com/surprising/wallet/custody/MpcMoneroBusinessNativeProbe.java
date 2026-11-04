@@ -47,8 +47,13 @@ public final class MpcMoneroBusinessNativeProbe {
                     new WalletMpcSignAttemptRepository(jdbc,json),new CustodyCryptoService(security),json,support.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
             var signing=spy(original);var orders=new WithdrawalOrderRepository(jdbc);var collections=new CollectionRecordRepository(jdbc);
             var transactions=new MoneroTransactionRepository(jdbc);var balances=new LedgerBalanceRepository(jdbc);
+            var broadcastFence=new HotWalletBroadcastFence(new CustodyTenantChainTableRepository(jdbc),
+                    new CustodyHotWalletRepository(jdbc),new CustodyAddressRepository(jdbc),
+                    new ChainAddressRepository(jdbc),collections,
+                    new com.surprising.wallet.repository.CustodyHotWalletInventoryObservationRepository(jdbc),support.manager);
             var submissions=new MoneroSubmissionService(orders,collections,transactions,requests,new WalletMpcKeyEpochRepository(jdbc,json),signing,nodes,profiles,addresses,
-                    new ChainScanHeightRepository(jdbc),new ChainAssetRepository(jdbc),new WithdrawalSettlementService(orders,balances),CustodyTestSupport.gasAccounting(jdbc),json,support.manager);
+                    new ChainScanHeightRepository(jdbc),new ChainAssetRepository(jdbc),new WithdrawalSettlementService(orders,balances,
+                    CustodyTestSupport.hotReservationLifecycle(jdbc)),CustodyTestSupport.gasAccounting(jdbc),json,support.manager,broadcastFence);
             var daemon=new MoneroDaemonClient(new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc),"mpc-test",2),json);
             var runtime=new WalletRuntimeConfigService(profiles,new WalletSystemConfigRepository(jdbc));
             var service=new MoneroTransactionService(daemon,submissions,signing,nodes,profiles,addresses,collections,CustodyTestSupport.gas(jdbc),runtime,com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
@@ -69,7 +74,7 @@ public final class MpcMoneroBusinessNativeProbe {
                 var result=call.callRealMethod();
                 if(request.command().businessReference().equals(reference) && loseReply.getAndSet(false))throw new IllegalStateException("deliberately lost accepted native Monero relay response");
                 return result;
-            }).when(signing).relayMonero(eq(tenant),any(),anyString(),eq(nodes));
+            }).when(signing).relayMonero(eq(tenant),any(),anyString(),eq(nodes),eq(broadcastFence));
             if(phase.equals("baseline")) {
                 enable(jdbc);scan(scanner,profiles);scan(scanner,profiles);
                 require(jdbc.queryForObject("select count(*) from custody_deposit where tenant_id=? and chain='XMR'",Integer.class,tenant)==2,"initial native source/Gas funds were not deposited exactly once");

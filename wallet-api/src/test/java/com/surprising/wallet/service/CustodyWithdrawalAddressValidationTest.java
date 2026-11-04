@@ -19,6 +19,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CustodyWithdrawalAddressValidationTest {
     @org.junit.jupiter.api.Test
+    void tenantPoolCannotFallBackToAnUnconfiguredWithdrawalAddress() {
+        var planning = mock(CollectionPlanningService.class);
+        UUID tenant = UUID.randomUUID();
+        when(planning.destination(tenant, "ETH")).thenReturn(Optional.empty());
+        var routing = mock(HotWalletWithdrawalRoutingService.class);
+        when(routing.reserveNewOrder(tenant, "ETH", "ETH", "test-order", BigDecimal.ONE))
+                .thenReturn(Optional.empty());
+        var service = new CustodyWithdrawalExecutionService(mock(WithdrawalOrderRepository.class), planning,
+                mock(WalletRuntimeConfigService.class), mock(BlockchainRuntimeService.class),
+                mock(ChainAssetRepository.class), mock(ChainProfileRepository.class),
+                mock(TokenConfigRepository.class), mock(LedgerBalanceRepository.class),
+                mock(CustodyPoolFundingService.class), routing);
+        var error = assertThrows(IllegalStateException.class, () ->
+                org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,
+                        "withdrawalSourceAddress", tenant, "ETH", "ETH", "test-order", BigDecimal.ONE, null,
+                        CustodyWithdrawalService.FundingSource.TENANT_POOL));
+        assertEquals("tenant withdrawal pool source is unavailable", error.getMessage());
+    }
+
+    @org.junit.jupiter.api.Test
     void validClassicAndFriendlyAddressesRemainAccepted() {
         var runtime = new ChainAddressRuntime();
         assertTrue(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.TRON,
@@ -57,7 +77,8 @@ class CustodyWithdrawalAddressValidationTest {
         var chains = ChainRepositoryFixture.mocked();
         var balances = mock(LedgerBalanceRepository.class);
         var service = new CustodyWithdrawalExecutionService(chains.withdrawalOrderRepository, chains.collectionPlanningService, mock(WalletRuntimeConfigService.class),
-                runtime, assets, profiles, mock(TokenConfigRepository.class), balances, mock(CustodyPoolFundingService.class));
+                runtime, assets, profiles, mock(TokenConfigRepository.class), balances, mock(CustodyPoolFundingService.class),
+                mock(HotWalletWithdrawalRoutingService.class));
 
         var custody = mock(com.surprising.wallet.chain.model.CustodyAddressRecord.class);
         when(custody.tenantId()).thenReturn(UUID.randomUUID());

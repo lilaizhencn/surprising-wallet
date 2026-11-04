@@ -32,12 +32,14 @@ public class UtxoBroadcastService {
     private final BlockchainRuntimeService runtime;
     private final PgmqClient queue;
     private final ObjectMapper json;
+    private final HotWalletBroadcastFence broadcastFence;
     private final String owner;
 
     public UtxoBroadcastService(ChainSigningTransactionRepository signing, WithdrawalOrderRepository orders,
                                 CollectionRecordRepository collections,
                                 UtxoMpcSigningService mpc, BlockchainRuntimeService runtime,
-                                PgmqClient queue, ObjectMapper json, WalletTaskLeaseService leases) {
+                                PgmqClient queue, ObjectMapper json, WalletTaskLeaseService leases,
+                                HotWalletBroadcastFence broadcastFence) {
         this.signing = signing;
         this.orders = orders;
         this.collections = collections;
@@ -45,6 +47,7 @@ public class UtxoBroadcastService {
         this.runtime = runtime;
         this.queue = queue;
         this.json = json;
+        this.broadcastFence = broadcastFence;
         this.owner = leases.ownerId() + "-broadcast";
     }
 
@@ -83,7 +86,8 @@ public class UtxoBroadcastService {
         }
         if (prepared == null) return null;
         String hash;
-        try { hash = runtime.broadcastSignedTransaction(prepared.request().asset().metadata(), prepared.result().transaction()); }
+        try { hash = broadcastFence.withExternalLegacyBroadcastPermit(prepared.request().tenantId(),prepared.request().asset().chain(),
+                ()->runtime.broadcastSignedTransaction(prepared.request().asset().metadata(), prepared.result().transaction())); }
         catch (RuntimeException uncertain) { return new Observation(prepared, null, uncertain.getClass().getSimpleName()); }
         if (hash == null || hash.isBlank()) return new Observation(prepared, null, "broadcast result unknown");
         if (!hash.equals(prepared.result().transaction().txId())) return new Observation(prepared, null, "broadcast transaction hash mismatch");

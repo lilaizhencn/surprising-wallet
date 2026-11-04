@@ -17,6 +17,7 @@ import com.surprising.wallet.common.signing.MpcClient;
 import com.surprising.wallet.common.signing.MpcSignCommand;
 import java.math.BigInteger;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.Map;
@@ -53,13 +54,15 @@ public class ApprovalSigningService {
     private final ApprovalSpendLockRepository spends;
     private final com.surprising.wallet.approval.gateway.ApprovalNativeRegistryClient nativeRegistry;
     private final ApprovalAutomationService automation;
+    private final com.surprising.wallet.approval.gateway.ApprovalOperatingBalanceReader operatingBalances;
 
     public ApprovalSigningService(ApprovalTenantRepository tenants,ApprovalRequestRepository requests,ApprovalKeyRepository keys,
             ApprovalSigningTransactionRepository transactions,ApprovalSigningVersionRepository versions,ApprovalSigningSlotRepository slots,
             ApprovalSigningGrantRepository grants,ApprovalFeeReservationRepository fees,ApprovalAuditRepository audit,
             ApprovalWorkflowService workflow,ApprovalAssetRegistry assets,ApprovalFeeBudgets budgets,ApprovalGrantSigner signer,
             ApprovalNativeProperties nativeNodes,PlatformTransactionManager manager,ObjectMapper json,Clock clock,ApprovalWithdrawalVerifiers verifiers,
-            ApprovalUtxoRpcClient utxoRpc,ApprovalSpendLockRepository spends,com.surprising.wallet.approval.gateway.ApprovalNativeRegistryClient nativeRegistry,ApprovalAutomationService automation) {
+            ApprovalUtxoRpcClient utxoRpc,ApprovalSpendLockRepository spends,com.surprising.wallet.approval.gateway.ApprovalNativeRegistryClient nativeRegistry,ApprovalAutomationService automation,
+            com.surprising.wallet.approval.gateway.ApprovalOperatingBalanceReader operatingBalances) {
         this.tenants=tenants;this.requests=requests;this.keys=keys;this.transactions=transactions;this.versions=versions;
         this.slots=slots;this.grants=grants;this.fees=fees;this.audit=audit;this.workflow=workflow;this.assets=assets;
         this.budgets=budgets;this.signer=signer;this.nativeNodes=nativeNodes;this.transaction=new TransactionTemplate(manager);
@@ -68,11 +71,15 @@ public class ApprovalSigningService {
         this.utxoRpc=utxoRpc;this.spends=spends;
         this.nativeRegistry=nativeRegistry;
         this.automation=automation;
+        this.operatingBalances=operatingBalances;
     }
     public Outcome authorizeMoneroRelay(com.surprising.wallet.common.approval.MoneroRelayCandidate candidate,String serviceIdentity) {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"relay authorization requires committed Wallet state");
         var execution=candidate.execution();var original=transaction.execute(status->{
             require(tenants.lockActive(execution.tenantId()),"independent tenant is disabled");
+            require(keys.lock(execution.tenantId(), execution.keyId())
+                    .filter(key -> key.state().equals("ACTIVE")).isPresent(),
+                    "independent Monero relay key is disabled");
             var admitted=grants.find(execution.tenantId(),candidate.signingRequestId(),execution.sessionId());
             if(admitted.isPresent())require(admitted.get().execution().equals(execution),"original relay descriptor cannot change");
             return grants.find(execution.tenantId(),candidate.signingRequestId(),candidate.signSessionId()).orElseThrow(()->new IllegalArgumentException("original independently authorized native payment required"));
@@ -113,6 +120,16 @@ public class ApprovalSigningService {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"authorization must be requested outside a caller transaction");
         var prepared=transaction.execute(status->prepare(candidate));
         if(prepared.outcome()!=null)return prepared.outcome();
+        RegisteredMpcKey signingCodeKey=null;
+        Instant signingCodeAt=null;
+        if(candidate.command().chain().isEvm()) {
+            var key=keys.find(candidate.command().tenantId(),candidate.command().keyId()).orElseThrow();
+            require(key.state().equals("ACTIVE") && key.epoch()==candidate.command().keyEpoch(),
+                    "independent EVM signing key changed before account code observation");
+            operatingBalances.requireEvmSigningCode(prepared.reviewed().getFirst().assetSnapshot(),key);
+            signingCodeKey=key;
+            signingCodeAt=clock.instant();
+        }
         ApprovalUtxoRpcClient.Observation evidence=null;
         if(prepared.utxo()!=null && prepared.original()==null) {
             var points=prepared.utxo().unsigned().inputs().stream().map(i->new ApprovalUtxoRpcClient.Outpoint(i.txId(),i.outputIndex())).toList();
@@ -130,13 +147,17 @@ public class ApprovalSigningService {
         }
         var observed=evidence;
         var accountFacts=accountEvidence;
-        return transaction.execute(status->issue(candidate,serviceIdentity,observed,accountFacts));
+        var observedCodeKey=signingCodeKey;
+        var observedCodeAt=signingCodeAt;
+        return transaction.execute(status->issue(candidate,serviceIdentity,observed,accountFacts,observedCodeKey,observedCodeAt));
     }
 
     /** No network call under this lock. Repeated after observation so expiry/configuration races cannot authorize stale work. */
     private Prepared prepare(SigningCandidate candidate) {
         var command=candidate.command();var execution=candidate.execution();UUID tenant=command.tenantId();
         require(tenants.lockActive(tenant),"independent tenant is not enrolled or disabled");
+        require(keys.lock(tenant, command.keyId()).filter(key -> key.state().equals("ACTIVE")).isPresent(),
+                "independent signing key is disabled");
         var oldSlot=slots.find(tenant,candidate.signingRequestId());
         if(oldSlot.isPresent()) {
             var original=oldSlot.get().candidate();
@@ -187,7 +208,8 @@ public class ApprovalSigningService {
         return new Prepared(null,reviewed,existing.orElse(null),version,reference,payload,automatic,replacement);
     }
 
-    private Outcome issue(SigningCandidate candidate,String serviceIdentity,ApprovalUtxoRpcClient.Observation fresh,tools.jackson.databind.JsonNode accountFresh) {
+    private Outcome issue(SigningCandidate candidate,String serviceIdentity,ApprovalUtxoRpcClient.Observation fresh,tools.jackson.databind.JsonNode accountFresh,
+            RegisteredMpcKey observedCodeKey,Instant observedCodeAt) {
         var prepared=prepare(candidate);if(prepared.outcome()!=null)return prepared.outcome();
         var command=candidate.command();var execution=candidate.execution();UUID tenant=command.tenantId();
         var reviewed=prepared.reviewed();var asset=reviewed.getFirst().assetSnapshot();
@@ -205,6 +227,9 @@ public class ApprovalSigningService {
             registered.put(id,key);
         }
         var key=registered.get(command.keyId());require(key.epoch()==command.keyEpoch(),"independent key epoch differs");
+        if(command.chain().isEvm())require(key.equals(observedCodeKey) && observedCodeAt!=null
+                && !observedCodeAt.isAfter(clock.instant()) && !observedCodeAt.isBefore(clock.instant().minusSeconds(30)),
+                "independent EVM account code observation expired or signing key changed");
         var roster=nativeNodes.nodes().stream().map(MpcClient.Node::partyId).toList();
         require(roster.size()==3 && execution.online().equals(roster.stream().filter(execution.online()::contains).toList()),"signing participants differ from the independently registered holder roster");
         var instant=clock.instant();var now=instant.truncatedTo(ChronoUnit.SECONDS);

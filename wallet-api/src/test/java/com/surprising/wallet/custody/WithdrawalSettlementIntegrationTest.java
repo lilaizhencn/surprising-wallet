@@ -49,6 +49,8 @@ class WithdrawalSettlementIntegrationTest {
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
         context.registerBean(WithdrawalOrderRepository.class, () -> orders);
         context.registerBean(LedgerBalanceRepository.class, () -> new LedgerBalanceRepository(jdbc));
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class,
+                ()->com.surprising.wallet.testutil.CustodyTestSupport.hotReservationLifecycle(jdbc));
         context.registerBean(WithdrawalSettlementService.class);
         context.refresh();
         settlements = context.getBean(WithdrawalSettlementService.class);

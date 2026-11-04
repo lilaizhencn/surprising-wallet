@@ -93,7 +93,7 @@ class Cluster:
                       "sessionTimeoutSeconds": 15, "peers": self.peers,
                       "authorizationPublicKeys": [self.authorization_public_key],
                       "clients": {self.client_id: {"tenants": tenants,
-                                   "operations": ["CREATE_KEY", "REFRESH", "SIGN", "READ_RESULT"]}}}
+                                   "operations": ["CREATE_KEY", "REFRESH", "SIGN", "QUARANTINE_KEY", "READ_RESULT"]}}}
             if monero_configs is not None:
                 require(len(monero_configs) == 3, "Monero fixture requires three independent native wallets")
                 config["monero"] = monero_configs[i]

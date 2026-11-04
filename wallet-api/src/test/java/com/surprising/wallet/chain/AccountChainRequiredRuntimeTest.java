@@ -7,6 +7,7 @@ import com.surprising.wallet.chain.polkadot.*;
 import com.surprising.wallet.chain.solana.*;
 import com.surprising.wallet.service.SolanaSubmissionService;
 import com.surprising.wallet.service.AptosSubmissionService;
+import com.surprising.wallet.service.HotWalletBroadcastFence;
 import com.surprising.wallet.service.TonSubmissionService;
 import com.surprising.wallet.service.SuiSubmissionService;
 import com.surprising.wallet.service.NearSubmissionService;
@@ -86,7 +87,7 @@ class AccountChainRequiredRuntimeTest {
                         runtime);
                 var service = new AptosTransactionService(dependency(AptosRpcClient.class),dependency(AptosSubmissionService.class),
                         dependency(ChainProfileRepository.class),dependency(TokenConfigRepository.class),dependency(WithdrawalOrderRepository.class),
-                        dependency(CollectionRecordRepository.class),runtime);
+                        dependency(CollectionRecordRepository.class),runtime,dependency(HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT, "COLL", null));
             }
             case "ADA" -> {
@@ -98,7 +99,7 @@ class AccountChainRequiredRuntimeTest {
                 // Recovery is queried before new-work gates; no intent exists in this entry-gating scenario.
                 var service = new CardanoTransactionService(dependency(CardanoRpcClient.class), mock(com.surprising.wallet.service.CardanoSubmissionService.class),
                         dependency(ChainProfileRepository.class), dependency(TokenConfigRepository.class), dependency(ChainAddressRepository.class),
-                        dependency(CollectionRecordRepository.class), dependency(CustodyGasService.class), runtime, dependency(tools.jackson.databind.ObjectMapper.class),dependency(com.surprising.wallet.service.MpcAuthorizationService.class));
+                        dependency(CollectionRecordRepository.class), dependency(CustodyGasService.class), runtime, dependency(tools.jackson.databind.ObjectMapper.class),dependency(com.surprising.wallet.service.MpcAuthorizationService.class),dependency(com.surprising.wallet.service.HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT, "COLL", null));
             }
             case "NEAR" -> {
@@ -110,12 +111,12 @@ class AccountChainRequiredRuntimeTest {
                 var service = new NearTransactionService(dependency(com.surprising.wallet.service.MpcAuthorizationService.class),
                         dependency(NearRpcClient.class),dependency(NearSubmissionService.class),
                         dependency(ChainProfileRepository.class),dependency(TokenConfigRepository.class),
-                        dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.NearRegistrationService.class),runtime);
+                        dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.NearRegistrationService.class),runtime,dependency(com.surprising.wallet.service.HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT, "COLL", null));
             }
             case "DOT" -> {
                 var scanner = new PolkadotDepositScanner(dependency(PolkadotRuntimeClient.class),dependency(ChainScanHeightRepository.class),dependency(DepositService.class),dependency(ChainAddressRepository.class),dependency(ChainProfileRepository.class),dependency(TokenConfigRepository.class),dependency(ChainAssetRepository.class),dependency(DepositRecordRepository.class),runtime);
-                var service = new PolkadotTransactionService(dependency(PolkadotRuntimeClient.class),dependency(com.surprising.wallet.service.PolkadotSubmissionService.class),dependency(ChainProfileRepository.class),dependency(ChainAssetRepository.class),dependency(TokenConfigRepository.class),dependency(ChainAddressRepository.class),dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.CustodyGasService.class),runtime,dependency(com.surprising.wallet.service.MpcAuthorizationService.class));
+                var service = new PolkadotTransactionService(dependency(PolkadotRuntimeClient.class),dependency(com.surprising.wallet.service.PolkadotSubmissionService.class),dependency(ChainProfileRepository.class),dependency(ChainAssetRepository.class),dependency(TokenConfigRepository.class),dependency(ChainAddressRepository.class),dependency(WithdrawalOrderRepository.class),dependency(CollectionRecordRepository.class),dependency(com.surprising.wallet.service.CustodyGasService.class),runtime,dependency(com.surprising.wallet.service.MpcAuthorizationService.class),dependency(com.surprising.wallet.service.HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT,"COLL",null));
             }
             case "SOLANA" -> {
@@ -138,7 +139,7 @@ class AccountChainRequiredRuntimeTest {
                         dependency(ChainProfileRepository.class),
                         dependency(TokenConfigRepository.class),
                         dependency(CustodyGasService.class),
-                        runtime);
+                        runtime,dependency(HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT, "COLL", null));
             }
             case "SUI" -> {
@@ -155,7 +156,7 @@ class AccountChainRequiredRuntimeTest {
                         runtime);
                 var service = new SuiTransactionService(dependency(SuiRpcClient.class),dependency(SuiSubmissionService.class),
                         dependency(ChainProfileRepository.class),dependency(TokenConfigRepository.class),dependency(WithdrawalOrderRepository.class),
-                        dependency(CollectionRecordRepository.class),runtime);
+                        dependency(CollectionRecordRepository.class),runtime,dependency(HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT, "COLL", null));
             }
             case "TON" -> {
@@ -173,7 +174,7 @@ class AccountChainRequiredRuntimeTest {
                 var service = new TonTransactionService(
                         dependency(TonCenterClient.class), dependency(TonSubmissionService.class),
                         dependency(ChainProfileRepository.class), dependency(TokenConfigRepository.class),
-                        dependency(WithdrawalOrderRepository.class), dependency(CollectionRecordRepository.class), runtime);
+                        dependency(WithdrawalOrderRepository.class), dependency(CollectionRecordRepository.class), runtime,dependency(com.surprising.wallet.service.HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collect(TENANT,"COLL",null));
             }
             case "XRP" -> {
@@ -195,7 +196,7 @@ class AccountChainRequiredRuntimeTest {
                         dependency(ChainAddressRepository.class),
                         dependency(com.surprising.wallet.service.XrpSubmissionService.class),
                         dependency(com.surprising.wallet.service.CustodyGasService.class),
-                        dependency(com.surprising.wallet.service.WalletTaskLeaseService.class),runtime);
+                        dependency(com.surprising.wallet.service.WalletTaskLeaseService.class),runtime,dependency(com.surprising.wallet.service.HotWalletBroadcastFence.class));
                 yield new Actions(scanner::scanAndCredit, () -> service.collectNative(TENANT, "COLL", null, "target", BigDecimal.ONE));
             }
             default -> throw new IllegalArgumentException(chain);

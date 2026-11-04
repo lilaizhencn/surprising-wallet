@@ -22,7 +22,7 @@ class TransactionQueueSafetyTest {
     private final PgmqClient queue = mock(PgmqClient.class);
     private final UtxoBroadcastService service = new UtxoBroadcastService(signing, mock(WithdrawalOrderRepository.class),
             mock(CollectionRecordRepository.class), mock(UtxoMpcSigningService.class),
-            mock(BlockchainRuntimeService.class), queue, new ObjectMapper(), mock(WalletTaskLeaseService.class));
+            mock(BlockchainRuntimeService.class), queue, new ObjectMapper(), mock(WalletTaskLeaseService.class),mock(HotWalletBroadcastFence.class));
 
     private final PgmqClient.Message claim=new PgmqClient.Message(1,1,"{}","{}");
     @org.junit.jupiter.api.BeforeEach void claimOwned() { when(queue.lock(com.surprising.wallet.common.queue.WalletQueue.SIGN_DONE,claim)).thenReturn(true); }

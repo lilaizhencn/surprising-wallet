@@ -6,6 +6,8 @@ import com.surprising.wallet.common.approval.SigningGrant;
 import com.surprising.wallet.common.approval.ApprovalTransactionHash;
 import com.surprising.wallet.common.signing.UtxoSigningPayload;
 import com.surprising.wallet.common.signing.Evm7702SigningPayload;
+import com.surprising.wallet.common.signing.Evm7702PayoutPayload;
+import com.surprising.wallet.common.signing.Evm7702CollectionPayload;
 import com.surprising.wallet.common.signing.MpcSignCommand;
 import com.surprising.wallet.gateway.WithdrawalApprovalClient;
 import com.surprising.wallet.model.custody.WithdrawalApprovalRecord;
@@ -38,19 +40,35 @@ public class MpcAuthorizationService {
     private final WalletMpcRelayRepository relays;
     private final CustodyTenantUserRepository users;
     private final MpcNonceAdmissionService nonceAdmission;
+    private final com.surprising.wallet.repository.CustodyTenantChainTableRepository tenantChains;
+    private final com.surprising.wallet.repository.CustodyHotWalletRepository hotWallets;
+    private final CustodyHotWalletInventoryObservationRepository hotObservations;
+    private final CustodyAddressRepository custodyAddresses;
+    private final ChainAddressRepository chainAddresses;
     public MpcAuthorizationService(WalletMpcSignRequestRepository requests,WalletMpcSignAttemptRepository attempts,WalletWithdrawalApprovalRepository approvals,
             CustodyAuditRepository audit,WithdrawalApprovalClient authority,ObjectMapper json,PlatformTransactionManager manager,
-            WalletMpcKeyRepository keys,WalletMpcKeyEpochRepository epochs,WalletMpcRelayRepository relays,CustodyTenantUserRepository users,MpcNonceAdmissionService nonceAdmission) {
+            WalletMpcKeyRepository keys,WalletMpcKeyEpochRepository epochs,WalletMpcRelayRepository relays,CustodyTenantUserRepository users,MpcNonceAdmissionService nonceAdmission,
+            com.surprising.wallet.repository.CustodyTenantChainTableRepository tenantChains,
+            com.surprising.wallet.repository.CustodyHotWalletRepository hotWallets,
+            CustodyHotWalletInventoryObservationRepository hotObservations,
+            CustodyAddressRepository custodyAddresses, ChainAddressRepository chainAddresses) {
         this.requests=requests;this.attempts=attempts;this.approvals=approvals;this.audit=audit;this.authority=authority;this.json=json;
         this.transaction=new TransactionTemplate(manager);
         this.keys=keys;this.epochs=epochs;
         this.relays=relays;
         this.users=users;
         this.nonceAdmission=nonceAdmission;
+        this.tenantChains=tenantChains;
+        this.hotWallets=hotWallets;
+        this.hotObservations=hotObservations;
+        this.custodyAddresses=custodyAddresses;
+        this.chainAddresses=chainAddresses;
     }
     public SigningAuthorization.Proof authorizeMoneroRelay(UUID requestId,UUID signSessionId,com.surprising.wallet.common.signing.MpcClient.Request relay) {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"Monero relay authorization requires committed original business state");
         var tenant=relay.tenantId();var request=requests.find(tenant,requestId).orElseThrow();var original=attempts.find(tenant,signSessionId).orElseThrow();
+        requireNotPaused(tenant, request.command().chain().name(), requestId);
+        requireHotWalletUsable(request.command(), requestId);
         require(request.state()==MpcSignRequest.State.COMPLETED && request.currentAttemptId().equals(signSessionId) && original.requestId().equals(requestId)
                 && original.state()==MpcSignAttempt.State.COMPLETED && original.authorization()!=null && original.request().online().containsAll(relay.online()),"Monero relay requires its original independently authorized completed payment");
         var originalClaims=request.command().businessType()==MpcSignCommand.BusinessType.WITHDRAWAL
@@ -76,13 +94,31 @@ public class MpcAuthorizationService {
     /** The original collection is durably claimed by its caller before this independent network admission. */
     public void planCollection(com.surprising.wallet.common.approval.AutomaticParentPlan plan) {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"collection planning requires committed original business state");
+        if (tenantChains.withdrawalPaused(plan.tenantId(), plan.chain())
+                && !safeCollectionTarget(plan.tenantId(),plan.chain(),plan.network(),plan.recipient(),false)) {
+            throw new IllegalStateException("tenant chain emergency pause blocks collection planning");
+        }
+        hotWallets.findByKey(plan.tenantId(), plan.chain(), plan.sourceKeyId())
+                .ifPresent(wallet -> require("ACTIVE".equals(wallet.status())
+                                && hotObservations.allUninvalidated(plan.tenantId(),wallet.id()),
+                        "unsafe hot wallet cannot plan collection"));
         var receipt=authority.plan(plan);require(receipt.businessType().equals("COLLECTION") && receipt.businessReference().equals(plan.businessReference())
                 && receipt.parentOperationId()==null && receipt.payments().size()==1,"independent collection planning receipt differs");
         var payment=receipt.payments().getFirst();require(payment.intent().tenantId().equals(plan.tenantId()) && payment.intent().chain().equals(plan.chain())
                 && payment.intent().network().equals(plan.network()) && payment.intent().assetSymbol().equals(plan.assetSymbol()) && payment.intent().recipient().equals(plan.recipient())
                 && payment.intent().amount().compareTo(plan.amount())==0 && payment.intentHash().equals(payment.assetSnapshot().bind(payment.intent(),json)),"independent collection plan changed the original payment");
-        transaction.executeWithoutResult(status->audit.insert(UUID.randomUUID(),plan.tenantId(),"SYSTEM","independent-approval","MPC.COLLECTION_PLAN","AUTOMATIC_OPERATION",receipt.id().toString(),null,
-                json.writeValueAsString(Map.of("sourceKeyId",plan.sourceKeyId(),"ruleId",receipt.ruleId(),"ruleFingerprint",receipt.ruleFingerprint(),"businessReference",plan.businessReference()))));
+        transaction.executeWithoutResult(status->{
+            if(tenantChains.withdrawalPausedForSigning(plan.tenantId(),plan.chain())
+                    && !safeCollectionTarget(plan.tenantId(),plan.chain(),plan.network(),
+                            plan.recipient(),true))
+                throw new IllegalStateException("tenant chain emergency pause blocks collection planning");
+            hotWallets.lockByKeyForSigning(plan.tenantId(),plan.chain(),plan.sourceKeyId())
+                    .ifPresent(wallet->require("ACTIVE".equals(wallet.status())
+                                    && hotObservations.lockAllUninvalidated(plan.tenantId(),wallet.id()),
+                            "unsafe hot wallet cannot accept collection plan"));
+            audit.insert(UUID.randomUUID(),plan.tenantId(),"SYSTEM","independent-approval","MPC.COLLECTION_PLAN","AUTOMATIC_OPERATION",receipt.id().toString(),null,
+                    json.writeValueAsString(Map.of("sourceKeyId",plan.sourceKeyId(),"ruleId",receipt.ruleId(),"ruleFingerprint",receipt.ruleFingerprint(),"businessReference",plan.businessReference())));
+        });
     }
     private SigningAuthorization.Claims verifyRelay(UUID requestId,com.surprising.wallet.common.signing.MpcClient.Request relay,SigningAuthorization.Claims original,SigningAuthorization.Proof proof) {
         var claims=SigningAuthorization.verifyOriginalProof(proof,SigningAuthorization.publicKey(authority.verificationKeyHex()),relay);
@@ -121,6 +157,8 @@ public class MpcAuthorizationService {
     public SigningAuthorization.Proof authorize(UUID tenant,UUID requestId,UUID attemptId) {
         require(!TransactionSynchronizationManager.isActualTransactionActive(),"independent final authorization requires committed signing intent");
         var request=requests.find(tenant,requestId).orElseThrow();var attempt=attempts.find(tenant,attemptId).orElseThrow();
+        requireNotPausedUnlessCollection(tenant,request.command(),requestId);
+        requireHotWalletUsable(request.command(), requestId);
         if(request.state()==MpcSignRequest.State.CANCELLED)throw new MpcPendingException(requestId,"CANCELLED");
         require(attempt.requestId().equals(requestId),"independent grant attempt belongs to another request");
         var command=request.command();
@@ -131,7 +169,12 @@ public class MpcAuthorizationService {
         var candidate=new SigningCandidate(requestId,reviewed.stream().map(r->r.intent().id()).toList(),command,attempt.request(),attempt.replayActor(),attempt.replayReason());
         if(attempt.authorization()!=null) {
             if(manual){require(attempt.automaticOperation()==null,"human withdrawal cannot use an operating receipt");verify(request,attempt,reviewed,attempt.authorization());}
-            else verifyAutomatic(request,attempt,attempt.automaticOperation(),attempt.authorization());return attempt.authorization();
+            else verifyAutomatic(request,attempt,attempt.automaticOperation(),attempt.authorization());
+            return transaction.execute(status->{
+                requireSafePausedCollection(tenant,command,attempt.automaticOperation(),requestId,true);
+                requireLockedHotWalletUsable(command,requestId);
+                return attempt.authorization();
+            });
         }
         if(users.pendingApprovalRevocation(tenant))throw new MpcPendingException(requestId,"APPROVAL_REVOCATION_PENDING");
         var response=authority.authorize(candidate);
@@ -139,11 +182,14 @@ public class MpcAuthorizationService {
         var grant=response.grant();
         require(!manual || response.automaticOperation()==null,"human withdrawal cannot be admitted by an operating rule");
         var claims=manual?verify(request,attempt,reviewed,grant.proof()):verifyAutomatic(request,attempt,response.automaticOperation(),grant.proof());
+        requireSafePausedCollection(tenant,command,response.automaticOperation(),requestId,false);
         require(grant.id().equals(claims.authorizationId()) && grant.tenantId().equals(tenant) && grant.slotId().equals(requestId)
                 && grant.sessionId().equals(attemptId) && grant.issuedAt().equals(claims.issuedAt()) && grant.expiresAt().equals(claims.expiresAt()),
                 "independent grant receipt differs from its signed claims");
         return transaction.execute(status->{
             var current=requests.lock(tenant,requestId).orElseThrow();
+            requireSafePausedCollection(tenant,command,response.automaticOperation(),requestId,true);
+            requireLockedHotWalletUsable(command,requestId);
             require(current.command().equals(command),"original signing command changed");
             require(current.state()!=MpcSignRequest.State.CANCELLED,"independently cancelled signing request cannot accept a grant");
             var existing=attempts.find(tenant,attemptId).orElseThrow();
@@ -155,6 +201,101 @@ public class MpcAuthorizationService {
             } else require(existing.authorization().equals(grant.proof()) && java.util.Objects.equals(existing.automaticOperation(),response.automaticOperation()),"original independent grant/operating receipt cannot be replaced");
             return attempts.find(tenant,attemptId).orElseThrow().authorization();
         });
+    }
+
+    private void requireNotPaused(UUID tenant, String chain, UUID requestId) {
+        if (tenantChains.withdrawalPaused(tenant, chain)) {
+            throw new MpcPendingException(requestId, "TENANT_CHAIN_EMERGENCY_PAUSED");
+        }
+    }
+    private void requireNotPausedUnlessCollection(UUID tenant,MpcSignCommand command,UUID requestId) {
+        if(command.businessType()!=MpcSignCommand.BusinessType.COLLECTION)
+            requireNotPaused(tenant,command.chain().name(),requestId);
+    }
+    void requireSafePausedCollection(UUID tenant,MpcSignCommand command,
+            com.surprising.wallet.common.approval.AutomaticOperation operation,UUID requestId,boolean locked) {
+        boolean paused=locked?tenantChains.withdrawalPausedForSigning(tenant,command.chain().name())
+                :tenantChains.withdrawalPaused(tenant,command.chain().name());
+        if(!paused)return;
+        if(command.businessType()!=MpcSignCommand.BusinessType.COLLECTION || operation==null
+                || !"COLLECTION".equals(operation.businessType()) || operation.payments().isEmpty())
+            throw new MpcPendingException(requestId,"TENANT_CHAIN_EMERGENCY_PAUSED");
+        for(var payment:operation.payments()) {
+            var intent=payment.intent();
+            if(!tenant.equals(intent.tenantId()) || !command.chain().name().equals(intent.chain())
+                    || !safeCollectionTarget(tenant,intent.chain(),intent.network(),intent.recipient(),locked))
+                throw new MpcPendingException(requestId,"TENANT_CHAIN_EMERGENCY_PAUSED");
+        }
+    }
+    private boolean safeCollectionTarget(UUID tenant,String chain,String network,String recipient,boolean locked) {
+        for(var candidate:hotWallets.list(tenant,chain)) {
+            if(!"ACTIVE".equals(candidate.status()) || !network.equals(candidate.network()))continue;
+            var wallet=locked?hotWallets.lock(tenant,candidate.id()).orElseThrow():candidate;
+            if(!"ACTIVE".equals(wallet.status()) || !network.equals(wallet.network()))continue;
+            var address=custodyAddresses.require(tenant,wallet.custodyAddressId());
+            var owner=chainAddresses.findOwned(tenant,address.chainAddressId()).orElse(null);
+            if(owner==null || !"ACTIVE".equals(address.status()) || !chain.equals(address.chain())
+                    || !network.equals(address.network()) || !"HOT_WITHDRAW".equals(owner.getWalletRole())
+                    || !Boolean.TRUE.equals(owner.getEnabled()) || !wallet.mpcKeyId().equals(owner.getMpcKeyId())
+                    || !address.address().equals(owner.getAddress()))continue;
+            if(!(locked?hotObservations.lockAllUninvalidated(tenant,wallet.id())
+                    :hotObservations.allUninvalidated(tenant,wallet.id())))continue;
+            boolean same=com.surprising.wallet.common.chain.ChainType.valueOf(chain).isEvm()
+                    ?address.address().equalsIgnoreCase(recipient):address.address().equals(recipient);
+            if(same)return true;
+        }
+        return false;
+    }
+    private void requireHotWalletUsable(com.surprising.wallet.common.signing.MpcSignCommand command, UUID requestId) {
+        for (UUID keyId : signingWalletKeys(command)) {
+            hotWallets.findByKey(command.tenantId(), command.chain().name(), keyId).ifPresent(wallet -> {
+                if (!"ACTIVE".equals(wallet.status())
+                        || !hotObservations.allUninvalidated(command.tenantId(),wallet.id())) {
+                    throw new MpcPendingException(requestId, "HOT_WALLET_UNSAFE");
+                }
+            });
+        }
+    }
+    private void requireLockedHotWalletUsable(MpcSignCommand command,UUID requestId) {
+        for(UUID keyId:signingWalletKeys(command)) {
+            hotWallets.lockByKeyForSigning(command.tenantId(),command.chain().name(),keyId)
+                    .ifPresent(wallet->{
+                        if(!"ACTIVE".equals(wallet.status())
+                                || !hotObservations.lockAllUninvalidated(command.tenantId(),wallet.id()))
+                            throw new MpcPendingException(requestId,"HOT_WALLET_UNSAFE");
+                    });
+        }
+    }
+    /** EIP-7702 relayer signatures also spend from the original delegated authority. */
+    private List<UUID> signingWalletKeys(com.surprising.wallet.common.signing.MpcSignCommand command) {
+        UUID signer = command.keyId();
+        if (!command.chain().isEvm() || !Evm7702SigningPayload.ENCODING.equals(command.payloadEncoding())) {
+            return List.of(signer);
+        }
+        var plan = Evm7702SigningPayload.decode(command, json).plan();
+        if (command.businessType() == MpcSignCommand.BusinessType.COLLECTION) {
+            var collection = json.readValue(plan.preparationJson(), Evm7702CollectionPayload.class);
+            require(!collection.items().isEmpty(), "EIP-7702 collection has no original authorities");
+            var keys = new java.util.ArrayList<UUID>();
+            keys.add(signer);
+            for (var item : collection.items()) {
+                var authority = item.authority();
+                require(authority != null && command.tenantId().equals(authority.getTenantId())
+                        && command.chain().name().equals(authority.getChain())
+                        && authority.getMpcKeyId() != null,
+                        "EIP-7702 collection authority has no original tenant key");
+                keys.add(authority.getMpcKeyId());
+            }
+            return keys.stream().distinct().toList();
+        }
+        if (command.businessType() != MpcSignCommand.BusinessType.WITHDRAWAL) return List.of(signer);
+        var payout = json.readValue(plan.preparationJson(), Evm7702PayoutPayload.class);
+        var authority = payout.authority();
+        require(authority != null && command.tenantId().equals(authority.getTenantId())
+                && command.chain().name().equals(authority.getChain()) && authority.getMpcKeyId() != null,
+                "EIP-7702 withdrawal authority has no original tenant key");
+        return signer.equals(authority.getMpcKeyId()) ? List.of(signer)
+                : List.of(signer, authority.getMpcKeyId());
     }
     private List<WithdrawalApprovalRecord> reviewed(MpcSignCommand command,UUID requestId) {
         var references=command.businessReferences(json);

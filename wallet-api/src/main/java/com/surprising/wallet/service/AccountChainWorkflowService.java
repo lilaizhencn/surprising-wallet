@@ -31,11 +31,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +62,7 @@ public class AccountChainWorkflowService {
     private final WithdrawalClaimService withdrawalClaimService;
     private final EvmBatchOwnershipService evmBatchOwnershipService;
     private final CollectionPlanningService collectionPlanningService;
+    private final CollectionAdmissionService collectionAdmissionService;
     private final TokenConfigRepository tokenConfigRepository;
     private final ChainAddressRepository chainAddressRepository;
 
@@ -391,7 +389,7 @@ public class AccountChainWorkflowService {
         }
         if ("XMR".equals(profile.getChain())) {
             collectionRecordRepository.markStaleSigningUnknown("XMR",Instant.now().minus(SIGNING_STALE_TIMEOUT));
-            for(var pending:collectionRecordRepository.listByStatus("XMR","BROADCAST_UNKgetCollectionNo()WN",CONFIRM_LIMIT)) {
+            for(var pending:collectionRecordRepository.listByStatus("XMR","BROADCAST_UNKNOWN",CONFIRM_LIMIT)) {
                 try {
                     var operation=new MoneroSubmissionService.Operation(pending.getTenantId(),pending.getCollectionNo(),MoneroSubmissionService.Kind.COLLECTION);
                     if(!moneroTransactionService.recover(operation))moneroTransactionService.releaseUnsigned(operation);
@@ -522,30 +520,19 @@ public class AccountChainWorkflowService {
                 : BigDecimal.ZERO;
         BigDecimal nativeReserve = candidates.stream().anyMatch(candidate -> assets.isNative(profile, candidate.getAssetSymbol()))
                 ? assets.collectionFeeReserve(profile, evmFeeReserve) : BigDecimal.ZERO;
-        record TenantChainKey(UUID tenantId, String chain) { }
-        Map<TenantChainKey, Optional<String>> collectionAddresses = new HashMap<>();
         for (CollectionCandidateRecord candidate : candidates) {
             BigDecimal amount = assets.collectionAmount(profile, candidate, nativeReserve);
             if (amount.signum() <= 0) {
                 continue;
             }
-            TenantChainKey key = new TenantChainKey(candidate.getTenantId(), candidate.getChain());
-            String hotAddress = collectionAddresses.computeIfAbsent(key,
-                            ignored -> collectionPlanningService.destination(candidate.getTenantId(), candidate.getChain()))
-                    .orElseThrow(() -> new IllegalStateException(
-                            "active tenant collection/gas address is required for "
-                                    + candidate.getChain() + " collection"));
-            collectionRecordRepository.create(
-                    candidate.getTenantId(),
-                    candidate.getCustodyAddressId(),
-                    collectionNo(candidate, amount),
-                    candidate.getChain(),
-                    candidate.getAssetSymbol(),
-                    candidate.getAddress(),
-                    hotAddress,
-                    amount,
-                    BigDecimal.ZERO,
-                    null);
+            try {
+                collectionAdmissionService.create(candidate.getTenantId(),candidate.getCustodyAddressId(),
+                        collectionNo(candidate,amount),candidate.getChain(),candidate.getAssetSymbol(),
+                        candidate.getAddress(),amount,BigDecimal.ZERO,null);
+            } catch (IllegalStateException unavailable) {
+                log.warn("tenant collection destination unavailable: tenant={} chain={} asset={} reason={}",
+                        candidate.getTenantId(),candidate.getChain(),candidate.getAssetSymbol(),unavailable.getMessage());
+            }
         }
     }
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {

@@ -52,6 +52,44 @@ with tempfile.TemporaryDirectory(prefix="sw-mpc-approval-") as directory:
             cluster.start(i)
             require(cluster.request(i, "/v1/sessions", dict(signing, authorization=proof), authorize=False)["state"] == "COMPLETED",
                     "original approval/session binding did not survive restart")
+        pending = dict(signing, sessionId=str(uuid.uuid4()), messageHex="78" * 32)
+        pending_proof = cluster.signing_authorization(pending)
+        require(cluster.request(0, "/v1/sessions", dict(pending, authorization=pending_proof), authorize=False)["state"] == "RUNNING",
+                "single-holder signing session did not wait for its partner")
+        quarantine = {"tenantId": cluster.tenant, "keyId": key, "descriptorHash": "ab" * 32}
+        rejected(lambda: cluster.request(0, "/v1/key-quarantines", quarantine,
+                                         context=cluster.client_context("unregistered")))
+        rejected(lambda: cluster.request(0, "/v1/key-quarantines",
+                                         dict(quarantine, tenantId=str(uuid.uuid4()))))
+        for i in range(3):
+            receipt = cluster.request(i, "/v1/key-quarantines", quarantine)
+            require(receipt["quarantined"] and receipt["descriptorHash"] == quarantine["descriptorHash"]
+                    and receipt["partyId"] == cluster.identities[i], "holder quarantine receipt differs")
+            require(cluster.request(i, "/v1/key-quarantines", quarantine) == receipt,
+                    "original holder quarantine retry differs")
+            rejected(lambda i=i: cluster.request(i, "/v1/key-quarantines",
+                                                 dict(quarantine, descriptorHash="cd" * 32)))
+        for i in (0, 1):
+            if i == 0:
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    interrupted = cluster.request(0, "/v1/results", {"sessionId": pending["sessionId"],
+                                                                        "tenantId": cluster.tenant, "keyId": key})
+                    if interrupted["state"] == "INDETERMINATE":
+                        break
+                    time.sleep(0.05)
+                require(interrupted["state"] == "INDETERMINATE", "in-flight session did not stop on key quarantine")
+            rejected(lambda i=i: cluster.request(i, "/v1/sessions",
+                                                 dict(signing, authorization=proof), authorize=False))
+            previous = cluster.request(i, "/v1/results", {"sessionId": signing["sessionId"],
+                                                             "tenantId": cluster.tenant, "keyId": key})
+            require(previous["state"] == "COMPLETED", "original result must remain readable for reconciliation")
+            cluster.stop(i)
+            cluster.start(i)
+            rejected(lambda i=i: cluster.request(i, "/v1/sessions",
+                                                 dict(signing, authorization=proof), authorize=False))
+        replacement = dict(create, sessionId=str(uuid.uuid4()), keyId=str(uuid.uuid4()))
+        cluster.run(replacement, [0, 1, 2])
         print("PASS native authorization: mandatory proof, tamper, expiry, one-time binding, original-session restart")
     finally:
         cluster.close()

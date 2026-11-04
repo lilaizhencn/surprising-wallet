@@ -13,6 +13,7 @@ import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.CustodyGasService;
+import com.surprising.wallet.service.HotWalletBroadcastFence;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.service.WalletTaskLeaseService;
 import com.surprising.wallet.service.XrpSubmissionService;
@@ -45,6 +46,7 @@ public class XrpTransactionService {
     private final CustodyGasService gas;
     private final WalletTaskLeaseService leases;
     private final WalletRuntimeConfigService runtime;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String sendNative(Operation operation,ChainAddressRecord source,String recipient,BigDecimal amount) {
         runtime.requireTaskEnabled(CHAIN,WalletRuntimeConfigService.TASK_WITHDRAW,"xrp native withdrawal");
@@ -89,7 +91,13 @@ public class XrpTransactionService {
         if(!known) {
             long expiry=MpcXrpTransactionCodec.restore(unsigned).lastLedgerSequence().orElseThrow().longValue();
             if(rpc.latestLedgerIndex()>expiry)throw new IllegalStateException("XRPL accepted intent expired; ledger reconciliation is required");
-            String observed=rpc.submit(signed.transactionHex());
+            var sourceKeyId=submissions.intent(operation).orElseThrow().command().keyId();
+            String observed=operation.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(operation.tenantId(),CHAIN,
+                            profiles.findAccountByChain(CHAIN).orElseThrow().getNetwork(),operation.reference(),
+                            signed.txId(),sourceKeyId,()->rpc.submit(signed.transactionHex()))
+                    :broadcastFence.withPayoutBroadcastPermit(operation.tenantId(),CHAIN,sourceKeyId,
+                            ()->rpc.submit(signed.transactionHex()));
             if(!signed.txId().equalsIgnoreCase(observed))throw new IllegalStateException("XRPL RPC hash differs from committed transaction");
         }
         submissions.observed(operation,signed.txId());

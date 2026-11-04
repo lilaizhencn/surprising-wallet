@@ -20,6 +20,16 @@ psql -h 127.0.0.1 -p 5432 -d surprising_wallet_test_manual_init -X -v ON_ERROR_S
 
 `surprising-wallet-init-pgsql.sql` 只用于可丢弃或全新的数据库。它包含 `pg_dump --clean` 生成的重置语句，不用于生产库原地升级。
 
+已有热钱包表的存量库需要在维护窗口执行 `scripts/ops/upgrade-hot-wallet-token-identity-guard.sql`。该脚本事务性、可重复执行，为热钱包、其托管地址及同网络代币身份加保护触发器；会短暂独占锁定三张表，锁等待超过 5 秒即失败并回滚。上线前核对目标库与备份；升级前已经删除或覆盖的历史合约仍需通过配置备份和独立审批登记追溯。
+
+存量库还需执行 `scripts/ops/upgrade-hot-wallet-inventory-block-anchor.sql`，为独立 EVM 余额观察保存区块高度与哈希。旧观察没有锚点，升级后须刷新库存才能继续为 EVM 热钱包分配新提现和归集。
+
+普通 EVM 单笔已确认提现的库存占额核对另需执行 `scripts/ops/upgrade-hot-wallet-finalized-spend-accounting.sql`。它为原预留增加一次性的 finalized 回执与余额锚点字段、未核销扫描索引，并替换不可变状态触发器；升级本身不会释放任何已有占额。先完成前述库存锚点升级，再启用后台限量轮询和 Console 单笔核对入口。
+
+活跃热钱包库存后台刷新需要 `scripts/ops/upgrade-hot-wallet-active-inventory-refresh.sql` 的部分索引。脚本在事务外并发建索引，可重复执行；先执行再启用轮询任务，并按活跃地址及资产数量调节 `custody.hot-wallet.inventory-refresh-delay-ms`。
+
+失败刷新即时阻断路由还需执行 `scripts/ops/upgrade-hot-wallet-inventory-invalidation.sql`，增加可清除的 `invalidated_at` 标记。该脚本可重复执行，不会抹除旧观察；新后台刷新只在原观察未被并发更新时置失效标记。
+
 ## 种子数据范围
 
 初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`wallet_system_config`、`chain_rpc_node` 的静态配置数据。Java 不加载钱包根 Seed；联合公钥与版本、签名请求和尝试由四张 `wallet_mpc_*` 表保存，私有份额留在独立持有者。MPC 通信配置通过 Spring `sw.wallet.mpc` 加载。

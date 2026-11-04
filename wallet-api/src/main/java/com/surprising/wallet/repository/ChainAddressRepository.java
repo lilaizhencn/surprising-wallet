@@ -292,6 +292,21 @@ public class ChainAddressRepository {
                 """, (rs, rowNum) -> map(rs), tenantId, chain, accountId, address);
     }
 
+    /** A hot withdrawal address may receive chain funds, but those funds are not a customer deposit. */
+    public boolean isHotWithdrawalDestination(UUID tenantId, String chain, String address) {
+        return !jdbc.queryForList("""
+                select id from chain_address where tenant_id=? and chain=? and lower(address)=lower(?)
+                  and wallet_role='HOT_WITHDRAW' limit 1
+                """, Long.class, tenantId, chain, address).isEmpty();
+    }
+
+    public List<String> listHotWithdrawalAccountIds(UUID tenantId, String chain) {
+        return jdbc.queryForList("""
+                select distinct account_id from chain_address
+                 where tenant_id=? and chain=? and wallet_role='HOT_WITHDRAW'
+                """, String.class, tenantId, chain);
+    }
+
     /** Related base addresses include older/disabled aliases bound to the same derivation coordinates. */
     public List<Long> listRelatedAddressIds(ChainAddressRecord address) {
         return jdbc.queryForList("""

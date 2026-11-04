@@ -44,6 +44,10 @@ public final class MpcMoneroPaymentNativeProbe {
             var signing=new MpcSigningService(new CustodyTenantTableRepository(jdbc),new WalletMpcKeyRepository(jdbc),new WalletMpcKeyEpochRepository(jdbc,json),
                     requests,attempts,new CustodyCryptoService(security),json,support.manager, com.surprising.wallet.testutil.MpcAuthorizationTestSupport.service(jdbc,json,support.manager));
             var source=new ChainAddressRepository(jdbc).findEnabledByTenantAndAddress(tenant,"XMR",test.path("source").asText()).orElseThrow();
+            var broadcastFence=new HotWalletBroadcastFence(new CustodyTenantChainTableRepository(jdbc),
+                    new CustodyHotWalletRepository(jdbc),new CustodyAddressRepository(jdbc),
+                    new ChainAddressRepository(jdbc),new CollectionRecordRepository(jdbc),
+                    new com.surprising.wallet.repository.CustodyHotWalletInventoryObservationRepository(jdbc),support.manager);
             String reference=test.path("reference").asText("monero-payment-bridge-v1-"+pair);var selectedFile=root.resolve("selected-payment-"+pair+"-public.json");
             var intent=requests.findBusiness(tenant,ChainType.XMR,MpcSignCommand.BusinessType.DEV_FAUCET,reference,"transaction");
             if(Set.of("sign","admit","select","recover-select").contains(phase)) {
@@ -77,10 +81,10 @@ public final class MpcMoneroPaymentNativeProbe {
                 var selected=signing.selectedMonero(tenant,request.id());
                 Files.writeString(selectedFile,json.writeValueAsString(Map.of("requestId",request.id(),"selected",selected,"recoveredUncollectedResult",selecting)));
                 boolean transactionRejected=false;
-                try{new TransactionTemplate(support.manager).execute(status->signing.relayMonero(tenant,request.id(),selected.transactionHash(),nodes));}
+                try{new TransactionTemplate(support.manager).execute(status->signing.relayMonero(tenant,request.id(),selected.transactionHash(),nodes,broadcastFence));}
                 catch(IllegalStateException expected){transactionRejected=true;}
                 require(transactionRejected,"native relay was admitted inside a database transaction");
-                boolean rejected=false;try{signing.relayMonero(tenant,request.id(),"00".repeat(32),nodes);}catch(IllegalStateException expected){rejected=true;}
+                boolean rejected=false;try{signing.relayMonero(tenant,request.id(),"00".repeat(32),nodes,broadcastFence);}catch(IllegalStateException expected){rejected=true;}
                 require(rejected,"changed relay hash was not rejected before any native relay");
             } else if(phase.equals("hold")) {
                 var request=intent.orElseThrow();var current=signing.advanceSignature(tenant,request.id(),nodes.clients());
@@ -97,7 +101,7 @@ public final class MpcMoneroPaymentNativeProbe {
                 require(jdbc.queryForObject("select count(*) from wallet_mpc_sign_attempt where tenant_id=? and request_id=?",Integer.class,tenant,request.id())==1,
                         "native recovery created a new signing attempt");
                 if(phase.equals("relay")) {
-                    var receipt=signing.relayMonero(tenant,request.id(),selected.transactionHash(),nodes);
+                    var receipt=signing.relayMonero(tenant,request.id(),selected.transactionHash(),nodes,broadcastFence);
                     require(receipt.request().online().size()==1 && selected.originalHolders().contains(receipt.request().online().getFirst())
                             && receipt.result().monero().path("transactionHash").asText().equals(selected.transactionHash()),"native single-holder relay changed its parent transaction");
                 } else if(phase.equals("observe")) {

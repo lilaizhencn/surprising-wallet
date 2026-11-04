@@ -44,6 +44,11 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+DROP TABLE IF EXISTS public.custody_hot_wallet_inventory_observation;
+DROP TABLE IF EXISTS public.custody_hot_wallet_withdrawal_reservation;
+DROP TABLE IF EXISTS public.custody_hot_wallet_asset_policy;
+DROP TABLE IF EXISTS public.custody_hot_wallet_exposure_limit;
+DROP TABLE IF EXISTS public.custody_hot_wallet;
 DROP TABLE IF EXISTS public.wallet_withdrawal_approval;
 
 ALTER TABLE IF EXISTS public.chain_address DROP CONSTRAINT IF EXISTS chain_address_mpc_key_fkey;
@@ -99,6 +104,7 @@ ALTER TABLE IF EXISTS ONLY public.custody_tenant_user DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public.custody_tenant_chain DROP CONSTRAINT IF EXISTS custody_tenant_chain_tenant_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_tenant_chain DROP CONSTRAINT IF EXISTS custody_tenant_chain_opened_by_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_tenant_chain DROP CONSTRAINT IF EXISTS custody_tenant_chain_closed_by_fk;
+ALTER TABLE IF EXISTS ONLY public.custody_tenant_chain DROP CONSTRAINT IF EXISTS custody_tenant_chain_paused_by_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_session DROP CONSTRAINT IF EXISTS custody_session_tenant_user_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_session DROP CONSTRAINT IF EXISTS custody_session_tenant_user_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_session DROP CONSTRAINT IF EXISTS custody_session_tenant_id_fkey;
@@ -864,6 +870,12 @@ CREATE TABLE public.collection_record (
     amount numeric(84,24) DEFAULT 0 NOT NULL,
     fee numeric(84,24) DEFAULT 0 NOT NULL,
     tx_hash character varying(128),
+    hot_inbound_accounted_at timestamptz,
+    hot_inbound_accounted_tx_hash varchar(128),
+    hot_inbound_receipt_block_height bigint,
+    hot_inbound_receipt_block_hash varchar(66),
+    hot_inbound_observed_block_height bigint,
+    hot_inbound_observed_block_hash varchar(66),
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     error_message text,
     raw_payload text,
@@ -871,8 +883,51 @@ CREATE TABLE public.collection_record (
     custody_address_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT collection_record_tenant_id_key UNIQUE (tenant_id, id)
+    CONSTRAINT collection_record_tenant_id_key UNIQUE (tenant_id, id),
+    CONSTRAINT collection_record_hot_inbound_accounting_complete CHECK (
+        (hot_inbound_accounted_at IS NULL AND hot_inbound_accounted_tx_hash IS NULL
+            AND hot_inbound_receipt_block_height IS NULL AND hot_inbound_receipt_block_hash IS NULL
+            AND hot_inbound_observed_block_height IS NULL AND hot_inbound_observed_block_hash IS NULL)
+        OR (hot_inbound_accounted_at IS NOT NULL AND status='CONFIRMED'
+            AND tx_hash IS NOT NULL AND hot_inbound_accounted_tx_hash IS NOT NULL
+            AND lower(tx_hash)=lower(hot_inbound_accounted_tx_hash)
+            AND hot_inbound_receipt_block_height >= 0
+            AND hot_inbound_receipt_block_hash ~ '^0x[0-9a-f]{64}$'
+            AND hot_inbound_observed_block_height >= hot_inbound_receipt_block_height
+            AND hot_inbound_observed_block_hash ~ '^0x[0-9a-f]{64}$'))
 );
+
+CREATE OR REPLACE FUNCTION public.wallet_enforce_collection_inbound_accounting() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN
+        IF OLD.hot_inbound_accounted_at IS NOT NULL THEN
+            RAISE EXCEPTION 'accounted hot collection cannot be deleted' USING ERRCODE='23514';
+        END IF;
+        RETURN OLD;
+    END IF;
+    IF OLD.hot_inbound_accounted_at IS NOT NULL AND
+       (OLD.tenant_id,OLD.custody_address_id,OLD.collection_no,OLD.chain,OLD.asset_symbol,
+        OLD.from_address,OLD.to_address,OLD.amount,OLD.tx_hash,OLD.status,
+        OLD.hot_inbound_accounted_at,OLD.hot_inbound_accounted_tx_hash,
+        OLD.hot_inbound_receipt_block_height,OLD.hot_inbound_receipt_block_hash,
+        OLD.hot_inbound_observed_block_height,OLD.hot_inbound_observed_block_hash)
+       IS DISTINCT FROM
+       (NEW.tenant_id,NEW.custody_address_id,NEW.collection_no,NEW.chain,NEW.asset_symbol,
+        NEW.from_address,NEW.to_address,NEW.amount,NEW.tx_hash,NEW.status,
+        NEW.hot_inbound_accounted_at,NEW.hot_inbound_accounted_tx_hash,
+        NEW.hot_inbound_receipt_block_height,NEW.hot_inbound_receipt_block_hash,
+        NEW.hot_inbound_observed_block_height,NEW.hot_inbound_observed_block_hash) THEN
+        RAISE EXCEPTION 'accounted hot collection facts cannot change' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER collection_record_hot_inbound_accounting_immutable
+    BEFORE UPDATE OR DELETE ON public.collection_record FOR EACH ROW
+    EXECUTE FUNCTION public.wallet_enforce_collection_inbound_accounting();
+CREATE INDEX collection_record_hot_inbound_pending_idx ON public.collection_record(id)
+    WHERE status='CONFIRMED' AND hot_inbound_accounted_at IS NULL;
 
 
 --
@@ -1406,12 +1461,16 @@ CREATE TABLE public.custody_tenant_chain (
     tenant_id uuid NOT NULL,
     chain character varying(32) NOT NULL,
     status character varying(24) DEFAULT 'CLOSED'::character varying NOT NULL,
+    withdrawal_paused boolean DEFAULT false NOT NULL,
+    withdrawal_paused_at timestamp with time zone,
+    withdrawal_paused_by uuid,
     opened_by uuid,
     opened_at timestamp with time zone,
     closed_by uuid,
     closed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT custody_tenant_chain_withdrawal_pause_check CHECK ((withdrawal_paused AND withdrawal_paused_at IS NOT NULL AND withdrawal_paused_by IS NOT NULL) OR (NOT withdrawal_paused AND withdrawal_paused_at IS NULL AND withdrawal_paused_by IS NULL)),
     CONSTRAINT custody_tenant_chain_lifecycle_check CHECK (((((status)::text = 'ACTIVE'::text) AND (opened_by IS NOT NULL) AND (opened_at IS NOT NULL) AND (closed_at IS NULL)) OR (((status)::text = 'CLOSED'::text) AND (closed_by IS NOT NULL) AND (closed_at IS NOT NULL)))),
     CONSTRAINT custody_tenant_chain_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'CLOSED'::character varying])::text[])))
 );
@@ -2595,6 +2654,24 @@ CREATE TABLE public.withdrawal_order (
     debit_account_id character varying(160),
     tenant_id uuid
 );
+
+-- A custody withdrawal binds its chain sender when the order is created. Switching
+-- hot wallets must never retarget an accepted or in-flight payment to another key.
+CREATE OR REPLACE FUNCTION public.wallet_enforce_tenant_withdrawal_source() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.tenant_id IS NOT NULL AND NEW.tenant_id IS DISTINCT FROM OLD.tenant_id THEN
+        RAISE EXCEPTION 'tenant withdrawal owner cannot change' USING ERRCODE='23514';
+    END IF;
+    IF OLD.tenant_id IS NOT NULL AND OLD.from_address IS NOT NULL
+       AND NEW.from_address IS DISTINCT FROM OLD.from_address THEN
+        RAISE EXCEPTION 'tenant withdrawal source cannot change after order creation' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER wallet_tenant_withdrawal_source_immutable BEFORE UPDATE ON public.withdrawal_order
+    FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_tenant_withdrawal_source();
 
 
 --
@@ -4623,6 +4700,9 @@ ALTER TABLE ONLY public.custody_session
 ALTER TABLE ONLY public.custody_tenant_chain
     ADD CONSTRAINT custody_tenant_chain_closed_by_fk FOREIGN KEY (tenant_id, closed_by) REFERENCES public.custody_tenant_user(tenant_id, id) ON DELETE RESTRICT;
 
+ALTER TABLE ONLY public.custody_tenant_chain
+    ADD CONSTRAINT custody_tenant_chain_paused_by_fk FOREIGN KEY (tenant_id, withdrawal_paused_by) REFERENCES public.custody_tenant_user(tenant_id, id) ON DELETE RESTRICT;
+
 
 --
 -- Name: custody_tenant_chain custody_tenant_chain_opened_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -4896,7 +4976,6 @@ CREATE TABLE public.evm_7702_payout_account (
     last_observed_block bigint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT evm_7702_payout_account_tenant_chain_key UNIQUE (tenant_id, chain),
     CONSTRAINT evm_7702_payout_account_tenant_authority_key UNIQUE (tenant_id, chain, authority_address),
     CONSTRAINT evm_7702_payout_account_status_check CHECK ((delegation_status)::text = ANY ((ARRAY[
         'NOT_DELEGATED'::character varying, 'DELEGATING'::character varying,
@@ -6396,7 +6475,6 @@ CREATE TABLE IF NOT EXISTS public.evm_7702_payout_account (
     last_observed_block bigint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT evm_7702_payout_account_tenant_chain_key UNIQUE (tenant_id, chain),
     CONSTRAINT evm_7702_payout_account_tenant_authority_key
         UNIQUE (tenant_id, chain, authority_address),
     CONSTRAINT evm_7702_payout_account_status_check CHECK (
@@ -7272,12 +7350,29 @@ CREATE TABLE approval.key (
     public_key_hex varchar(128) NOT NULL CHECK (public_key_hex ~ '^[0-9a-f]+$'),
     public_address varchar(256),
     state varchar(16) NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE','DISABLED')),
+    quarantine_hash varchar(64) UNIQUE CHECK (quarantine_hash IS NULL OR quarantine_hash ~ '^[0-9a-f]{64}$'),
     ceremony_request jsonb NOT NULL,
     observations jsonb NOT NULL CHECK (jsonb_typeof(observations)='array'),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (tenant_id,key_id)
 );
+CREATE FUNCTION approval.enforce_key_quarantine_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.quarantine_hash IS NOT NULL THEN
+            RAISE EXCEPTION 'independent quarantined key cannot be deleted';
+        END IF;
+        RETURN OLD;
+    END IF;
+    IF OLD.quarantine_hash IS NOT NULL AND
+       (NEW.state IS DISTINCT FROM 'DISABLED' OR NEW.quarantine_hash IS DISTINCT FROM OLD.quarantine_hash) THEN
+        RAISE EXCEPTION 'independent quarantined key cannot be restored';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER approval_key_quarantine_fence BEFORE UPDATE OR DELETE ON approval.key
+    FOR EACH ROW EXECUTE FUNCTION approval.enforce_key_quarantine_fence();
 REVOKE ALL ON approval.key FROM PUBLIC;
 
 -- Permanent authorization receipts. Never delete these to retry an unknown signature or payment.
@@ -7487,3 +7582,308 @@ END;
 $$;
 CREATE TRIGGER wallet_withdrawal_approval_intent_immutable BEFORE UPDATE OR DELETE ON public.wallet_withdrawal_approval
     FOR EACH ROW EXECUTE FUNCTION public.wallet_enforce_withdrawal_approval_intent();
+
+-- Each withdrawal source has its own MPC-backed custody address. Creating a row does not authorize spending.
+CREATE TABLE public.custody_hot_wallet (
+    id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    custody_address_id uuid NOT NULL,
+    mpc_key_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    network varchar(64) NOT NULL,
+    label varchar(160) NOT NULL,
+    status varchar(24) NOT NULL DEFAULT 'STANDBY',
+    route_priority integer NOT NULL DEFAULT 100,
+    quarantine_actor_id uuid,
+    quarantine_at timestamptz,
+    quarantine_reason varchar(500),
+    quarantine_fence_confirmed_at timestamptz,
+    created_by uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (id),
+    UNIQUE (tenant_id, id, chain),
+    UNIQUE (custody_address_id),
+    UNIQUE (tenant_id, chain, mpc_key_id),
+    FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE RESTRICT,
+    FOREIGN KEY (tenant_id, custody_address_id) REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (tenant_id, mpc_key_id) REFERENCES public.wallet_mpc_key(tenant_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (tenant_id, created_by) REFERENCES public.custody_tenant_user(tenant_id, id) ON DELETE RESTRICT,
+    CHECK (status IN ('STANDBY', 'ACTIVE', 'QUARANTINED', 'RETIRED')),
+    CHECK (route_priority BETWEEN 0 AND 1000000),
+    CHECK ((status = 'QUARANTINED') = (quarantine_actor_id IS NOT NULL AND quarantine_at IS NOT NULL AND quarantine_reason IS NOT NULL)),
+    CHECK (quarantine_fence_confirmed_at IS NULL OR status = 'QUARANTINED'),
+    CHECK (quarantine_reason IS NULL OR length(btrim(quarantine_reason)) BETWEEN 8 AND 500),
+    CHECK (length(btrim(label)) BETWEEN 1 AND 160)
+);
+CREATE INDEX custody_hot_wallet_route_idx ON public.custody_hot_wallet(tenant_id, chain, status, route_priority, id);
+CREATE INDEX custody_hot_wallet_active_refresh_idx ON public.custody_hot_wallet(id)
+    WHERE status = 'ACTIVE';
+CREATE INDEX custody_hot_wallet_quarantine_retry_idx ON public.custody_hot_wallet(quarantine_at, id)
+    WHERE status = 'QUARANTINED' AND quarantine_fence_confirmed_at IS NULL;
+
+-- Amounts use the same exact decimal storage as custody balances; policy rows alone cannot activate a wallet.
+CREATE TABLE public.custody_hot_wallet_asset_policy (
+    tenant_id uuid NOT NULL,
+    wallet_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    target_balance numeric(78,24) NOT NULL,
+    maximum_balance numeric(78,24) NOT NULL,
+    maximum_single_withdrawal numeric(78,24) NOT NULL,
+    maximum_24h_withdrawal numeric(78,24) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, wallet_id, asset_symbol),
+    FOREIGN KEY (tenant_id, wallet_id, chain) REFERENCES public.custody_hot_wallet(tenant_id, id, chain) ON DELETE RESTRICT,
+    FOREIGN KEY (chain, asset_symbol) REFERENCES public.chain_asset(chain, symbol) ON DELETE RESTRICT,
+    CHECK (target_balance >= 0 AND target_balance <= maximum_balance),
+    CHECK (maximum_balance > 0 AND maximum_single_withdrawal > 0
+           AND maximum_24h_withdrawal >= maximum_single_withdrawal)
+);
+
+-- Explicit aggregate cap for active hot wallets; lowering it stops new collection without changing booked funds.
+CREATE TABLE public.custody_hot_wallet_exposure_limit (
+    tenant_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    maximum_active_balance numeric(78,24) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, chain, asset_symbol),
+    FOREIGN KEY (tenant_id, chain) REFERENCES public.custody_tenant_chain(tenant_id, chain) ON DELETE RESTRICT,
+    FOREIGN KEY (chain, asset_symbol) REFERENCES public.chain_asset(chain, symbol) ON DELETE RESTRICT,
+    CHECK (maximum_active_balance > 0)
+);
+
+-- Read-only chain evidence cache. This is never customer principal or a spend authorization.
+CREATE TABLE public.custody_hot_wallet_inventory_observation (
+    tenant_id uuid NOT NULL,
+    wallet_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    mpc_key_id uuid NOT NULL,
+    address varchar(160) NOT NULL,
+    network_identity varchar(160) NOT NULL,
+    decimals integer NOT NULL,
+    native_decimals integer NOT NULL,
+    available_atomic numeric(78,0) NOT NULL,
+    native_atomic numeric(78,0) NOT NULL,
+    observed_at timestamptz NOT NULL,
+    invalidated_at timestamptz,
+    collection_rule_id uuid NOT NULL,
+    collection_rule_fingerprint varchar(128) NOT NULL,
+    observed_block_height bigint,
+    observed_block_hash varchar(66),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, wallet_id, asset_symbol),
+    FOREIGN KEY (tenant_id, wallet_id, chain) REFERENCES public.custody_hot_wallet(tenant_id, id, chain) ON DELETE RESTRICT,
+    FOREIGN KEY (tenant_id, wallet_id, asset_symbol) REFERENCES public.custody_hot_wallet_asset_policy(tenant_id, wallet_id, asset_symbol) ON DELETE RESTRICT,
+    CHECK (decimals BETWEEN 0 AND 36 AND native_decimals BETWEEN 0 AND 36),
+    CHECK (available_atomic >= 0 AND native_atomic >= 0),
+    CHECK (length(btrim(address)) BETWEEN 1 AND 160),
+    CHECK (length(btrim(network_identity)) BETWEEN 1 AND 160),
+    CHECK (length(btrim(collection_rule_fingerprint)) BETWEEN 1 AND 128),
+    CONSTRAINT custody_hot_inventory_block_pair_check
+        CHECK ((observed_block_height IS NULL) = (observed_block_hash IS NULL)),
+    CONSTRAINT custody_hot_inventory_block_height_check
+        CHECK (observed_block_height IS NULL OR observed_block_height >= 0),
+    CONSTRAINT custody_hot_inventory_block_hash_check
+        CHECK (observed_block_hash IS NULL OR observed_block_hash ~ '^0x[0-9a-f]{64}$')
+);
+
+-- A chain observation is not spendable until all unresolved withdrawals against it are reserved.
+-- Confirmed rows remain charged until a later canonical chain anchor proves the balance includes them.
+-- Unknown broadcasts stay OPEN. Terminal rows remain for the rolling 24h exposure window and audit.
+CREATE TABLE public.custody_hot_wallet_withdrawal_reservation (
+    id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    wallet_id uuid NOT NULL,
+    chain varchar(32) NOT NULL,
+    asset_symbol varchar(32) NOT NULL,
+    order_no varchar(160) NOT NULL,
+    source_address varchar(160) NOT NULL,
+    amount numeric(78,24) NOT NULL,
+    source_observed_at timestamptz NOT NULL,
+    status varchar(24) NOT NULL DEFAULT 'OPEN',
+    terminal_at timestamptz,
+    accounted_at timestamptz,
+    accounted_tx_hash varchar(66),
+    accounted_receipt_block_height bigint,
+    accounted_receipt_block_hash varchar(66),
+    accounted_observed_block_height bigint,
+    accounted_observed_block_hash varchar(66),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (id),
+    UNIQUE (tenant_id, chain, order_no),
+    FOREIGN KEY (tenant_id, wallet_id, chain) REFERENCES public.custody_hot_wallet(tenant_id, id, chain) ON DELETE RESTRICT,
+    FOREIGN KEY (tenant_id, wallet_id, asset_symbol) REFERENCES public.custody_hot_wallet_asset_policy(tenant_id, wallet_id, asset_symbol) ON DELETE RESTRICT,
+    CHECK (amount > 0),
+    CHECK (length(btrim(source_address)) BETWEEN 1 AND 160),
+    CHECK (status IN ('OPEN', 'CONFIRMED', 'FAILED', 'CANCELLED')),
+    CHECK ((status = 'OPEN') = (terminal_at IS NULL)),
+    CONSTRAINT custody_hot_reservation_accounted_check CHECK (
+        (accounted_at IS NULL AND accounted_tx_hash IS NULL
+            AND accounted_receipt_block_height IS NULL AND accounted_receipt_block_hash IS NULL
+            AND accounted_observed_block_height IS NULL AND accounted_observed_block_hash IS NULL)
+        OR (status='CONFIRMED' AND terminal_at IS NOT NULL AND accounted_at IS NOT NULL
+            AND accounted_at>=terminal_at
+            AND accounted_tx_hash IS NOT NULL AND accounted_tx_hash ~ '^0x[0-9a-f]{64}$'
+            AND accounted_receipt_block_height IS NOT NULL AND accounted_receipt_block_height>=0
+            AND accounted_receipt_block_hash IS NOT NULL
+            AND accounted_receipt_block_hash ~ '^0x[0-9a-f]{64}$'
+            AND accounted_observed_block_height IS NOT NULL
+            AND accounted_observed_block_height>=accounted_receipt_block_height
+            AND accounted_observed_block_hash IS NOT NULL
+            AND accounted_observed_block_hash ~ '^0x[0-9a-f]{64}$')
+    )
+);
+CREATE INDEX custody_hot_wallet_withdrawal_reservation_open_idx
+    ON public.custody_hot_wallet_withdrawal_reservation(tenant_id, wallet_id, asset_symbol, created_at)
+    WHERE status = 'OPEN';
+CREATE INDEX custody_hot_wallet_withdrawal_reservation_unaccounted_idx
+    ON public.custody_hot_wallet_withdrawal_reservation(id)
+    WHERE status = 'CONFIRMED' AND accounted_at IS NULL;
+
+CREATE OR REPLACE FUNCTION public.custody_enforce_hot_wallet_reservation() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'hot wallet withdrawal reservation cannot be deleted' USING ERRCODE='23514';
+    END IF;
+    IF (NEW.id,NEW.tenant_id,NEW.wallet_id,NEW.chain,NEW.asset_symbol,NEW.order_no,NEW.source_address,
+        NEW.amount,NEW.source_observed_at,NEW.created_at) IS DISTINCT FROM
+       (OLD.id,OLD.tenant_id,OLD.wallet_id,OLD.chain,OLD.asset_symbol,OLD.order_no,OLD.source_address,
+        OLD.amount,OLD.source_observed_at,OLD.created_at) THEN
+        RAISE EXCEPTION 'hot wallet withdrawal reservation identity or terminal state cannot change' USING ERRCODE='23514';
+    END IF;
+    IF OLD.status='OPEN' AND NEW.status IN ('CONFIRMED','FAILED','CANCELLED')
+       AND NEW.terminal_at IS NOT NULL AND NEW.accounted_at IS NULL THEN
+        RETURN NEW;
+    END IF;
+    IF OLD.status='CONFIRMED' AND OLD.accounted_at IS NULL
+       AND NEW.status='CONFIRMED' AND NEW.terminal_at=OLD.terminal_at
+       AND NEW.accounted_at IS NOT NULL THEN
+        RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'hot wallet withdrawal reservation terminal or accounted state cannot change'
+        USING ERRCODE='23514';
+END;
+$$;
+CREATE TRIGGER custody_hot_wallet_withdrawal_reservation_immutable
+    BEFORE UPDATE OR DELETE ON public.custody_hot_wallet_withdrawal_reservation
+    FOR EACH ROW EXECUTE FUNCTION public.custody_enforce_hot_wallet_reservation();
+
+-- Once a hot-wallet reservation exists, the original beneficiary and amount cannot be retargeted.
+-- A signed hash is also fixed; only the first NULL -> hash binding is permitted.
+CREATE OR REPLACE FUNCTION public.custody_guard_hot_wallet_withdrawal_order() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.tenant_id IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.custody_hot_wallet_withdrawal_reservation
+         WHERE tenant_id=OLD.tenant_id AND chain=OLD.chain AND order_no=OLD.order_no
+    ) AND (
+        (NEW.id,NEW.tenant_id,NEW.order_no,NEW.user_id,NEW.chain,NEW.asset_symbol,
+         NEW.from_address,NEW.to_address,NEW.amount,NEW.debit_account_id) IS DISTINCT FROM
+        (OLD.id,OLD.tenant_id,OLD.order_no,OLD.user_id,OLD.chain,OLD.asset_symbol,
+         OLD.from_address,OLD.to_address,OLD.amount,OLD.debit_account_id)
+        OR (OLD.tx_hash IS NOT NULL AND NEW.tx_hash IS DISTINCT FROM OLD.tx_hash)
+    ) THEN
+        RAISE EXCEPTION 'reserved hot wallet withdrawal intent or bound hash cannot change'
+            USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER custody_hot_wallet_withdrawal_order_guard
+    BEFORE UPDATE ON public.withdrawal_order
+    FOR EACH ROW EXECUTE FUNCTION public.custody_guard_hot_wallet_withdrawal_order();
+
+-- A registered hot wallet makes its network's token identity historical evidence.
+-- The common advisory lock serializes registration with token identity edits, including
+-- the case where neither transaction can see the other's uncommitted row yet.
+CREATE OR REPLACE FUNCTION public.custody_guard_hot_wallet_identity() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        PERFORM pg_advisory_xact_lock(hashtextextended('SW-HOT-WALLET-TOKEN-IDENTITY-V1', 0));
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'registered hot wallet identity cannot be deleted' USING ERRCODE='23514';
+    END IF;
+    IF (NEW.id,NEW.tenant_id,NEW.custody_address_id,NEW.mpc_key_id,NEW.chain,
+        NEW.network,NEW.created_by,NEW.created_at) IS DISTINCT FROM
+       (OLD.id,OLD.tenant_id,OLD.custody_address_id,OLD.mpc_key_id,OLD.chain,
+        OLD.network,OLD.created_by,OLD.created_at) THEN
+        RAISE EXCEPTION 'registered hot wallet identity cannot change' USING ERRCODE='23514';
+    END IF;
+    IF (OLD.status IN ('QUARANTINED','RETIRED') AND NEW.status<>OLD.status)
+       OR (OLD.status='ACTIVE' AND NEW.status='STANDBY')
+       OR (OLD.quarantine_at IS NOT NULL AND
+           (NEW.quarantine_actor_id,NEW.quarantine_at,NEW.quarantine_reason) IS DISTINCT FROM
+           (OLD.quarantine_actor_id,OLD.quarantine_at,OLD.quarantine_reason))
+       OR (OLD.quarantine_fence_confirmed_at IS NOT NULL AND
+           NEW.quarantine_fence_confirmed_at IS DISTINCT FROM OLD.quarantine_fence_confirmed_at)
+       OR (OLD.status<>'QUARANTINED' AND NEW.quarantine_fence_confirmed_at IS NOT NULL) THEN
+        RAISE EXCEPTION 'registered hot wallet quarantine and retirement cannot be reversed or rewritten'
+            USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER custody_hot_wallet_identity_guard
+    BEFORE INSERT OR UPDATE OR DELETE ON public.custody_hot_wallet
+    FOR EACH ROW EXECUTE FUNCTION public.custody_guard_hot_wallet_identity();
+
+-- The referenced address row must not be repointed while the hot-wallet row stays fixed.
+CREATE OR REPLACE FUNCTION public.custody_guard_registered_hot_wallet_address() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF (NEW.id,NEW.tenant_id,NEW.chain_address_id,NEW.chain,NEW.network,NEW.address,
+            NEW.memo,NEW.source,NEW.subject,NEW.derivation_subject,NEW.derivation_child,
+            NEW.address_version,NEW.created_by,NEW.created_at) IS NOT DISTINCT FROM
+           (OLD.id,OLD.tenant_id,OLD.chain_address_id,OLD.chain,OLD.network,OLD.address,
+            OLD.memo,OLD.source,OLD.subject,OLD.derivation_subject,OLD.derivation_child,
+            OLD.address_version,OLD.created_by,OLD.created_at) THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('SW-HOT-WALLET-TOKEN-IDENTITY-V1', 0));
+    IF EXISTS (SELECT 1 FROM public.custody_hot_wallet WHERE custody_address_id=OLD.id) THEN
+        RAISE EXCEPTION 'registered hot wallet address identity cannot change or be deleted'
+            USING ERRCODE='23514';
+    END IF;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER custody_registered_hot_wallet_address_guard
+    BEFORE UPDATE OR DELETE ON public.custody_address
+    FOR EACH ROW EXECUTE FUNCTION public.custody_guard_registered_hot_wallet_address();
+
+CREATE OR REPLACE FUNCTION public.custody_guard_token_identity_after_hot_wallet() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF (NEW.chain,NEW.network,NEW.symbol,NEW.standard,NEW.contract_address,
+            NEW.contract_address_base58,NEW.contract_address_hex,NEW.decimals) IS NOT DISTINCT FROM
+           (OLD.chain,OLD.network,OLD.symbol,OLD.standard,OLD.contract_address,
+            OLD.contract_address_base58,OLD.contract_address_hex,OLD.decimals) THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('SW-HOT-WALLET-TOKEN-IDENTITY-V1', 0));
+    IF EXISTS (SELECT 1 FROM public.custody_hot_wallet
+                WHERE upper(chain)=upper(OLD.chain) AND lower(network)=lower(OLD.network)) THEN
+        RAISE EXCEPTION 'token identity is locked after hot wallet registration'
+            USING ERRCODE='23514';
+    END IF;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER custody_token_identity_after_hot_wallet_guard
+    BEFORE UPDATE OR DELETE ON public.token_config
+    FOR EACH ROW EXECUTE FUNCTION public.custody_guard_token_identity_after_hot_wallet();

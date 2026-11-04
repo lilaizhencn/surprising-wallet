@@ -48,6 +48,8 @@ class PolkadotSubmissionIntegrationTest {
         context.registerBean(ChainAddressRepository.class,()->new ChainAddressRepository(jdbc));context.registerBean(TokenConfigRepository.class,()->new TokenConfigRepository(jdbc));
         context.registerBean(ChainAssetRepository.class,()->new ChainAssetRepository(jdbc));context.registerBean(MpcSigningService.class,()->fixture.signing);context.registerBean(MpcNodes.class,()->fixture.nodes);
         context.registerBean(LedgerBalanceRepository.class,()->new LedgerBalanceRepository(jdbc));context.registerBean(CustodyGasAccountingService.class,()->CustodyTestSupport.gasAccounting(jdbc));
+        context.registerBean(com.surprising.wallet.service.HotWalletReservationLifecycleService.class,
+                ()->CustodyTestSupport.hotReservationLifecycle(jdbc));
         context.registerBean(WithdrawalSettlementService.class);context.registerBean(ObjectMapper.class,()->json);context.registerBean(PolkadotSubmissionService.class);context.refresh();service=context.getBean(PolkadotSubmissionService.class);
         createOrder(REFERENCE,"DOT");
     }

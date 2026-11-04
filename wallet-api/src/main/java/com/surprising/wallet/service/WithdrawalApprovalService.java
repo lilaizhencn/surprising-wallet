@@ -26,12 +26,15 @@ public class WithdrawalApprovalService {
     private final ObjectMapper json;
     private final TransactionTemplate transaction;
     private final UnsignedWithdrawalCancellationService cancellation;
+    private final HotWalletReservationLifecycleService hotReservations;
     public WithdrawalApprovalService(WalletWithdrawalApprovalRepository approvals,WithdrawalOrderRepository orders,LedgerBalanceRepository balances,
             CustodyAuditRepository audit,CustodyWithdrawalReconciliationService projection,WithdrawalApprovalClient authority,ObjectMapper json,
-            PlatformTransactionManager manager,UnsignedWithdrawalCancellationService cancellation) {
+            PlatformTransactionManager manager,UnsignedWithdrawalCancellationService cancellation,
+            HotWalletReservationLifecycleService hotReservations) {
         this.approvals=approvals;this.orders=orders;this.balances=balances;this.audit=audit;this.projection=projection;this.authority=authority;
         this.json=json;this.transaction=new TransactionTemplate(manager);
         this.cancellation=cancellation;
+        this.hotReservations=hotReservations;
     }
     public void reconcile() {
         long deadline=System.nanoTime()+java.time.Duration.ofSeconds(30).toNanos();
@@ -74,6 +77,7 @@ public class WithdrawalApprovalService {
                 require(balances.release(order.getChain(),order.getAssetSymbol(),order.getDebitAccountId(),order.getAmount().add(order.getFee()),tenant),
                         "independent refusal principal release is inconsistent");
             require(orders.independentRefundComplete(tenant,original.orderId()),"unsigned cancellation refund did not complete");
+            hotReservations.close(tenant,order.getChain(),order.getOrderNo(),"CANCELLED");
             projection.project(tenant,id); // Input/nonce/batch cleanup, principal, Gas, event and receipt share one transaction.
             cleaned=true;
         }

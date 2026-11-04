@@ -36,6 +36,7 @@ public class NearTransactionService {
     private final CollectionRecordRepository collections;
     private final NearRegistrationService registrations;
     @NonNull private final WalletRuntimeConfigService runtime;
+    private final HotWalletBroadcastFence broadcastFence;
 
     public String send(NearOperation op,ChainAddressRecord source) {
         runtime.requireTaskEnabled("NEAR",WalletRuntimeConfigService.TASK_WITHDRAW,"NEAR withdrawal");
@@ -95,7 +96,13 @@ public class NearTransactionService {
         catch(IllegalStateException error){if(!NearRpcClient.isUnknownTransactionError(error.getMessage()))throw error;found=false;}
         if(!found) {
             require(selectedRpc.latestFinalBlockHeight()<=p.unsigned().validUntilHeight(),"NEAR reference expired; original payment remains held for reconciliation");
-            var answer=selectedRpc.sendTransaction(signed.signedTransactionBase64());
+            var sourceKeyId=submissions.intent(op).orElseThrow().command().keyId();
+            var answer=op.kind()==Kind.COLLECTION
+                    ?broadcastFence.withAccountCollectionBroadcastPermit(op.tenantId(),"NEAR",
+                            p.unsigned().network(),op.reference(),signed.txHash(),sourceKeyId,
+                            ()->selectedRpc.sendTransaction(signed.signedTransactionBase64()))
+                    :broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"NEAR",sourceKeyId,
+                            ()->selectedRpc.sendTransaction(signed.signedTransactionBase64()));
             require(signed.txHash().equals(answer.path("transaction").path("hash").asText()),"NEAR node returned another selected transaction hash");
         }
         submissions.observed(op,signed.txHash());return signed.txHash();
@@ -143,7 +150,10 @@ public class NearTransactionService {
         catch(IllegalStateException error){if(!NearRpcClient.isUnknownTransactionError(error.getMessage()))throw error;known=false;}
         if(!known) {
             require(selectedRpc.latestFinalBlockHeight()<=p.unsigned().validUntilHeight(),"NEP-145 original reference expired; retain original registration and parent");
-            var sent=selectedRpc.sendTransaction(selected.signedTransactionBase64());require(selected.txHash().equals(sent.path("transaction").path("hash").asText()),"NEP-145 node returned another hash");
+            var registrationKeyId=registrations.intent(op).orElseThrow().command().keyId();
+            var sent=broadcastFence.withPayoutBroadcastPermit(op.tenantId(),"NEAR",registrationKeyId,
+                    ()->selectedRpc.sendTransaction(selected.signedTransactionBase64()));
+            require(selected.txHash().equals(sent.path("transaction").path("hash").asText()),"NEP-145 node returned another hash");
         }
         var proof=registrations.proof(op).orElseGet(()->{
             var execution=selectedRpc.finalTransaction(selected.txHash(),p.unsigned().sender());var receipts=new HashMap<String,JsonNode>();var headers=new HashMap<String,JsonNode>();

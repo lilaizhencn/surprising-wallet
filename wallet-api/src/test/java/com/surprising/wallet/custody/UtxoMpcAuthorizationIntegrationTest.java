@@ -36,6 +36,8 @@ class UtxoMpcAuthorizationIntegrationTest {
     @BeforeEach void setup() throws Exception {
         var ds=CustodyIntegrationDatabase.dataSource();CustodyIntegrationDatabase.reset(ds);jdbc=new JdbcTemplate(ds);
         jdbc.update("update chain_profile set enabled=false where chain='BTC'");jdbc.update("update chain_profile set enabled=true where chain='BTC' and network='regtest'");
+        new CustodyTenantChainTableRepository(jdbc).setStatus(TENANT,"BTC","ACTIVE",
+                UUID.fromString("00000000-0000-0000-0000-000000000002"));
         fixture=new MpcSigningTestSupport(jdbc);var source=fixture.address(jdbc,TENANT,ChainType.BTC,1,0,"HOT");
         UUID custody=UUID.randomUUID();jdbc.update("insert into custody_address(id,tenant_id,chain_address_id,chain,network,address,subject,source,status,derivation_subject,derivation_child) values (?,?,?,'BTC','regtest',?,'batch-proof','API','ACTIVE',1,0)",custody,TENANT,source.getId(),source.getAddress());
         jdbc.update("insert into ledger_balance(tenant_id,chain,asset_symbol,account_id,available_balance,locked_balance,total_balance) values (?,'BTC','BTC','batch-principal',0,1,1)",TENANT);
