@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * <p>
  * 每 5 秒执行一次：遍历所有启用了 EIP-7702 的 EVM 链，
  * 将 collection_record 打包为批量归集交易——
- * 构建 auth 授权、调用合约 batchCollect、签名（sig1+sig2）、
+ * 构建 auth 授权、调用合约 batchCollect、MPC 门限签名、
  * 广播上链、确认。
  * <p>
  * 与普通 EVM 链的归集不同，7702 归集使用 EOA 委托合约方式，

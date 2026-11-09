@@ -53,7 +53,7 @@ ETH/BNB/Polygon/Base/Arbitrum/Optimism 共用的第一阶段当前已经具备�
 
 - `../../../pom.xml` 使用 Web3j `6.0.0`，依赖中已有 `Transaction7702` 和 `AuthorizationTuple`；
 - `resources/infra/evm-fork` 使用 Hardhat `2.26.3`，包含 Prague/EIP-7702 交易字段；
-- `AccountSecp256k1KeyService` 能从现有 sig2 根密钥派生 EVM Authority 私钥；
+- `AccountSecp256k1KeyService` 能从现有 MPC/托管体系安全派生 EVM Authority 授权密钥；
 - `EvmNonceRepository.reserve` 已有数据库 Nonce 预留；
 - `CustodyGasService` 已有租户 Gas 预留、释放和结算框架；
 - `AccountChainWorkflowService` 已有 EVM 归集候选、广播和确认调度。
@@ -1320,7 +1320,7 @@ savingRate                  = 1 - 7702实际费用 / 同时段旧路径估算费
 
 - 目标链已经激活 EIP-7702，RPC 支持 type-4；
 - Token 是标准 ERC-20，不收转账税、不 rebasing；
-- 该地址私钥可由现有 sig2 托管体系安全派生；
+- 该地址私钥或授权可由现有 MPC 托管体系安全协同；
 - Relayer 有足够原生币，租户 Gas 账户有足够可用余额；
 - 地址没有未知代码或冲突 delegation。
 
